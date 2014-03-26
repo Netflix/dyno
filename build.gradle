@@ -1,0 +1,50 @@
+// Establish version and status
+ext.githubProjectName = rootProject.name // Change if github project name is not the same as the root project's name
+
+buildscript {
+    repositories {
+        mavenLocal()
+        mavenCentral() // maven { url 'http://jcenter.bintray.com' }
+    }
+    apply from: file('gradle/buildscript.gradle'), to: buildscript 
+}
+
+allprojects {
+    repositories { 
+        mavenCentral() // maven { url: 'http://jcenter.bintray.com' }
+    }
+}
+
+apply plugin: 'idea'
+apply plugin: 'osgi'
+
+apply from: file('gradle/convention.gradle')
+apply from: file('gradle/maven.gradle')
+apply from: file('gradle/release.gradle')
+
+
+subprojects {
+    group = "com.netflix.${githubProjectName}"
+
+    apply plugin: 'eclipse'
+
+    dependencies {
+        compile "joda-time:joda-time:2.3"
+        compile "org.slf4j:slf4j-api:1.7.5"
+        testCompile "junit:junit:4.11"
+    }
+}
+
+project(':dyno') {
+    dependencies {
+        compile  project(':dyno-core')
+    }
+}
+
+project(':dyno-core') {
+    apply plugin: 'osgi'
+    apply plugin: 'java'
+    dependencies {
+        testCompile "junit:junit:4.11"
+    }
+}
