@@ -16,7 +16,7 @@ public class DynoWorker {
 	public DynoWorker() {
 
 		try {
-			mc = new MemcachedClient(new InetSocketAddress("localhost", 11211));
+			mc = new MemcachedClient(new InetSocketAddress(DemoConfig.ServerHostname.get(), DemoConfig.ServerPort.get()));
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}

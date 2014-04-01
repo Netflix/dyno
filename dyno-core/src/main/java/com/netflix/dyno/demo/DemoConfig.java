@@ -3,6 +3,7 @@ package com.netflix.dyno.demo;
 import com.netflix.config.DynamicBooleanProperty;
 import com.netflix.config.DynamicIntProperty;
 import com.netflix.config.DynamicPropertyFactory;
+import com.netflix.config.DynamicStringProperty;
 
 public class DemoConfig {
 
@@ -20,4 +21,8 @@ public class DemoConfig {
 
 	// CONFIG FOR SPY MEMCACHED CLIENT
 	public static final DynamicIntProperty Expiration = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.expiration", 36000);
+
+	// DYNO HOST ENDPOINT CONFIG
+	public static final DynamicStringProperty ServerHostname = DynamicPropertyFactory.getInstance().getStringProperty("dyno.demo.hostname", "localhost");
+	public static final DynamicIntProperty ServerPort = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.port", 11211);
 }
