@@ -44,7 +44,7 @@ public class DynoStats {
 
 	@Monitor(name="failure", type=DataSourceType.COUNTER)
 	public int getFailure() {
-		return success.get();
+		return failure.get();
 	}
 
 	public void cacheHit() {
@@ -53,7 +53,7 @@ public class DynoStats {
 
 	@Monitor(name="cacheHit", type=DataSourceType.COUNTER)
 	public int getCacheHits() {
-		return success.get();
+		return cacheHits.get();
 	}
 
 	public void cacheMiss() {
@@ -62,7 +62,7 @@ public class DynoStats {
 	
 	@Monitor(name="cacheMiss", type=DataSourceType.COUNTER)
 	public int getCacheMiss() {
-		return success.get();
+		return cacheMiss.get();
 	}
 
 	private double getCacheHitRatio() {

@@ -25,4 +25,10 @@ public class DemoConfig {
 	// DYNO HOST ENDPOINT CONFIG
 	public static final DynamicStringProperty ServerHostname = DynamicPropertyFactory.getInstance().getStringProperty("dyno.demo.hostname", "localhost");
 	public static final DynamicIntProperty ServerPort = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.port", 11211);
+
+	public static final DynamicIntProperty ReadRateLimit = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.readRateLimit", 10000);
+	public static final DynamicIntProperty WriteRateLimit = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.writeRateLimit", 2000);
+
+	public static final DynamicIntProperty NumReadersPerConn = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numReadersPerConn", 2);
+	public static final DynamicIntProperty NumWritersPerConn = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numWritersPerConn", 1);
 }

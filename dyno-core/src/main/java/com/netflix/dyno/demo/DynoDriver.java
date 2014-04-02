@@ -1,5 +1,13 @@
 package com.netflix.dyno.demo;
 
+import static com.netflix.dyno.demo.DemoConfig.NumKeys;
+import static com.netflix.dyno.demo.DemoConfig.NumReaders;
+import static com.netflix.dyno.demo.DemoConfig.NumReadersPerConn;
+import static com.netflix.dyno.demo.DemoConfig.NumWriters;
+import static com.netflix.dyno.demo.DemoConfig.NumWritersPerConn;
+import static com.netflix.dyno.demo.DemoConfig.ReadEnabled;
+import static com.netflix.dyno.demo.DemoConfig.WriteEnabled;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -12,8 +20,10 @@ import org.slf4j.LoggerFactory;
 
 import com.netflix.config.DynamicBooleanProperty;
 import com.netflix.config.DynamicIntProperty;
-
-import static com.netflix.dyno.demo.DemoConfig.*;
+import com.netflix.servo.DefaultMonitorRegistry;
+import com.netflix.servo.annotations.DataSourceType;
+import com.netflix.servo.annotations.Monitor;
+import com.netflix.servo.monitor.Monitors;
 
 public class DynoDriver {
 
@@ -39,6 +49,8 @@ public class DynoDriver {
 				checkAndInitWrites();
 			}
 		});
+		
+		DefaultMonitorRegistry.getInstance().register(Monitors.newObjectMonitor(new DynoDriverStats()));
 	}
 		
 	public void checkAndInitReads() {
@@ -74,6 +86,7 @@ public class DynoDriver {
 		Logger.info("Starting DynoDriver reads...");
 		startOperation(ReadEnabled,
 				       NumReaders, readWorkers,
+				       NumReadersPerConn,
 				       tpReadRef,
 				       new DynoReadOperation());
 	}
@@ -83,12 +96,14 @@ public class DynoDriver {
 		Logger.info("Starting DynoDriver writes...");
 		startOperation(WriteEnabled,
 				       NumWriters, writeWorkers,
+				       NumWritersPerConn,
 				       tpWriteRef,
 				       new DynoWriteOperation());
 	}
 
 	public void startOperation(DynamicBooleanProperty operationEnabled, 
 							   DynamicIntProperty numWorkers, List<DynoWorker> workerList,
+							   DynamicIntProperty numWorkersPerConn,
 							   AtomicReference<ExecutorService> tpRef, 
 							   final DynoOperation operation) {
 		 
@@ -97,7 +112,8 @@ public class DynoDriver {
 			return;
 		}
 		
-		ExecutorService threadPool = Executors.newFixedThreadPool(numWorkers.get());
+		int totalWorkerPoolSize = numWorkers.get() * numWorkersPerConn.get();
+		ExecutorService threadPool = Executors.newFixedThreadPool(totalWorkerPoolSize);
 		 
 		boolean success = tpRef.compareAndSet(null, threadPool);
 		if (!success) {
@@ -111,19 +127,21 @@ public class DynoDriver {
 			
 			final DynoStats stats = DynoStats.getInstance();
 			
-			threadPool.submit(new Callable<Void>() {
+			for (int k=0; k<numWorkersPerConn.get(); k++) {
+				threadPool.submit(new Callable<Void>() {
 
-				@Override
-				public Void call() throws Exception {
-					
-					Thread thread = Thread.currentThread();
-					while (!thread.isInterrupted() && !worker.isShutdown()) {
-						operation.process(worker, stats);
+					@Override
+					public Void call() throws Exception {
+
+						Thread thread = Thread.currentThread();
+						while (!thread.isInterrupted() && !worker.isShutdown()) {
+							operation.process(worker, stats);
+						}
+						Logger.info("DynoWorker shutting down");
+						return null;
 					}
-					Logger.info("DynoWorker shutting down");
-					return null;
-				}
-			});
+				});
+			}
 		}
 	}
 
@@ -212,7 +230,10 @@ public class DynoDriver {
 	
 	public void backfillData() {
 		
-		int tenPercent = NumKeys.get()/10;
+		int onePercent = NumKeys.get()/100;
+		
+		long lastTimestamp = System.currentTimeMillis();
+		int lastCount = 0; 
 		
 		DynoWorker worker = new DynoWorker();
 		for (int i=0; i<NumKeys.get(); i++) {
@@ -221,12 +242,36 @@ public class DynoDriver {
 			String value = SampleData.getInstance().getRandomValue();
 			worker.write(key, value);
 			
-			if (i % tenPercent == 0) {
-				System.out.println("Backfill progress: " + i + " out of " + NumKeys.get());
-				Logger.info("Backfill progress: " + i + " out of " + NumKeys.get());
+			if (i % onePercent == 0) {
+				//System.out.println("Backfill progress: " + i + " out of " + NumKeys.get());
+				
+				long d = (System.currentTimeMillis() - lastTimestamp)/1000;
+				int c = i - lastCount;
+				
+				int ratio = (int) ((d!=0) ? c/d : 0);
+				
+				Logger.info("Backfill progress: " + i + " out of " + NumKeys.get() + 
+						" duration (secs): " + d + 
+						" count: " + c + " avg rps: " + ratio);
+				
+				lastTimestamp = System.currentTimeMillis();
+				lastCount = i;
 			}
 		}
 		worker.shutdown();
+	}
+	
+	class DynoDriverStats {
+		
+		@Monitor(name="readers", type=DataSourceType.COUNTER)
+		public int getNumReaders() {
+			return readWorkers.size();
+		}
+		
+		@Monitor(name="writers", type=DataSourceType.COUNTER)
+		public int getNumWriters() {
+			return writeWorkers.size();
+		}
 	}
 	
 	public static void main(String args[]) {
