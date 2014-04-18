@@ -10,6 +10,7 @@ public class DemoConfig {
 	// SAMPLE DATA CONFIG
 	public static final DynamicIntProperty NumKeys = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numKeys", 1000);
 	public static final DynamicIntProperty NumValues = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numValues", 1000);
+	public static final DynamicIntProperty DataSize = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.dataSize", 1024);
 	
 	// NUM WORKERS
 	public static final DynamicIntProperty NumWriters = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numWriters", 1);

@@ -63,7 +63,12 @@ public class DynoWorker {
 	
 	public String read(String key) {
 		readRateLimiter.get().acquire();
-		return (String)mc.get(key);
+		
+		String value = (String)mc.get(key);
+//		
+//		Logger.info("Key: " + key + ", value: " + value);
+//		Logger.info("Server: " + DemoConfig.ServerHostname.get() + " "  + DemoConfig.ServerPort.get());
+		return value;
 	}
 	
 	public void write(String key, String value) {
@@ -74,11 +79,9 @@ public class DynoWorker {
 		try {
 			future.get();
 		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			Logger.error("Thread interrupted", e);
 		} catch (ExecutionException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			Logger.error("Thread execution failed", e);
 		}
 	}
 	

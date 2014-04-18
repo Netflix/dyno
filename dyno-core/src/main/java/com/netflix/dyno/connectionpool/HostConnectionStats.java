@@ -1,12 +1,9 @@
 package com.netflix.dyno.connectionpool;
 
-import java.util.Date;
 
 public interface HostConnectionStats {
 
 	public boolean isHostUp();
-
-	public Date getPoolCreationTime();
 
 	public long getConnectionsBorrowed();
 	

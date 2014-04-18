@@ -1,5 +1,7 @@
 package com.netflix.dyno.connectionpool;
 
+import java.util.concurrent.TimeUnit;
+
 import com.netflix.dyno.connectionpool.exception.DynoException;
 
 /**
@@ -43,7 +45,7 @@ public interface HostConnectionPool<CL> {
      *  or closeConnection.
      * @throws DynoException
      */
-    Connection<CL> borrowConnection(int timeout) throws DynoException;
+    Connection<CL> borrowConnection(int duration, TimeUnit unit) throws DynoException;
 
     /**
      * Return a connection to the host's pool. May close the connection if the
@@ -75,13 +77,12 @@ public interface HostConnectionPool<CL> {
     void shutdown();
 
     /**
-     * Create numConnections new connections and add them to the
+     * Create new connections and add them to the pool. Consult ConnectionPoolConfiguration.getMaxConnsPerHost()
      * 
      * @throws DynoException
-     * @throws InterruptedException
      * @returns Actual number of connections created
      */
-    int primeConnections(int numConnections) throws DynoException, InterruptedException;
+    int primeConnections() throws DynoException;
 
     /**
      * @return Get the host to which this pool is associated

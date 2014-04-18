@@ -36,7 +36,7 @@ public interface ConnectionPool<CL> {
      * @returns True if host was added or false if host already exists
      * @throws DynoException
      */
-    boolean addHost(Host host, boolean refresh);
+    boolean addHost(Host host);
 
     /**
      * Remove a host from the connection pool. Any pending connections will be
@@ -45,7 +45,7 @@ public interface ConnectionPool<CL> {
      * @returns True if host was removed or false if host does not exist
      * @param host
      */
-    boolean removeHost(Host host, boolean refresh);
+    boolean removeHost(Host host);
 
     /**
      * @return Return true if the host is up
@@ -91,7 +91,7 @@ public interface ConnectionPool<CL> {
      * @throws DynoException
      * @throws OperationException
      */
-    <R> OperationResult<R> executeWithFailover(Operation<CL, R> op, RetryPolicy retry) throws DynoException;
+    <R> OperationResult<R> executeWithFailover(Operation<CL, R> op) throws DynoException;
             
 
     /**

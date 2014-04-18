@@ -29,7 +29,8 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
 public interface Connection<CL> {
 	
     public interface AsyncOpenCallback<CL> {
-        void success(Connection<CL> conn);
+        
+    	void success(Connection<CL> conn);
 
         void failure(Connection<CL> conn, DynoConnectException e);
     }
@@ -76,4 +77,10 @@ public interface Connection<CL> {
      * @return
      */
     public DynoConnectException getLastException();
+    
+    /**
+     * 
+     * @return
+     */
+    public HostConnectionPool<CL> getParentConnectionPool();
 }

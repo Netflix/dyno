@@ -51,6 +51,7 @@ project(':dyno-core') {
     dependencies {
         compile "org.slf4j:slf4j-api:1.7.5"
         compile "net.spy:spymemcached:2.9.1"
+        compile "org.apache.commons:commons-math:2.2"
         testCompile "junit:junit:4.11"
     }
 }
