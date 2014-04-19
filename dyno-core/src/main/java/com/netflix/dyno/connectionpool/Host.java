@@ -5,6 +5,8 @@ public class Host {
 	private final String name;
 	private final int port;
 	
+	private String dc; 
+	
 	public Host(String name, int port) {
 		this.name = name;
 		this.port = port;
@@ -18,6 +20,11 @@ public class Host {
 		return port;
 	}
 	
+	public Host setDC(String datacenter) {
+		this.dc = datacenter;
+		return this;
+	}
+	
 	public static final Host NO_HOST = new Host("UNKNOWN", 0);
 
 	@Override
@@ -25,6 +32,7 @@ public class Host {
 		final int prime = 31;
 		int result = 1;
 		result = prime * result + ((name == null) ? 0 : name.hashCode());
+		result = prime * result + ((dc == null) ? 0 : dc.hashCode());
 		result = prime * result + port;
 		return result;
 	}
@@ -39,7 +47,8 @@ public class Host {
 		Host other = (Host) obj;
 		boolean equals = true;
 		
-		equals &= (name != null) ? other.name.equals(name) : other.name == null;
+		equals &= (name != null) ? name.equals(other.name) : other.name == null;
+		equals &= (dc != null) ? dc.equals(other.dc) : other.dc == null;
 		equals &= (port == other.port);
 		
 		return equals;
@@ -47,7 +56,7 @@ public class Host {
 
 	@Override
 	public String toString() {
-		return "Host [name=" + name + ", port=" + port + "]";
+		return "Host [name=" + name + ", port=" + port + ", dc: " + dc + "]";
 	}
 	
 	

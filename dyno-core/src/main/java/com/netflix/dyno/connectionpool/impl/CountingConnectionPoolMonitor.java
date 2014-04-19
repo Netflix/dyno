@@ -15,7 +15,6 @@ import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostConnectionStats;
 import com.netflix.dyno.connectionpool.exception.BadRequestException;
-import com.netflix.dyno.connectionpool.exception.InterruptedOperationException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
 import com.netflix.dyno.connectionpool.exception.TimeoutException;
@@ -38,7 +37,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
 
     // tracking host activity
     private final AtomicLong hostAddedCount         = new AtomicLong();
-    private final AtomicLong hostRemovedCount       = new AtomicLong();
+    //private final AtomicLong hostRemovedCount       = new AtomicLong();
     private final AtomicLong hostDownCount          = new AtomicLong();
     private final AtomicLong hostReactivatedCount   = new AtomicLong();
     
@@ -48,8 +47,6 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     private final AtomicLong noHostsCount           = new AtomicLong();
     private final AtomicLong unknownErrorCount      = new AtomicLong();
     private final AtomicLong badRequestCount        = new AtomicLong();
-    private final AtomicLong interruptedCount       = new AtomicLong();
-    private final AtomicLong transportErrorCount    = new AtomicLong();
 
     private final ConcurrentHashMap<Host, HostConnectionStats> hostStats = new ConcurrentHashMap<Host, HostConnectionStats>();
     
@@ -59,21 +56,14 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     private void trackError(Host host, Exception reason) {
         if (reason instanceof PoolTimeoutException) {
             this.poolExhastedCount.incrementAndGet();
-        }
-        else if (reason instanceof TimeoutException) {
+        } else if (reason instanceof TimeoutException) {
             this.socketTimeoutCount.incrementAndGet();
-        }
-        else if (reason instanceof OperationTimeoutException) {
+        } else if (reason instanceof OperationTimeoutException) {
             this.operationTimeoutCount.incrementAndGet();
-        }
-        else if (reason instanceof BadRequestException) {
+        } else if (reason instanceof BadRequestException) {
             this.badRequestCount.incrementAndGet();
-        }
-        else if (reason instanceof NoAvailableHostsException ) {
+        } else if (reason instanceof NoAvailableHostsException ) {
             this.noHostsCount.incrementAndGet();
-        }
-        else if (reason instanceof InterruptedOperationException) {
-            this.interruptedCount.incrementAndGet();
         } else {
             LOG.error(reason.toString(), reason);
             this.unknownErrorCount.incrementAndGet();
@@ -179,22 +169,8 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     }
 
     @Override
-    public long getHostAddedCount() {
-        return this.hostAddedCount.get();
-    }
-
-    @Override
-    public long getHostRemovedCount() {
-        return this.hostRemovedCount.get();
-    }
-
-    @Override
     public long getHostDownCount() {
         return this.hostDownCount.get();
-    }
-
-    public long getHostReactivatedCount() {
-        return this.hostReactivatedCount.get();
     }
 
     @Override
@@ -205,11 +181,6 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     @Override
     public long getUnknownErrorCount() {
         return this.unknownErrorCount.get();
-    }
-    
-    @Override
-    public long getInterruptedCount() {
-        return this.interruptedCount.get();
     }
 
     @Override
@@ -227,7 +198,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     
     @Override
     public long getHostCount() {
-        return getHostAddedCount() - getHostRemovedCount();
+        return hostStats.keySet().size();
     }
 
     public String toString() {
@@ -250,12 +221,9 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
                     .append(",failover="   ).append(operationFailoverCount.get())
                     .append(",nohosts="    ).append(noHostsCount.get())
                     .append(",unknown="    ).append(unknownErrorCount.get())
-                    .append(",interrupted=").append(interruptedCount.get())
                     .append(",exhausted="  ).append(poolExhastedCount.get())
-                    .append(",transport="  ).append(transportErrorCount.get())
                 .append("], Hosts[")
                     .append( "add="        ).append(hostAddedCount.get())
-                    .append(",remove="     ).append(hostRemovedCount.get())
                     .append(",down="       ).append(hostDownCount.get())
                     .append(",reactivate=" ).append(hostReactivatedCount.get())
                 .append("])").toString();

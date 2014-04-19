@@ -32,7 +32,7 @@ public class RunOnce implements RetryPolicy {
 		return attempts.get();
 	}
 	
-	public static class RunOnceRetryFactory implements RetryPolicyFactory {
+	public static class RetryFactory implements RetryPolicyFactory {
 
 		@Override
 		public RetryPolicy getRetryPolicy() {
