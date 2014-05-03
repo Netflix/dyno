@@ -38,4 +38,6 @@ public interface OperationResult<R> {
      * @param count
      */
     void setAttemptsCount(int count);
+    
+    void setLatency(long duration, TimeUnit unit);
 }

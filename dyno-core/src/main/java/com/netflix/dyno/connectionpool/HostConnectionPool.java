@@ -98,4 +98,6 @@ public interface HostConnectionPool<CL> {
      * @return Return true if the has been shut down and is no longer accepting traffic.
      */
     boolean isShutdown();
+    
+    OperationMonitor getOperationMonitor();
 }

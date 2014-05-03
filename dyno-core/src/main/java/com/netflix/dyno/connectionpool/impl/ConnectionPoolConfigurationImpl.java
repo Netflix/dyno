@@ -12,11 +12,13 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	
 	// DEFAULTS 
 	private static final int DEFAULT_PORT = 11211; 
-	private static final int DEFAULT_MAX_CONNS_PER_HOST = 3; 
+	private static final int DEFAULT_MAX_CONNS_PER_HOST = 1; 
 	private static final int DEFAULT_MAX_TIMEOUT_WHEN_EXHAUSTED = 2000; 
 	private static final int DEFAULT_MAX_FAILOVER_COUNT = 3; 
 	private static final int DEFAULT_CONNECT_TIMEOUT = 3000; 
 	private static final int DEFAULT_SOCKET_TIMEOUT = 12000; 
+	private static final int DEFAULT_POOL_SHUTDOWN_DELAY = 60000; 
+	private static final boolean DEFAULT_LOCAL_DC_AFFINITY = true; 
 
 	private final String name;
 	private int port = DEFAULT_PORT; 
@@ -25,6 +27,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private int maxFailoverCount = DEFAULT_MAX_FAILOVER_COUNT; 
 	private int connectTimeout = DEFAULT_CONNECT_TIMEOUT; 
 	private int socketTimeout = DEFAULT_SOCKET_TIMEOUT; 
+	private int poolShutdownDelay = DEFAULT_POOL_SHUTDOWN_DELAY; 
+	private boolean localDcAffinity = DEFAULT_LOCAL_DC_AFFINITY; 
 	
 	private RetryPolicyFactory retryFactory = new RetryPolicyFactory() {
 
@@ -79,30 +83,67 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		return socketTimeout;
 	}
 
-	// ALL SETTERS
-	public void setMaxConnsPerHost(int maxConnsPerHost) {
-		this.maxConnsPerHost = maxConnsPerHost;
+	@Override
+	public RetryPolicyFactory getRetryPolicyFactory() {
+		return retryFactory;
+	}
+	
+	@Override
+	public int getPoolShutdownDelay() {
+		return poolShutdownDelay;
 	}
 
-	public void setMaxTimeoutWhenExhausted(int maxTimeoutWhenExhausted) {
-		this.maxTimeoutWhenExhausted = maxTimeoutWhenExhausted;
-	}
-
-	public void setMaxFailoverCount(int maxFailoverCount) {
-		this.maxFailoverCount = maxFailoverCount;
-	}
-
-	public void setConnectTimeout(int connectTimeout) {
-		this.connectTimeout = connectTimeout;
-	}
-
-	public void setSocketTimeout(int socketTimeout) {
-		this.socketTimeout = socketTimeout;
+	@Override
+	public boolean localDcAffinity() {
+		return localDcAffinity;
 	}
 
 	@Override
 	public ErrorRateMonitorConfig getErrorCheckConfig() {
 		return errorRateConfig;
+	}
+	
+	// ALL SETTERS
+	public ConnectionPoolConfigurationImpl setMaxConnsPerHost(int maxConnsPerHost) {
+		this.maxConnsPerHost = maxConnsPerHost;
+		return this;
+	}
+
+	public ConnectionPoolConfigurationImpl setMaxTimeoutWhenExhausted(int maxTimeoutWhenExhausted) {
+		this.maxTimeoutWhenExhausted = maxTimeoutWhenExhausted;
+		return this;
+	}
+
+	public ConnectionPoolConfigurationImpl setMaxFailoverCount(int maxFailoverCount) {
+		this.maxFailoverCount = maxFailoverCount;
+		return this;
+	}
+
+	public ConnectionPoolConfigurationImpl setConnectTimeout(int connectTimeout) {
+		this.connectTimeout = connectTimeout;
+		return this;
+	}
+
+	public ConnectionPoolConfigurationImpl setSocketTimeout(int socketTimeout) {
+		this.socketTimeout = socketTimeout;
+		return this;
+	}
+
+
+	public ConnectionPoolConfigurationImpl setRetryPolicyFactory(RetryPolicyFactory factory) {
+		this.retryFactory = factory;
+		return this;
+	}
+
+
+	public ConnectionPoolConfigurationImpl setPoolShutdownDelay(int shutdownDelaySeconds) {
+		poolShutdownDelay = shutdownDelaySeconds;
+		return this;
+	}
+	
+	public ConnectionPoolConfigurationImpl setLocalDcAffinity(boolean condition) {
+		localDcAffinity = condition;
+		return this;
 	}
 	
 	public static class ErrorRateMonitorConfigImpl implements ErrorRateMonitorConfig {
@@ -164,15 +205,4 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 			});
 		}
 	}
-
-	@Override
-	public RetryPolicyFactory getRetryPolicyFactory() {
-		return retryFactory;
-	}
-	
-	public ConnectionPoolConfigurationImpl setRetryPolicyFactory(RetryPolicyFactory factory) {
-		this.retryFactory = factory;
-		return this;
-	}
-
 }

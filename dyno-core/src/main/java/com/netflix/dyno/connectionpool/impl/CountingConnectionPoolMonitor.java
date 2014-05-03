@@ -14,6 +14,7 @@ import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostConnectionStats;
+import com.netflix.dyno.connectionpool.HostGroup;
 import com.netflix.dyno.connectionpool.exception.BadRequestException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;

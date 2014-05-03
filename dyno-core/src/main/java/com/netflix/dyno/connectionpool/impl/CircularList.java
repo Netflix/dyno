@@ -26,7 +26,6 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import com.google.common.base.Predicate;
-import com.google.common.collect.Collections2;
 import com.google.common.collect.Maps;
 
 public class CircularList<T> {
@@ -76,6 +75,11 @@ public class CircularList<T> {
 		swapWithList(newList);
 	}
 	
+	public List<T> getEntireList() {
+		InnerList iList = ref.get();
+		return iList != null ? iList.getList() : null;
+	}
+	
 	private class InnerList { 
 		
 		private List<T> list = new ArrayList<T>();
@@ -98,7 +102,20 @@ public class CircularList<T> {
 		}
 
 		private T getNextElement() {
+			
+			if (list == null || list.size() == 0) {
+				return null;
+			}
+			
+			if (list.size() == 1) {
+				return list.get(0);
+			}
+			
 			return list.get(getNextIndex());
+		}
+		
+		private List<T> getList() {
+			return list;
 		}
 	}
 	

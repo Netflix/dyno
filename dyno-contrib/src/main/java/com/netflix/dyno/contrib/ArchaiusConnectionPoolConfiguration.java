@@ -5,6 +5,7 @@ import org.codehaus.jettison.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.netflix.config.DynamicBooleanProperty;
 import com.netflix.config.DynamicIntProperty;
 import com.netflix.config.DynamicPropertyFactory;
 import com.netflix.dyno.connectionpool.ErrorRateMonitorConfig;
@@ -25,6 +26,8 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	private final DynamicIntProperty maxFailoverCount;
 	private final DynamicIntProperty connectTimeout;
 	private final DynamicIntProperty socketTimeout;
+	private final DynamicIntProperty poolShutdownDelay;
+	private final DynamicBooleanProperty localDcAffinity;
 	
 	private final ErrorRateMonitorConfig errorRateConfig;
 	private final RetryPolicyFactory retryPolicyFactory;
@@ -40,6 +43,8 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		maxFailoverCount = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.maxFailoverCount", super.getMaxFailoverCount());
 		connectTimeout = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.connectTimeout", super.getConnectTimeout());
 		socketTimeout = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.socketTimeout", super.getSocketTimeout());
+		poolShutdownDelay = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.poolShutdownDelay", super.getPoolShutdownDelay());
+		localDcAffinity = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + ".connection.localDcAffinity", super.localDcAffinity());
 
 		errorRateConfig = parseErrorRateMonitorConfig(propertyPrefix);
 		retryPolicyFactory = parseRetryPolicyFactory(propertyPrefix);
@@ -90,6 +95,16 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	@Override
 	public RetryPolicyFactory getRetryPolicyFactory() {
 		return retryPolicyFactory;
+	}
+
+	@Override
+	public int getPoolShutdownDelay() {
+		return poolShutdownDelay.get();
+	}
+
+	@Override
+	public boolean localDcAffinity() {
+		return localDcAffinity.get();
 	}
 
 	private ErrorRateMonitorConfig parseErrorRateMonitorConfig(String propertyPrefix) {

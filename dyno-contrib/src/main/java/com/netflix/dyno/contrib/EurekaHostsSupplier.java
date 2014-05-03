@@ -7,19 +7,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Function;
-import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.Lists;
 import com.netflix.appinfo.AmazonInfo;
 import com.netflix.appinfo.AmazonInfo.MetaDataKey;
 import com.netflix.appinfo.InstanceInfo;
+import com.netflix.appinfo.InstanceInfo.InstanceStatus;
 import com.netflix.appinfo.MyDataCenterInstanceConfig;
 import com.netflix.discovery.DefaultEurekaClientConfig;
 import com.netflix.discovery.DiscoveryClient;
 import com.netflix.discovery.DiscoveryManager;
 import com.netflix.discovery.shared.Application;
 import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostSupplier;
 
 /**
@@ -32,7 +33,7 @@ import com.netflix.dyno.connectionpool.HostSupplier;
  */
 public class EurekaHostsSupplier implements HostSupplier {
 
-	private static final Logger LOG = LoggerFactory.getLogger(EurekaHostsSupplier.class);
+	private static final Logger Logger = LoggerFactory.getLogger(EurekaHostsSupplier.class);
 
 	// The C* cluster name for discovering nodes
 	private final String applicationName;
@@ -49,10 +50,12 @@ public class EurekaHostsSupplier implements HostSupplier {
 
 		DiscoveryClient discoveryClient = DiscoveryManager.getInstance().getDiscoveryClient();
 		if (discoveryClient == null) {
-			LOG.error("Error getting discovery client");
+			Logger.error("Error getting discovery client");
 			throw new RuntimeException("Failed to create discovery client");
 		}
 
+		Logger.info("Dyno fetching instance list for app: " + applicationName);
+		
 		Application app = discoveryClient.getApplication(applicationName);
 		List<Host> hosts = new ArrayList<Host>();
 
@@ -66,20 +69,15 @@ public class EurekaHostsSupplier implements HostSupplier {
 			return hosts;
 		}
 
-		hosts = Lists.newArrayList(Collections2.transform(
-				
-				Collections2.filter(ins, new Predicate<InstanceInfo>() {
-					@Override
-					public boolean apply(InstanceInfo input) {
-						return input.getStatus() == InstanceInfo.InstanceStatus.UP;
-					}
-				}), 
+		hosts = Lists.newArrayList(Collections2.transform(ins,
 				
 				new Function<InstanceInfo, Host>() {
 					@Override
 					public Host apply(InstanceInfo info) {
 						
 						Host host = new Host(info.getHostName(), info.getPort());
+						Host.Status status = info.getStatus() == InstanceStatus.UP ? Host.Status.Up : Host.Status.Down;
+						host.setStatus(status);
 
 						try {
 							if (info.getDataCenterInfo() instanceof AmazonInfo) {
@@ -88,7 +86,7 @@ public class EurekaHostsSupplier implements HostSupplier {
 							}
 						}
 						catch (Throwable t) {
-							LOG.error("Error getting rack for host " + host.getHostName(), t);
+							Logger.error("Error getting rack for host " + host.getHostName(), t);
 						}
 
 						return host;

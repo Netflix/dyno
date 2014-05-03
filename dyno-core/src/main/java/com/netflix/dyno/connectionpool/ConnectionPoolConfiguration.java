@@ -57,7 +57,11 @@ public interface ConnectionPoolConfiguration {
     /**
      * @return Socket connect timeout
      */
-    int getConnectTimeout();
+    public int getConnectTimeout();
+    
+    public int getPoolShutdownDelay();
+    
+    public boolean localDcAffinity(); 
     
     ErrorRateMonitorConfig getErrorCheckConfig();
     

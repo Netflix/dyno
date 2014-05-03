@@ -1,17 +1,31 @@
 package com.netflix.dyno.connectionpool;
 
+import java.net.InetSocketAddress;
+
 public class Host {
 
 	private final String name;
 	private final int port;
+	private Status status = Status.Down;
+	private InetSocketAddress socketAddress = null;
 	
 	private String dc; 
 	
-	public Host(String name, int port) {
-		this.name = name;
-		this.port = port;
+	public static enum Status {
+		Up, Down;
 	}
 	
+	public Host(String name, int port) {
+		this(name, port, Status.Down);
+	}
+	
+	public Host(String name, int port, Status status) {
+		this.name = name;
+		this.port = port;
+		this.status = status;
+		this.socketAddress = new InetSocketAddress(name, port);
+	}
+
 	public String getHostName() {
 		return name;
 	}
@@ -20,9 +34,26 @@ public class Host {
 		return port;
 	}
 	
+	public String getDC() {
+		return dc;
+	}
+	
 	public Host setDC(String datacenter) {
 		this.dc = datacenter;
 		return this;
+	}
+	
+	public Host setStatus(Status condition) {
+		status = condition;
+		return this;
+	}
+	
+	public boolean isUp() {
+		return status == Status.Up;
+	}
+	
+	public InetSocketAddress getSocketAddress() {
+		return socketAddress;
 	}
 	
 	public static final Host NO_HOST = new Host("UNKNOWN", 0);
@@ -56,7 +87,7 @@ public class Host {
 
 	@Override
 	public String toString() {
-		return "Host [name=" + name + ", port=" + port + ", dc: " + dc + "]";
+		return "Host [name=" + name + ", port=" + port + ", dc: " + dc + ", status: " + status.name() + "]";
 	}
 	
 	

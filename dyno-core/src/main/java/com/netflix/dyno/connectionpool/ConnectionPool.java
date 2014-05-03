@@ -18,6 +18,9 @@ package com.netflix.dyno.connectionpool;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.Future;
+
+import net.spy.memcached.ops.OperationException;
 
 import com.netflix.dyno.connectionpool.exception.DynoException;
 
@@ -29,7 +32,8 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
  * @param <CL>
  */
 public interface ConnectionPool<CL> {
-    /**
+    
+	/**
      * Add a host to the connection pool.
      * 
      * @param host
@@ -38,12 +42,12 @@ public interface ConnectionPool<CL> {
      */
     boolean addHost(Host host);
 
-    /**
-     * Remove a host from the connection pool. Any pending connections will be
-     * allowed to complete
+	/**
+     * Remove a host from the connection pool.
      * 
-     * @returns True if host was removed or false if host does not exist
      * @param host
+     * @returns True if host was added or false if host already exists
+     * @throws DynoException
      */
     boolean removeHost(Host host);
 
@@ -73,7 +77,7 @@ public interface ConnectionPool<CL> {
      * Set the complete set of hosts in the ring
      * @param hosts
      */
-    void setHosts(Collection<Host> hosts);
+    Future<Boolean> updateHosts(Collection<Host> activeHosts, Collection<Host> inactiveHosts);
 
     /**
      * @return Return an immutable connection pool for this host
@@ -93,6 +97,7 @@ public interface ConnectionPool<CL> {
      */
     <R> OperationResult<R> executeWithFailover(Operation<CL, R> op) throws DynoException;
             
+    <R> Future<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException;
 
     /**
      * Shut down the connection pool and terminate all existing connections
@@ -102,5 +107,6 @@ public interface ConnectionPool<CL> {
     /**
      * Setup the connection pool and start any maintenance threads
      */
-    void start();
+    Future<Boolean> start();
+
 }

@@ -3,12 +3,11 @@ package com.netflix.dyno.connectionpool.impl;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
+import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
-import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
@@ -26,7 +25,7 @@ public class RoundRobinSelection<CL> implements HostSelectionStrategy<CL> {
 	}
 	
 	@Override
-	public Connection<CL> getConnection(Operation<CL, ?> op, int duration, TimeUnit unit) {
+	public Connection<CL> getConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) {
 		
 		int totalHosts = currentMap.size();
 		
@@ -79,4 +78,5 @@ public class RoundRobinSelection<CL> implements HostSelectionStrategy<CL> {
 		
 		circularList.removeElement(poolToRemove);
 	}
+
 }

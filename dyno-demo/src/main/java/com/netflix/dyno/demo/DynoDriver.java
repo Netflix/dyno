@@ -1,9 +1,7 @@
 package com.netflix.dyno.demo;
 
 import static com.netflix.dyno.demo.DemoConfig.NumReaders;
-import static com.netflix.dyno.demo.DemoConfig.NumReadersPerConn;
 import static com.netflix.dyno.demo.DemoConfig.NumWriters;
-import static com.netflix.dyno.demo.DemoConfig.NumWritersPerConn;
 import static com.netflix.dyno.demo.DemoConfig.ReadEnabled;
 import static com.netflix.dyno.demo.DemoConfig.WriteEnabled;
 
@@ -20,6 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import com.netflix.config.DynamicBooleanProperty;
 import com.netflix.config.DynamicIntProperty;
+import com.netflix.dyno.memcache.DynoMCacheClient;
 import com.netflix.servo.DefaultMonitorRegistry;
 import com.netflix.servo.annotations.DataSourceType;
 import com.netflix.servo.annotations.Monitor;
@@ -93,7 +92,6 @@ public class DynoDriver {
 		Logger.info("Starting DynoDriver reads...");
 		startOperation(ReadEnabled,
 				       NumReaders, readWorkers,
-				       NumReadersPerConn,
 				       tpReadRef,
 				       new DynoReadOperation());
 		readsStarted.set(true);
@@ -109,7 +107,6 @@ public class DynoDriver {
 		Logger.info("Starting DynoDriver writes...");
 		startOperation(WriteEnabled,
 				       NumWriters, writeWorkers,
-				       NumWritersPerConn,
 				       tpWriteRef,
 				       new DynoWriteOperation());
 		
@@ -118,7 +115,6 @@ public class DynoDriver {
 
 	public void startOperation(DynamicBooleanProperty operationEnabled, 
 							   DynamicIntProperty numWorkers, List<DynoWorker> workerList,
-							   DynamicIntProperty numWorkersPerConn,
 							   AtomicReference<ExecutorService> tpRef, 
 							   final DynoOperation operation) {
 		 
@@ -127,7 +123,7 @@ public class DynoDriver {
 			return;
 		}
 		
-		int totalWorkerPoolSize = numWorkers.get() * numWorkersPerConn.get();
+		int totalWorkerPoolSize = numWorkers.get();
 		ExecutorService threadPool = Executors.newFixedThreadPool(totalWorkerPoolSize);
 		 
 		boolean success = tpRef.compareAndSet(null, threadPool);
@@ -135,29 +131,26 @@ public class DynoDriver {
 			throw new RuntimeException("Unknown threadpool when performing tpRef CAS operation");
 		}
 		
+		final DynoStats stats = DynoStats.getInstance();
+		final DynoMCacheClient client = DynoClientHolder.getInstance().get();
+		
 		for (int i=0; i<numWorkers.get(); i++) {
 			
-			final DynoWorker worker = new DynoWorker();
-			workerList.add(worker);
-			
-			final DynoStats stats = DynoStats.getInstance();
-			
-			for (int k=0; k<numWorkersPerConn.get(); k++) {
-				threadPool.submit(new Callable<Void>() {
+			threadPool.submit(new Callable<Void>() {
 
-					@Override
-					public Void call() throws Exception {
+				@Override
+				public Void call() throws Exception {
 
-						Thread thread = Thread.currentThread();
-						while (!thread.isInterrupted() && !worker.isShutdown()) {
-							operation.process(worker, stats);
-						}
-						Logger.info("DynoWorker shutting down");
-						return null;
+					Thread thread = Thread.currentThread();
+					while (!thread.isInterrupted()) {
+						operation.process(client, stats);
 					}
-				});
-			}
+					Logger.info("DynoWorker shutting down");
+					return null;
+				}
+			});
 		}
+		
 	}
 
 	/** FUNCTIONALITY FOR STOPPING THE DYNO WORKERS */
@@ -190,16 +183,16 @@ public class DynoDriver {
 
 	private interface DynoOperation { 
 		
-		void process(DynoWorker worker, DynoStats stats); 
+		void process(DynoMCacheClient dynoClient, DynoStats stats); 
 	}
 	
 	private class DynoReadOperation implements DynoOperation {
 
 		@Override
-		public void process(DynoWorker worker, DynoStats stats) {
+		public void process(DynoMCacheClient dynoClient, DynoStats stats) {
 			Long startTime = System.currentTimeMillis();
 			try { 
-				String value = worker.read(SampleData.getInstance().getRandomKey());
+				String value = (String) dynoClient.get(SampleData.getInstance().getRandomKey()).getResult();
 				if (value != null) {
 					stats.cacheHit();
 				} else {
@@ -218,12 +211,13 @@ public class DynoDriver {
 	private class DynoWriteOperation implements DynoOperation {
 
 		@Override
-		public void process(DynoWorker worker, DynoStats stats) {
+		public void process(DynoMCacheClient dynoClient, DynoStats stats) {
 			Long startTime = System.currentTimeMillis();
 			try { 
 				String key = SampleData.getInstance().getRandomKey();
 				String value = SampleData.getInstance().getRandomValue();
-				worker.write(key, value);
+				
+				dynoClient.set(key, value);
 				stats.success();
 			} catch (Exception e) {
 				stats.failure();
@@ -242,41 +236,7 @@ public class DynoDriver {
 	public String toString() {
 		return getStatus();
 	}
-	
-	public void backfillData() {
-//		
-//		int onePercent = NumKeys.get()/100;
-//		
-//		long lastTimestamp = System.currentTimeMillis();
-//		int lastCount = 0; 
-//		
-//		DynoWorker worker = new DynoWorker();
-//		for (int i=0; i<NumKeys.get(); i++) {
-//			
-//			String key = String.valueOf(i);
-//			String value = SampleData.getInstance().getRandomValue();
-//			worker.write(key, value);
-//			
-//			if (i % onePercent == 0) {
-//				//System.out.println("Backfill progress: " + i + " out of " + NumKeys.get());
-//				
-//				long d = (System.currentTimeMillis() - lastTimestamp)/1000;
-//				int c = i - lastCount;
-//				
-//				int ratio = (int) ((d!=0) ? c/d : 0);
-//				
-//				Logger.info("Backfill progress: " + i + " out of " + NumKeys.get() + 
-//						" duration (secs): " + d + 
-//						" count: " + c + " avg rps: " + ratio);
-//				
-//				lastTimestamp = System.currentTimeMillis();
-//				lastCount = i;
-//			}
-//		}
-//		worker.shutdown();
-		new DynoBackfill().backfill();
-	}
-	
+
 	class DynoDriverStats {
 		
 		@Monitor(name="readers", type=DataSourceType.COUNTER)
@@ -290,22 +250,22 @@ public class DynoDriver {
 		}
 	}
 	
-	public static void main(String args[]) {
-		
-		//DynoDriver.getInstance().backfillData();
-		
-		DynoDriver driver = new DynoDriver();
-		
-		driver.startReads();
-		
-		try {
-			Thread.sleep(10000);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
-		
-		driver.stop();
-		
-		System.out.println(DynoStats.getInstance().getStatus());
-	}
+//	public static void main(String args[]) {
+//		
+//		//DynoDriver.getInstance().backfillData();
+//		
+//		DynoDriver driver = new DynoDriver();
+//		
+//		driver.startReads();
+//		
+//		try {
+//			Thread.sleep(10000);
+//		} catch (InterruptedException e) {
+//			e.printStackTrace();
+//		}
+//		
+//		driver.stop();
+//		
+//		System.out.println(DynoStats.getInstance().getStatus());
+//	}
 }
