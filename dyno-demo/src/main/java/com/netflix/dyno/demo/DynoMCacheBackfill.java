@@ -27,7 +27,10 @@ public class DynoMCacheBackfill {
 		final int numThreads = 10; 
 		final int numKeysPerThread = DemoConfig.NumKeys.get()/numThreads;
 		
-		ExecutorService threadPool = Executors.newFixedThreadPool(numThreads);
+		System.out.println("NUM KEYS: " + DemoConfig.NumKeys.get());
+		System.out.println("NUM KEYS PER TH: " + numKeysPerThread);
+		
+		ExecutorService threadPool = Executors.newFixedThreadPool(numThreads + 1);
 		final CountDownLatch latch = new CountDownLatch(numThreads);
 		final AtomicInteger count = new AtomicInteger(0);
 		
@@ -47,7 +50,7 @@ public class DynoMCacheBackfill {
 					
 					while(k<endKey) {
 						try {
-							client.set(""+k, SampleData.getInstance().getRandomValue());
+							client.set(""+k, SampleData.getInstance().getRandomValue()).get();
 							k++;
 							count.incrementAndGet();
 						} catch (Exception e) {
@@ -59,13 +62,27 @@ public class DynoMCacheBackfill {
 					return null;
 				}
 			});
-			
-			Logger.info("Backfiller waiting on latch");
-			latch.await();
-			Logger.info("Backfiller latch done!");
-			
-			threadPool.shutdownNow();
 		}
+			
+		threadPool.submit(new Callable<Void>() {
+
+			@Override
+			public Void call() throws Exception {
+
+				while(!Thread.currentThread().isInterrupted()) {
+					System.out.println("Count so far: " + count.get());
+					Thread.sleep(5000);
+				}
+				return null;
+			}
+		});
+
+		Logger.info("Backfiller waiting on latch");
+		latch.await();
+		Logger.info("Backfiller latch done!");
+
+		threadPool.shutdownNow();
+
 		
 //		ExecutorService thPool = Executors.newFixedThreadPool(1);
 //		

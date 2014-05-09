@@ -1,17 +1,10 @@
 package com.netflix.dyno.memcache;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.Nullable;
 
@@ -27,22 +20,21 @@ import com.google.common.collect.Collections2;
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionPool;
-import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
-import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.Operation;
-import com.netflix.dyno.connectionpool.OperationMonitor;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoException;
-import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
-import com.netflix.dyno.connectionpool.impl.CountingConnectionPoolMonitor;
-import com.netflix.dyno.connectionpool.impl.LastOperationMonitor;
 
+/**
+ * Dyno client for Memcached that uses the {@link RollingMemcachedConnectionPoolImpl} for managing connections to {@link MemcachedClient}s
+ * with local zone aware based RR load balancing and fallbacks to the remote zones
+ * 
+ * @author poberai
+ *
+ */
 public class DynoMCacheClient {
 	
 	private static final Logger Logger = LoggerFactory.getLogger(DynoMCacheClient.class);
 	
-
 	private static final String SEPARATOR = ":";
 	private final String cacheName;
 	private final String cacheNamePrefix;
@@ -297,124 +289,4 @@ public class DynoMCacheClient {
 	public String toString() {
 		return this.cacheName;
 	}
-	
-//	public static void main(String[] args) {
-//		
-//		String appName = "dynomite";
-//		
-//		
-////		EurekaHostsSupplier supplier = new EurekaHostsSupplier("dynomite");
-////		List<Host> hosts = supplier.getHosts();
-////
-////		for (Host host : hosts) {
-////			System.out.println("Host: "  + host);
-////		}
-//
-//		List<Host> hosts = new ArrayList<Host>();
-//		hosts.add(new Host("ec2-54-237-47-72.compute-1.amazonaws.com",  11211).setDC("us-east-1c").setStatus(Status.Up));
-////		hosts.add(new Host("ec2-54-198-49-149.compute-1.amazonaws.com", 11211).setDC("us-east-1c").setStatus(Status.Up));
-////		hosts.add(new Host("ec2-54-205-213-52.compute-1.amazonaws.com", 11211).setDC("us-east-1c").setStatus(Status.Up));
-//
-//		ConnectionPoolConfiguration cpConfig = new ConnectionPoolConfigurationImpl(appName).setLocalDcAffinity(false);
-//		CountingConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
-//		OperationMonitor opMonitor = new LastOperationMonitor();
-//		MemcachedConnectionFactory connFactory = new MemcachedConnectionFactory(cpConfig, cpMonitor);
-//
-//		RollingMemcachedConnectionPoolImpl<MemcachedClient> pool = 
-//				new RollingMemcachedConnectionPoolImpl<MemcachedClient>(connFactory, cpConfig, cpMonitor, opMonitor);
-//		
-//		pool.updateHosts(hosts, Collections.<Host> emptyList());
-//		
-//		
-//		try {
-//			Thread.sleep(150);
-//		} catch (Exception e) {
-//			e.printStackTrace();
-//		}
-//		
-//		System.out.println("Getting data");
-//		DynoMCacheClient client = new DynoMCacheClient("Puneet", pool);
-//		
-//		OperationResult<Object> result = client.get("test");
-//		
-//		final AtomicInteger count = new AtomicInteger(0);
-//		ExecutorService thPool = Executors.newFixedThreadPool(1);
-//		
-//		Future<Void> f = thPool.submit(new Callable<Void>() {
-//
-//			@Override
-//			public Void call() throws Exception {
-//				
-//				boolean done = false;
-//				while (!done) {
-//					System.out.println("Count so far " + count.get());
-//					Thread.sleep(5000);
-//					if (count.get() >= 1000000) {
-//						done = true;
-//					}
-//				}
-//				// TODO Auto-generated method stub
-//				return null;
-//			}
-//			
-//		});
-//
-//		try {
-//			InetSocketAddress addr  = new InetSocketAddress("ec2-54-237-47-72.compute-1.amazonaws.com", 11211);
-//			MemcachedClient mc = new MemcachedClient(addr);
-//
-//			for (int i=0; i<1000000; i++) {
-//				try {
-//					mc.set("test" + i, 360000, "Value_" + i).get();
-//					count.incrementAndGet();
-//					System.out.println("Count : " + count.get());
-//
-//				} catch (Exception e) {
-//					// TODO Auto-generated catch block
-//					e.printStackTrace();
-//				}
-//			}
-//
-//			mc.shutdown();
-//		} catch (IOException e) {
-//			e.printStackTrace();
-//		}
-//
-////		try {
-////			for (int i=0; i<1000000; i++) {
-////				client.set("test" + i, UUID.randomUUID().toString()).get();
-////				count.incrementAndGet();
-////				System.out.println("Count : " + count.get());
-////			}
-////		} catch (Exception e) {
-////			// TODO Auto-generated catch block
-////			e.printStackTrace();
-////		}
-//		
-////		
-////		//System.out.println("Key: test, value: " + result.getResult());
-////		try {
-////			f.get();
-////		} catch (InterruptedException e) {
-////			// TODO Auto-generated catch block
-////			e.printStackTrace();
-////		} catch (ExecutionException e) {
-////			// TODO Auto-generated catch block
-////			e.printStackTrace();
-////		}
-//		thPool.shutdownNow();
-//		pool.shutdown();
-//
-////		try {
-////			InetSocketAddress addr  = new InetSocketAddress("ec2-54-237-47-72.compute-1.amazonaws.com", 11211);
-////			MemcachedClient mc = new MemcachedClient(addr);
-////			
-////			mc.set("test", 36000, "puneetV");
-////			String value = (String) mc.get("test");
-////			System.out.println("Value: " + value);
-////			mc.shutdown();
-////		} catch (IOException e) {
-////			e.printStackTrace();
-////		}
-//	}
 }

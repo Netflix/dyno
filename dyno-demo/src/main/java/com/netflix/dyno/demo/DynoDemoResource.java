@@ -35,6 +35,18 @@ public class DynoDemoResource {
 	
 	
 	// ALL DYNO RESOURCES
+	
+	// ALL DYNO RESOURCES
+	@Path("/init")
+	@GET
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.TEXT_PLAIN)
+	public String dynoInit() throws Exception {
+
+		DynoDemo.getInstance().getDriver().init();
+		return "Dyno client inited!" + "\n";
+	}
+	
 	@Path("/start")
 	@GET
 	@Consumes(MediaType.TEXT_PLAIN)
@@ -51,7 +63,7 @@ public class DynoDemoResource {
 		}
 	}
 		
-	@Path("/dyno/startReads")
+	@Path("/startReads")
 	@GET
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.TEXT_PLAIN)
@@ -67,7 +79,7 @@ public class DynoDemoResource {
 		}
 	}
 		
-	@Path("/dyno/startWrites")
+	@Path("/startWrites")
 	@GET
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.TEXT_PLAIN)
@@ -83,7 +95,7 @@ public class DynoDemoResource {
 		}
 	}
 		
-	@Path("/dyno/stop")
+	@Path("/stop")
 	@GET
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.TEXT_PLAIN)
@@ -99,7 +111,7 @@ public class DynoDemoResource {
 		}
 	}
 
-	@Path("/dyno/status")
+	@Path("/status")
 	@GET
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.TEXT_PLAIN)
@@ -112,5 +124,15 @@ public class DynoDemoResource {
 			Logger.error("Error getting dyno status", e);
 			return "dyno status failed! " + e.getMessage();
 		}
+	}
+	
+	@Path("/removeOneHost")
+	@GET
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.TEXT_PLAIN)
+	public String removeOneHost() throws Exception {
+
+		DynoClientHolder.getInstance().removeOneHost();
+		return "Dyno client rmoved one host!" + "\n";
 	}
 }

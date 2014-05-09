@@ -9,11 +9,11 @@ import com.netflix.servo.annotations.DataSourceType;
 import com.netflix.servo.annotations.Monitor;
 import com.netflix.servo.monitor.Monitors;
 
-public class ServoConnectionPoolMonitor extends CountingConnectionPoolMonitor {
+public class DynoCPMonitor extends CountingConnectionPoolMonitor {
 	
-	private static final Logger Logger = LoggerFactory.getLogger(ServoConnectionPoolMonitor.class);
+	private static final Logger Logger = LoggerFactory.getLogger(DynoCPMonitor.class);
 	
-	public ServoConnectionPoolMonitor(String namePrefix) {
+	public DynoCPMonitor(String namePrefix) {
 		
 		try {
 			DefaultMonitorRegistry.getInstance().register(Monitors.newObjectMonitor(namePrefix, this));

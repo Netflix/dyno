@@ -16,6 +16,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import net.spy.memcached.MemcachedClient;
+
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -38,21 +40,68 @@ import com.netflix.dyno.connectionpool.impl.CircularList;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.CountingConnectionPoolMonitor;
 
+/**
+ * Simpler implementation of {@link HostConnectionPool} for MemcachedConnecitons. 
+ * The class maintains a circular list of Memcached {@link Connection}s underneath and just round robins traffic over them.
+ * 
+ * Each connection is in the circular list is responsible for the entire list of hosts supplied to it. That's how the spy Memcached client
+ * works, hence the {@link Connection} object wrapping the {@link MemcachedClient} can handle requests for all hosts backed by that client. 
+ * 
+ * We have a circular list of these in case we need more than one dedicated connection to each {@link Host}
+ * The no of connections in the circular list is determined by {@link ConnectionPoolConfiguration#getMaxConnsPerHost()}
+ * 
+ * Another important note:  
+ *    The connections managed underneath are assumed to be async. Hence this class does not have to ensure thread safe access to any of the 
+ *    connections, since we can just share the async connections for multiple requests.
+ *     
+ *    This greatly simplifies the design of this class.
+ *     
+ *    All the pool does is round robin over the available connections so that there is a fair distribution of load on the multiple connections
+ *    in the circular list.
+ *    
+ * 
+ * The class still makes use of generics which makes testing easier. 
+ * This also allows the entire functionality to be reused for another similar connection which multiplexes and de-multiplexes 
+ * requests for a list of hosts underneath. 
+ *  
+ * @author poberai
+ *
+ * @param <CL>
+ */
 public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 
 	private static final Logger Logger = LoggerFactory.getLogger(MemcachedConnectionPool.class);
 	
+	// The circular list tracking the individual connections. Size = config.getMaxConnsPerHost()
 	private final CircularList<Connection<CL>> mClients = new CircularList<Connection<CL>>(null);
 	
+	// The connection factory for vending config.getMaxConnsPerHost() number of connections
 	private final ConnectionFactory<CL> connFactory;
-	private final ConnectionPoolConfiguration cpConfig; 
-	private final ConnectionPoolMonitor cpMonitor;
+	// The config for this pool
+	private final ConnectionPoolConfiguration cpConfig;
+	// The host group that is associated for this connection pool. Note that the host group encapsulates a list of hosts
+	// see {@link Host}
 	private final Host host;
+	// A connection observor for tracking when connections appear and disappear
 	private final ConnectionObservor connObservor;
+	// Monitor for tracking stats
+	private final ConnectionPoolMonitor cpMonitor;
+	// Operation monitor for tracking operation level counters and latencies
 	private final OperationMonitor operationMonitor;
 	
+	// Control variable for turning the pool on and off. Note that connections cannot be borrowed when the pool is shutdown
 	private final AtomicBoolean shutdown = new AtomicBoolean(true);
 	
+	/**
+	 * Constuctor 
+	 * 
+	 * @param host
+	 * @param config 
+	 * @param monitor
+	 * @param connFactory
+	 * @param observor
+	 * @param opMonitor
+	 */
 	public MemcachedConnectionPool(Host host, 
 								   ConnectionPoolConfiguration config, ConnectionPoolMonitor monitor, 
 								   ConnectionFactory<CL> connFactory, ConnectionObservor observor,
@@ -65,6 +114,16 @@ public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 		this.operationMonitor = opMonitor;
 	}
 	
+	/**
+	 * Borrow a connection from the pool. 
+	 * This will consult the circular list and hence round robin on the available connections. 
+	 * No of connections = config.getMaxConnsPerHost()
+	 * 
+	 * Note that unlike other connection pool implementations, we do NOT need to guarantee thread safe
+	 * access to the connection, since the underlying connections are assumed  to be async in nature. 
+	 * 
+	 * @return Connection<CL> 
+	 */
 	@Override
 	public Connection<CL> borrowConnection(int duration, TimeUnit unit) throws DynoException {
 
@@ -72,18 +131,27 @@ public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 			if (shutdown.get()) {
 				throw new DynoConnectException("Cannot borrow connection from pool when it is shutdown");
 			}
+			cpMonitor.incConnectionBorrowed(host, 0);
 			return mClients.getNextElement();
 		} finally {
 			
 		}
 	}
 
+	/**
+	 * Nothing to do here since the underlying connections are async in nature. 
+	 * Just records the stats
+	 * @return true/false indicating whether the connection was closed
+	 */
 	@Override
 	public boolean returnConnection(Connection<CL> connection) {
 		cpMonitor.incConnectionReturned(host);
 		return false;
 	}
 
+	/**
+	 * Simple calls connection.close() and records stats
+	 */
 	@Override
 	public boolean closeConnection(Connection<CL> connection) {
 		try { 
@@ -94,12 +162,24 @@ public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 		return true;
 	}
 
+	/**
+	 * Causes the connection pool to shutdown
+	 */
 	@Override
 	public void markAsDown(DynoException reason) {
 		shutdown();
 	}
 
-	private static AtomicInteger sCount = new AtomicInteger(0);
+	/**
+	 * Shuts down the connection pool. Note that calling this method causes all the connections to be immediately closed. 
+	 * Hence this will cancel any in flight requests. 
+	 * 
+	 * See {@link RollingMemcachedConnectionPoolImpl#updateHosts(java.util.Collection, java.util.Collection)} for details 
+	 * on how it manages another active {@link MemcachedConnectionPool} when calling shutdown on this pool 
+	 * and allows in flight requests on this pool to complete with a sufficient grace period configured using 
+	 * {@link ConnectionPoolConfiguration#getPoolShutdownDelay()}. 
+	 * 
+	 */
 	@Override
 	public void shutdown() {
 		
@@ -113,9 +193,7 @@ public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 			return; 
 		}
 
-		int sc = sCount.incrementAndGet();
 		Logger.info("Shutting down connection pool");
-		System.out.println("Shutting down connection pool " + this.getHost().getHostName() + " " + sc + " " + Thread.currentThread().getName());
 		
 		List<Connection<CL>> connections = mClients.getEntireList();
 		
@@ -126,6 +204,11 @@ public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 		}
 	}
 
+	/**
+	 * Simple method for creation new connections as dictated by {@link ConnectionPoolConfiguration#getMaxConnsPerHost()}
+	 * 
+	 * @return int - how many connections were opened
+	 */
 	@Override
 	public int primeConnections() throws DynoException {
 		
@@ -159,21 +242,33 @@ public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 		return successCount;
 	}
 
+	/**
+	 * @return {@link Host} 
+	 */
 	@Override
 	public Host getHost() {
 		return host;
 	}
 
+	/**
+	 * @return true/false
+	 */
 	@Override
 	public boolean isActive() {
 		return !shutdown.get();
 	}
 
+	/**
+	 * @return true/false
+	 */
 	@Override
 	public boolean isShutdown() {
 		return shutdown.get();
 	}
 
+	/**
+	 * @return {@link OperationMonitor}
+	 */
 	@Override
 	public OperationMonitor getOperationMonitor() {
 		return operationMonitor;
@@ -280,9 +375,9 @@ public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 			when(mockFactory.createConnection(pool, null)).thenReturn(mockConnection);
 
 			int numConns = pool.primeConnections();
-			System.out.println("numConns: " + numConns);
-
-			verify(mockFactory, times(3)).createConnection(pool, null);
+			assertTrue("" + numConns, numConns == config.getMaxConnsPerHost());
+			
+			verify(mockFactory, times(config.getMaxConnsPerHost())).createConnection(pool, null);
 			
 			Connection<TestClient> connection = pool.borrowConnection(1, TimeUnit.MILLISECONDS);
 			assertTrue(mockConnection.equals(connection));
@@ -299,12 +394,12 @@ public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 			when(mockFactory.createConnection(pool, null)).thenReturn(mockConnection);
 			
 			int numConns = pool.primeConnections();
-			System.out.println("numConns: " + numConns);
+			assertTrue("" + numConns, numConns == config.getMaxConnsPerHost());
 
-			verify(mockFactory, times(3)).createConnection(pool, null);
+			verify(mockFactory, times(config.getMaxConnsPerHost())).createConnection(pool, null);
 			
 			pool.shutdown();
-			verify(mockConnection, times(3)).close();
+			verify(mockConnection, times(config.getMaxConnsPerHost())).close();
 		}
 
 		@Test
@@ -337,7 +432,7 @@ public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 			when(mockFactory.createConnection(pool, null)).thenReturn(mockConnection);
 
 			int numConns = pool.primeConnections();
-			System.out.println("numConns: " + numConns);
+			assertTrue("" + numConns, numConns == config.getMaxConnsPerHost());
 
 			List<Future<BasicResult>> futures = new ArrayList<Future<BasicResult>>(); 
 
@@ -354,15 +449,13 @@ public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 				totalOps += f.get().opCount.get();
 			}
 
-			System.out.println(totalOps);
-
 			pool.shutdown();
 
-			System.out.println("Conns borrowed: " + cpMonitor.getConnectionBorrowedCount());
-			System.out.println("Conns returned: " + cpMonitor.getConnectionReturnedCount());
-			System.out.println("Conns created: " + cpMonitor.getConnectionCreatedCount());
-			System.out.println("Conns closed: " + cpMonitor.getConnectionClosedCount());
-			System.out.println("Conns create failed: " + cpMonitor.getConnectionCreateFailedCount());	
+			assertTrue("TotalOps: " + totalOps, totalOps == cpMonitor.getConnectionBorrowedCount());
+			assertTrue("TotalOps: " + totalOps, totalOps == cpMonitor.getConnectionReturnedCount());
+			assertTrue("" + cpMonitor.getConnectionCreatedCount(), cpMonitor.getConnectionCreatedCount() == config.getMaxConnsPerHost());
+			assertTrue("" + cpMonitor.getConnectionClosedCount(), cpMonitor.getConnectionClosedCount() == config.getMaxConnsPerHost());
+			assertTrue("" + cpMonitor.getConnectionCreateFailedCount(), cpMonitor.getConnectionCreateFailedCount() == 0);
 		}
 	}
 }

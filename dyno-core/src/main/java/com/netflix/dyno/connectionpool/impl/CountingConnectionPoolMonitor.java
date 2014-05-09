@@ -12,9 +12,9 @@ import org.slf4j.LoggerFactory;
 
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.HostGroup;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostConnectionStats;
-import com.netflix.dyno.connectionpool.HostGroup;
 import com.netflix.dyno.connectionpool.exception.BadRequestException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
@@ -55,21 +55,25 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     }
     
     private void trackError(Host host, Exception reason) {
-        if (reason instanceof PoolTimeoutException) {
-            this.poolExhastedCount.incrementAndGet();
-        } else if (reason instanceof TimeoutException) {
-            this.socketTimeoutCount.incrementAndGet();
-        } else if (reason instanceof OperationTimeoutException) {
-            this.operationTimeoutCount.incrementAndGet();
-        } else if (reason instanceof BadRequestException) {
-            this.badRequestCount.incrementAndGet();
-        } else if (reason instanceof NoAvailableHostsException ) {
-            this.noHostsCount.incrementAndGet();
-        } else {
-            LOG.error(reason.toString(), reason);
-            this.unknownErrorCount.incrementAndGet();
-        }
-        
+    	if (reason != null) {
+    		if (reason instanceof PoolTimeoutException) {
+    			this.poolExhastedCount.incrementAndGet();
+    		} else if (reason instanceof TimeoutException) {
+    			this.socketTimeoutCount.incrementAndGet();
+    		} else if (reason instanceof OperationTimeoutException) {
+    			this.operationTimeoutCount.incrementAndGet();
+    		} else if (reason instanceof BadRequestException) {
+    			this.badRequestCount.incrementAndGet();
+    		} else if (reason instanceof NoAvailableHostsException ) {
+    			this.noHostsCount.incrementAndGet();
+    		} else {
+    			LOG.error(reason.toString(), reason);
+    			this.unknownErrorCount.incrementAndGet();
+    		}
+    	} else {
+    		this.unknownErrorCount.incrementAndGet();
+    	}
+    	
         if (host != null) {
         	getOrCreateHostStats(host).opFailure.incrementAndGet();
         }
@@ -128,6 +132,9 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     @Override
     public void incConnectionBorrowed(Host host, long delay) {
         this.connectionBorrowCount.incrementAndGet();
+        if (host == null || (host instanceof HostGroup)) {
+        	return;
+        }
         getOrCreateHostStats(host).borrowed.incrementAndGet();
     }
 
@@ -138,6 +145,9 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     @Override
     public void incConnectionReturned(Host host) {
         this.connectionReturnCount.incrementAndGet();
+        if (host == null || (host instanceof HostGroup)) {
+        	return;
+        }
         getOrCreateHostStats(host).returned.incrementAndGet();
     }
 
@@ -264,7 +274,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
 		return hostStats;
 	}
 	
-	private HostConnectionStatsImpl getOrCreateHostStats(Host host) {
+	public HostConnectionStatsImpl getOrCreateHostStats(Host host) {
 		
 		HostConnectionStatsImpl hStats = (HostConnectionStatsImpl) hostStats.get(host);
 		if (hStats != null) {

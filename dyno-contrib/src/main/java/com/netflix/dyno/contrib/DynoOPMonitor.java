@@ -4,14 +4,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import com.netflix.dyno.connectionpool.OperationMonitor;
+import com.netflix.servo.DefaultMonitorRegistry;
 import com.netflix.servo.monitor.Counter;
 import com.netflix.servo.monitor.Monitors;
 import com.netflix.servo.monitor.Timer;
 
-public class ServoOperationMonitor implements OperationMonitor {
+public class DynoOPMonitor implements OperationMonitor {
 
-	private static final String Success = "__SUCCESS"; 
-	private static final String Error = "__ERROR"; 
+	private static final String Success = "SUCCESS"; 
+	private static final String Error = "ERROR"; 
 	
 	private final ConcurrentHashMap<String, Counter> counterMap = new ConcurrentHashMap<String, Counter>();
 	private final ConcurrentHashMap<String, Timer> timerMap = new ConcurrentHashMap<String, Timer>();
@@ -20,10 +21,10 @@ public class ServoOperationMonitor implements OperationMonitor {
 	private final String ErrorPrefix;
 	private final String TimerPrefix;
 
-	public ServoOperationMonitor(String prefix) {
-		SuccessPrefix = prefix + Success;
-		ErrorPrefix   = prefix + Error;
-		TimerPrefix = prefix = "__";
+	public DynoOPMonitor(String prefix) {
+		SuccessPrefix = prefix + "__" + Success + "__";
+		ErrorPrefix   = prefix + "__" + Error + "__";
+		TimerPrefix   = prefix + "__";
 	}
 	
 	@Override
@@ -49,7 +50,7 @@ public class ServoOperationMonitor implements OperationMonitor {
 			counter = Monitors.newCounter(name);
 			Counter oldCounter = counterMap.putIfAbsent(name, counter);
 			if (oldCounter == null) {
-				Monitors.registerObject(counter);
+				DefaultMonitorRegistry.getInstance().register(counter);
 				return counter;
 			} else {
 				return oldCounter;
@@ -67,7 +68,8 @@ public class ServoOperationMonitor implements OperationMonitor {
 			timer = Monitors.newTimer(name, TimeUnit.MILLISECONDS);
 			Timer oldTimer = timerMap.putIfAbsent(name, timer);
 			if (oldTimer == null) {
-				Monitors.registerObject(timer);
+				System.out.println("\n\nREGISTERING TIMER : " + name);
+				DefaultMonitorRegistry.getInstance().register(timer);
 				return timer;
 			} else {
 				return oldTimer;

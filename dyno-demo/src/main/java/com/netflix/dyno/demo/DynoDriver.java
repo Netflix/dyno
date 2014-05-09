@@ -91,7 +91,7 @@ public class DynoDriver {
 		}
 		Logger.info("Starting DynoDriver reads...");
 		startOperation(ReadEnabled,
-				       NumReaders, readWorkers,
+				       NumReaders,
 				       tpReadRef,
 				       new DynoReadOperation());
 		readsStarted.set(true);
@@ -99,14 +99,14 @@ public class DynoDriver {
 	
 	public void startWrites() {
 		
-		if (readsStarted.get()) {
+		if (writesStarted.get()) {
 			Logger.info("Writes already started ... ignoring");
 			return;
 		}
 
 		Logger.info("Starting DynoDriver writes...");
 		startOperation(WriteEnabled,
-				       NumWriters, writeWorkers,
+				       NumWriters,
 				       tpWriteRef,
 				       new DynoWriteOperation());
 		
@@ -114,7 +114,7 @@ public class DynoDriver {
 	}
 
 	public void startOperation(DynamicBooleanProperty operationEnabled, 
-							   DynamicIntProperty numWorkers, List<DynoWorker> workerList,
+							   DynamicIntProperty numWorkers,
 							   AtomicReference<ExecutorService> tpRef, 
 							   final DynoOperation operation) {
 		 
@@ -237,6 +237,10 @@ public class DynoDriver {
 		return getStatus();
 	}
 
+	public void init() {
+		DynoClientHolder.getInstance().get();
+	}
+	
 	class DynoDriverStats {
 		
 		@Monitor(name="readers", type=DataSourceType.COUNTER)

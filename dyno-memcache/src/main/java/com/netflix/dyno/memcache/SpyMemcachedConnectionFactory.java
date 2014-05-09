@@ -17,6 +17,12 @@ import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.impl.CircularList;
 
+/**
+ * This class encapsulates a custom {@link SpyMemcachedRRLocator} for our custom local zone aware round robin load balancing
+ * with RR lb over the remote zone for fallback cases. 
+ * 
+ * @author poberai
+ */
 public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 	
 	private final String localDC; 
@@ -24,6 +30,12 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 	private final ConnectionPoolConfiguration cpConfig;
 	private final ConnectionPoolMonitor cpMonitor;
 
+	/**
+	 * Constructor
+	 * @param hosts
+	 * @param config
+	 * @param monitor
+	 */
 	public SpyMemcachedConnectionFactory(List<Host> hosts, ConnectionPoolConfiguration config, ConnectionPoolMonitor monitor) {
 		super();
 		this.localDC = System.getenv("EC2_AVAILABILITY_ZONE");
@@ -40,7 +52,11 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 		return new SpyMemcachedRRLocator();
 	}
 
-
+	/**
+	 * Impl of {@link NodeLocator} for custom local zone aware RR load balancing
+	 * @author poberai
+	 *
+	 */
 	private class SpyMemcachedRRLocator implements NodeLocator {
 
 		@Override
@@ -64,6 +80,12 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 
 		@Override
 		public Iterator<MemcachedNode> getSequence(String k) {
+			
+			System.out.println("\nGet sequence called! " + innerState.remoteZoneMCNodes.getEntireList() + "\n");
+			StackTraceElement[] elements = Thread.currentThread().getStackTrace();
+			for (StackTraceElement el : elements) {
+				System.out.println(el.toString());
+			}
 
 			final CircularList<MemcachedNode> cList = innerState.remoteZoneMCNodes;
 			final int size = cList.getEntireList().size();
@@ -120,6 +142,16 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 
 	}
 
+	/**
+	 * Inner state tracking the local zone nodes in a circular list for RR load balancing. 
+	 * It also tracks the remote zone nodes to fall back to during problems. 
+	 * It also maintains a mapping of {@link SocketAddress} for all the {@link MemcachedNode}s
+	 * This helps us connect {@link MemcachedNode}s to {@link Host}s and we can then track metrics with the 
+	 * {@link ConnectionPoolMonitor} for each {@link Host} when we route requests to each {@link MemcachedNode}
+	 *
+	 * @author poberai
+	 *
+	 */
 	private class InnerState { 
 
 		// Used to lookup the primary node for an operation

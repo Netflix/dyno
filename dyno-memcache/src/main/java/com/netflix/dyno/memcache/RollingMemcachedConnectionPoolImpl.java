@@ -15,6 +15,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import net.spy.memcached.MemcachedClient;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -50,6 +52,20 @@ import com.netflix.dyno.connectionpool.impl.HostStatusTracker;
 import com.netflix.dyno.connectionpool.impl.LastOperationMonitor;
 import com.netflix.dyno.connectionpool.impl.MonitorConsole;
 
+/**
+ * Impl of {@link ConnectionPool} 
+ * 
+ * Note that this class manages an active {@link MemcachedConnectionPool} underneath. The {@link MemcachedConnectionPool} maintains
+ * a single async connection for all active hosts. Hence we only need one  {@link MemcachedConnectionPool} for all hosts.
+ * 
+ * When the active host set changes via {@link #addHost(Host)} {@link #removeHost(Host)} or {@link #updateHosts(Collection, Collection)}
+ * we just swap the {@link MemcachedConnectionPool} with a new one and let the older one terminate. 
+ * This is done via the {@link #reconnect(Collection, Collection)} method. 
+ * 
+ * @author poberai
+ *
+ * @param <CL>
+ */
 public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	
 	private static final Logger Logger = LoggerFactory.getLogger(ConnectionPoolImpl.class);
@@ -74,7 +90,7 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 	// Inner state of the pool. Note that this state flips when there is a bad connection to a host of a change in the hosts supplied
 	private final AtomicReference<InnerState> innerState = new AtomicReference<InnerState>(new InnerState());
 	// Simple counter for tracking the no of state changes.
-	private static final AtomicInteger stateChangeCount = new AtomicInteger(0);
+	private final AtomicInteger stateChangeCount = new AtomicInteger(0);
 	
 	private final MemcachedConnectionObserver connObservor = new MemcachedConnectionObserver(this);
 	
@@ -96,6 +112,12 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 		MonitorConsole.getInstance().addMonitorConsole(namespace, cpMonitor);
 	}
 	
+	/**
+	 * Simple method that determines if there is an actual change in the set of active hosts and calls 
+	 * {@link RollingMemcachedConnectionPoolImpl#reconnect(Collection, Collection)} 
+	 * 
+	 * @return true/false indicating whether there was an actual change in connections for this pool. 
+	 */
 	@Override
 	public boolean addHost(Host host) {
 		
@@ -117,6 +139,12 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 		}
 	}
 
+	/**
+	 * Simple method that determines if there is an actual change in the set of inactive hosts and calls 
+	 * {@link RollingMemcachedConnectionPoolImpl#reconnect(Collection, Collection)} 
+	 * 
+	 * @return true/false indicating whether there was an actual change in connections for this pool. 
+	 */
 	@Override
 	public boolean removeHost(Host host) {
 
@@ -139,16 +167,25 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 		}
 	}
 
+	/**
+	 * @return true/false indicating whether the host is active/inactive
+	 */
 	@Override
 	public boolean isHostUp(Host host) {
 		return innerState.get().hostTracker.isHostUp(host);
 	}
 
+	/**
+	 * @return true/false indicating whether this host is being tracked by this conn pool.
+	 */
 	@Override
 	public boolean hasHost(Host host) {
 		return isHostUp(host); // since we only track hosts that are up
 	}
 
+	/**
+	 * @return all active {@link HostConnectionPool}s for this meta conn pool
+	 */
 	@Override
 	public List<HostConnectionPool<CL>> getActivePools() {
 		
@@ -160,11 +197,17 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 		return list;
 	}
 
+	/**
+	 * Same as {@link #getActivePools()} due to the way the Memcached {@link HostConnectionPool} function.
+	 */
 	@Override
 	public List<HostConnectionPool<CL>> getPools() {
 		return getActivePools();  // remember that we are only tracking active pools here. Inactive pools are scheduled for shutdown
 	}
 
+	/**
+	 * Similar to {@link #addHost(Host)} and {@link #removeHost(Host)}, ultimately calls {@link #reconnect(Collection, Collection)}
+	 */
 	@Override
     public Future<Boolean> updateHosts(Collection<Host> hostsUp, Collection<Host> hostsDown) {
 		
@@ -173,7 +216,6 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 			
 			// Host status changed! Recycle existing pool.
 			Logger.info("Host set has changed. Will recycle memcache connection pool");
-			System.out.println("Host set has changed. Will recycle memcache connection pool");
 			
 			return reconnect(hostsUp, hostsDown);
 		}
@@ -190,6 +232,12 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 		return null; 
 	}
 
+	/**
+	 * This method executes the supplied {@link Operation} using the {@link MemcachedConnectionPool} undernath. 
+	 * It also maintains {@link ConnectionPoolMonitor} metrics and does retries. 
+	 * 
+	 * @return {@link OperationResult} 
+	 */
 	@Override
 	public <R> OperationResult<R> executeWithFailover(Operation<CL, R> op) throws DynoException {
 		
@@ -254,6 +302,13 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 	}
 
 
+	/**
+	 * Asynchronously executes  the {@link Operation} using the {@link MemcachedConnectionPool} underneath.
+	 * It also maintains {@link ConnectionPoolMonitor} metrics. Since this is an async operation, we don't do any 
+	 * retries. That is upto the caller of the api.
+	 *
+	 * @return Future<OperationResult<R>>
+	 */
 	@Override
 	public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException {
 		
@@ -338,6 +393,28 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 		return new FutureTask<Boolean>(task);
 	}
 	
+	/**
+	 * Main method that can potentially cause a change in the connections for this connection pool. 
+	 * Note that the inner {@link HostConnectionPool} is based off of {@link MemcachedConnectionPool}
+	 * which is a wrapper over {@link MemcachedClient} from the spy memcached library. 
+	 * MemcachedClient maintains an async connection to all the hosts in the pool. Hence when there are 
+	 * new hosts added or existing hosts removed, we recycle the whole  MemcachedClient via the MemcachedConnectionPool
+	 * 
+	 * This is what the reconnect() method does. 
+	 * 1. It creates a new MemcachedConnectionPool with a new set of hosts which include the new active hosts and exclude the newly inactive hosts.
+	 * 2. The newly created MemcachedConnectionPool is added to the active pool set via the reference "innerState"
+	 * 3  Now all new requests are being sent to the new pool and we wait for inflight requests to finish with the older pool for 
+	 *    {@link ConnectionPoolConfiguration#getPoolShutdownDelay()} 
+	 * 4. Then the older pool is finally terminated using a threadpool in another thread. This allows the caller of the method to return
+	 *    without blocking for the delay {@link ConnectionPoolConfiguration#getPoolShutdownDelay()}. 
+	 * 5. A Future<Boolean> is returned for callers interested in knowing when the older pool is actually terminated. 
+	 *
+	 * 
+	 * @param activeHosts
+	 * @param inactiveHosts
+	 * @return
+	 * @throws DynoException
+	 */
 	private Future<Boolean> reconnect(Collection<Host> activeHosts, Collection<Host> inactiveHosts) throws DynoException {
 		
 		if (reconnecting.get()) {
@@ -353,8 +430,6 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 		
 		/** ====== Ok, we won the CAS. Go ahead and create the pool. === */
 		Logger.info("Reconnecting connection pool with \nnew active hosts hosts: " + activeHosts
-				+ " \nand inactive hosts: " + inactiveHosts);
-		System.out.println("Reconnecting connection pool with \nnew active hosts hosts: " + activeHosts
 				+ " \nand inactive hosts: " + inactiveHosts);
 		
 		// Track the state change counter. Useful for stats
@@ -389,10 +464,8 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 					
 					Logger.info("Sleeping for " + cpConfiguration.getPoolShutdownDelay() + 
 							" before shutting down to allow in flight requests to complete");
-					System.out.println("Sleeping for " + cpConfiguration.getPoolShutdownDelay() + 
-							" before shutting down to allow in flight requests to complete");
 					Thread.sleep(cpConfiguration.getPoolShutdownDelay());
-					
+					Logger.info("Shutting down older conn pool");
 					oldState.hostConnectionPool.shutdown();
 				}
 				return true;
@@ -404,8 +477,15 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 		return future;
 	}
 	
+	/**
+	 * Private inner class that tracks the core state of the {@link MemcachedConnectionPool} and the active set of hosts for that pool.
+	 * When we need to create a new pool via {@link RollingMemcachedConnectionPoolImpl#reconnect(Collection, Collection)} a new object 
+	 * of this class is created and swapped atomically with the older InnerState. 
+	 * 
+	 * @author poberai
+	 *
+	 */
 	private class InnerState {
-		
 		
 		private final HostStatusTracker hostTracker;
 		private final MemcachedConnectionPool<CL> hostConnectionPool;
@@ -535,7 +615,7 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 			cpMonitor = new CountingConnectionPoolMonitor();
 		}
 		
-		//@Test
+		@Test
 		public void testConnectionPoolNormal() throws Exception {
 
 			final RollingMemcachedConnectionPoolImpl<TestClient> pool = 
@@ -554,27 +634,12 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 			
 			runTest(pool, testLogic);
 			
-			checkConnectionPoolMonitorStats(2);
+			checkConnectionPoolMonitorStats(1);
 			
 			checkHostStats(pool.getActivePools().get(0).getHost());
 		}
 		
-		private void checkConnectionPoolMonitorStats(int numHosts)  {
-			Assert.assertTrue("Total ops: " + client.ops.get(), client.ops.get() > 0);
-
-			Assert.assertEquals(client.ops.get(), cpMonitor.getOperationSuccessCount());
-			Assert.assertEquals(0, cpMonitor.getOperationFailureCount());
-			Assert.assertEquals(0, cpMonitor.getOperationTimeoutCount());
-			
-			Assert.assertEquals(3, cpMonitor.getConnectionCreatedCount());
-			Assert.assertEquals(0, cpMonitor.getConnectionCreateFailedCount());
-			Assert.assertEquals(3, cpMonitor.getConnectionClosedCount());
-			
-			Assert.assertEquals(client.ops.get(), cpMonitor.getConnectionBorrowedCount());
-			Assert.assertEquals(client.ops.get(), cpMonitor.getConnectionReturnedCount());
-		}
-		
-		//@Test
+		@Test
 		public void testAddingNewHosts() throws Exception {
 			
 			final RollingMemcachedConnectionPoolImpl<TestClient> pool = 
@@ -592,49 +657,37 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 					Thread.sleep(1000);
 					
 					HostConnectionPool<TestClient> hostPool = pool.getActivePools().get(0);
-					System.out.println("BEFORE HostPool: " + hostPool.getHost().getHostName() + ": " + hostPool.isActive());
+					
+					HostGroup hGroupBeforeAddingHosts = (HostGroup) hostPool.getHost();
+					Assert.assertEquals("AllHosts1", hGroupBeforeAddingHosts.getHostName());
+					Assert.assertTrue(hostPool.isActive());
+					
+					Assert.assertEquals(host1.getHostName(), hGroupBeforeAddingHosts.getHostList().get(0).getHostName());
+					Assert.assertEquals(host2.getHostName(), hGroupBeforeAddingHosts.getHostList().get(1).getHostName());
+					
 					Future<Boolean> reconnect = pool.updateHosts(Arrays.asList(host1, host2, host3), Collections.<Host> emptyList());
 					Boolean reconnected = reconnect.get();
-					//Thread.sleep(1000);
-					System.out.println("Reconnected: " + reconnected);
-					System.out.println("After update HostPool: " + hostPool.getHost().getHostName() + ": " + hostPool.isActive());
+					Assert.assertTrue("Reconnected: " + reconnected, reconnected);
+					Assert.assertFalse(hostPool.isActive());
+					
 					HostConnectionPool<TestClient> newHostPool = pool.getActivePools().get(0);
-					System.out.println("newHostPool: " + newHostPool.getHost().getHostName() + ": " + newHostPool.isActive());
+					Assert.assertTrue(newHostPool.isActive());
+					
+					HostGroup hGroupAfterAddingHosts = (HostGroup) newHostPool.getHost();
+					Assert.assertEquals(host1.getHostName(), hGroupAfterAddingHosts.getHostList().get(0).getHostName());
+					Assert.assertEquals(host2.getHostName(), hGroupAfterAddingHosts.getHostList().get(1).getHostName());
+					Assert.assertEquals(host3.getHostName(), hGroupAfterAddingHosts.getHostList().get(2).getHostName());
+					
 					return null;
 				}
 			};
 			
 			runTest(pool, testLogic);
 			
-//			checkConnectionPoolMonitorStats(3);
-//			
-//			checkHostStats(host1);
-//			checkHostStats(host2);
-//			checkHostStats(host3);
-
-//			HostConnectionStats h1Stats = cpMonitor.getHostStats().get(host1);
-//			HostConnectionStats h2Stats = cpMonitor.getHostStats().get(host2);
-//			HostConnectionStats h3Stats = cpMonitor.getHostStats().get(host3);
-//			
-//			Assert.assertTrue("h3Stats: " + h3Stats + " h1Stats: " + h1Stats, h1Stats.getOperationSuccessCount() > h3Stats.getOperationSuccessCount());
-//			Assert.assertTrue("h3Stats: " + h3Stats + " h2Stats: " + h2Stats, h2Stats.getOperationSuccessCount() > h3Stats.getOperationSuccessCount());
-		}
-		
-		private void checkHostStats(Host host) {
-
-			HostConnectionStats hStats = cpMonitor.getHostStats().get(host);
-			
-			System.out.println(cpMonitor.getHostStats().keySet());
-			Assert.assertTrue("host ops: " + hStats.getOperationSuccessCount(), hStats.getOperationSuccessCount() > 0);
-			Assert.assertEquals(0, hStats.getOperationErrorCount());
-			Assert.assertEquals(3, hStats.getConnectionsCreated());
-			Assert.assertEquals(0, hStats.getConnectionsCreateFailed());
-			Assert.assertEquals(3, hStats.getConnectionsClosed());
-			Assert.assertEquals(hStats.getOperationSuccessCount(), hStats.getConnectionsBorrowed());
-			Assert.assertEquals(hStats.getOperationSuccessCount(), hStats.getConnectionsReturned());
+			checkConnectionPoolMonitorStats(2);
 		}
 
-		//@Test
+		@Test
 		public void testRemovingHosts() throws Exception {
 			
 			cpConfig.setPoolShutdownDelay(500);
@@ -649,12 +702,28 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 				public Void call() throws Exception {
 					Thread.sleep(500);
 					HostConnectionPool<TestClient> hostPool = pool.getActivePools().get(0);
-					System.out.println("BEFORE HostPool: " + hostPool.getHost().getHostName() + ": " + hostPool.isActive());
+					
+					HostGroup hGroupBeforeAddingHosts = (HostGroup) hostPool.getHost();
+					Assert.assertEquals("AllHosts1", hGroupBeforeAddingHosts.getHostName());
+					Assert.assertTrue(hostPool.isActive());
+					
+					Assert.assertEquals(host1.getHostName(), hGroupBeforeAddingHosts.getHostList().get(0).getHostName());
+					Assert.assertEquals(host2.getHostName(), hGroupBeforeAddingHosts.getHostList().get(1).getHostName());
+					Assert.assertEquals(host3.getHostName(), hGroupBeforeAddingHosts.getHostList().get(2).getHostName());
 
 					Future<Boolean> reconnect = pool.updateHosts(Arrays.asList(host1, host3), Arrays.asList(host2));
 					Boolean reconnected = reconnect.get();
-					System.out.println("Reconnected: " + reconnected);
-					System.out.println("AFTER HostPool: " + hostPool.getHost().getHostName() + ": " + hostPool.isActive());
+
+					Assert.assertTrue("Reconnected: " + reconnected, reconnected);
+					Assert.assertFalse(hostPool.isActive());
+					
+					HostConnectionPool<TestClient> newHostPool = pool.getActivePools().get(0);
+					Assert.assertTrue(newHostPool.isActive());
+					
+					HostGroup hGroupAfterAddingHosts = (HostGroup) newHostPool.getHost();
+					Assert.assertEquals(host1.getHostName(), hGroupAfterAddingHosts.getHostList().get(0).getHostName());
+					Assert.assertEquals(host3.getHostName(), hGroupAfterAddingHosts.getHostList().get(1).getHostName());
+
 					return null;
 				}
 			};
@@ -679,11 +748,28 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 					Thread.sleep(500);
 					
 					HostConnectionPool<TestClient> hostPool = pool.getActivePools().get(0);
-					System.out.println("BEFORE HostPool: " + hostPool.getHost().getHostName() + ": " + hostPool.isActive());
+
+					HostGroup hGroupBeforeAddingHosts = (HostGroup) hostPool.getHost();
+					Assert.assertEquals("AllHosts1", hGroupBeforeAddingHosts.getHostName());
+					Assert.assertTrue(hostPool.isActive());
 					
+					Assert.assertEquals(host1.getHostName(), hGroupBeforeAddingHosts.getHostList().get(0).getHostName());
+					Assert.assertEquals(host2.getHostName(), hGroupBeforeAddingHosts.getHostList().get(1).getHostName());
+					Assert.assertEquals(host3.getHostName(), hGroupBeforeAddingHosts.getHostList().get(2).getHostName());
+					
+					// NOW MAKE ONE CONN GOP BAD
 					pool.connObservor.connectionLost(host1);
 					Thread.sleep(1000);
-					System.out.println("AFTER HostPool: " + hostPool.getHost().getHostName() + ": " + hostPool.isActive());
+
+					Assert.assertFalse(hostPool.isActive());
+					
+					HostConnectionPool<TestClient> newHostPool = pool.getActivePools().get(0);
+					Assert.assertTrue(newHostPool.isActive());
+					
+					HostGroup hGroupAfterAddingHosts = (HostGroup) newHostPool.getHost();
+					Assert.assertEquals(host2.getHostName(), hGroupAfterAddingHosts.getHostList().get(0).getHostName());
+					Assert.assertEquals(host3.getHostName(), hGroupAfterAddingHosts.getHostList().get(1).getHostName());
+
 					return null;
 				}
 			};
@@ -691,6 +777,38 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 			runTest(pool, testLogic);
 		}
 
+		
+		private void checkHostStats(Host host) {
+
+			HostConnectionStats hStats = cpMonitor.getHostStats().get(host);
+			
+			System.out.println(cpMonitor.getHostStats().keySet());
+			System.out.println("hStats: " + hStats.toString());
+
+			Assert.assertTrue("host ops: " + hStats.getOperationSuccessCount(), hStats.getOperationSuccessCount() > 0);
+			Assert.assertEquals(0, hStats.getOperationErrorCount());
+			Assert.assertEquals(cpConfig.getMaxConnsPerHost(), hStats.getConnectionsCreated());
+			Assert.assertEquals(0, hStats.getConnectionsCreateFailed());
+			Assert.assertEquals(cpConfig.getMaxConnsPerHost(), hStats.getConnectionsClosed());
+//			Assert.assertEquals(hStats.getOperationSuccessCount(), hStats.getConnectionsBorrowed());
+//			Assert.assertEquals(hStats.getOperationSuccessCount(), hStats.getConnectionsReturned());
+		}
+
+		private void checkConnectionPoolMonitorStats(int expectedConnCreateCount)  {
+			Assert.assertTrue("Total ops: " + client.ops.get(), client.ops.get() > 0);
+
+			Assert.assertEquals(client.ops.get(), cpMonitor.getOperationSuccessCount());
+			Assert.assertEquals(0, cpMonitor.getOperationFailureCount());
+			Assert.assertEquals(0, cpMonitor.getOperationTimeoutCount());
+			
+			Assert.assertEquals(expectedConnCreateCount, cpMonitor.getConnectionCreatedCount());
+			Assert.assertEquals(0, cpMonitor.getConnectionCreateFailedCount());
+			Assert.assertEquals(expectedConnCreateCount, cpMonitor.getConnectionClosedCount());
+			
+			Assert.assertEquals(client.ops.get(), cpMonitor.getConnectionBorrowedCount());
+			Assert.assertEquals(client.ops.get(), cpMonitor.getConnectionReturnedCount());
+		}
+		
 		private void runTest(final RollingMemcachedConnectionPoolImpl<TestClient> pool, final Callable<Void> customTestLogic) throws Exception {
 
 			int nThreads = 4;
@@ -736,6 +854,4 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 			pool.shutdown();
 		}
 	}
-
-			
 }

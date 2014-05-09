@@ -71,6 +71,7 @@ public class MonitorConsole {
 			 sb.append(" closed: " + hStats.getConnectionsClosed());
 			 sb.append(" failed: " + hStats.getConnectionsCreateFailed());
 		 }
+		 sb.append("\n");
 		 
 		 return sb.toString();
 	}
