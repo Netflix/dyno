@@ -1,5 +1,7 @@
 package com.netflix.dyno.connectionpool;
 
+import java.util.concurrent.Future;
+
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 
@@ -27,12 +29,6 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
  * @param <CL>
  */
 public interface Connection<CL> {
-	
-    public interface AsyncOpenCallback<CL> {
-        void success(Connection<CL> conn);
-
-        void failure(Connection<CL> conn, DynoConnectException e);
-    }
 
     /**
      * Execute an operation on the connection and return a result
@@ -42,6 +38,8 @@ public interface Connection<CL> {
      * @throws DynoException
      */
     public <R> OperationResult<R> execute(Operation<CL, R> op) throws DynoException;
+    
+    public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException;
 
     /**
      * Shut down the connection. isOpen() will now return false.
@@ -66,7 +64,7 @@ public interface Connection<CL> {
      * 
      * @param callback
      */
-    public void openAsync(AsyncOpenCallback<CL> callback);
+    //public void openAsync(AsyncOpenCallback<CL> callback);
 
     /**
      * Can be used by clients to indicate connection exception. 
@@ -76,4 +74,10 @@ public interface Connection<CL> {
      * @return
      */
     public DynoConnectException getLastException();
+    
+    /**
+     * 
+     * @return
+     */
+    public HostConnectionPool<CL> getParentConnectionPool();
 }

@@ -30,11 +30,8 @@ public interface RetryPolicy {
      * @return
      */
     int getAttemptCount();
-
-    /**
-     * Duplicate this policy into a fresh instance
-     * 
-     * @return
-     */
-    RetryPolicy duplicate();
+    
+    public static interface RetryPolicyFactory {
+    	public RetryPolicy getRetryPolicy();
+    }
 }

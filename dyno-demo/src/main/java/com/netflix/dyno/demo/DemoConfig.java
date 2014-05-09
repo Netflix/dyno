@@ -10,6 +10,7 @@ public class DemoConfig {
 	// SAMPLE DATA CONFIG
 	public static final DynamicIntProperty NumKeys = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numKeys", 1000);
 	public static final DynamicIntProperty NumValues = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numValues", 1000);
+	public static final DynamicIntProperty DataSize = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.dataSize", 1024);
 	
 	// NUM WORKERS
 	public static final DynamicIntProperty NumWriters = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numWriters", 1);
@@ -29,6 +30,6 @@ public class DemoConfig {
 	public static final DynamicIntProperty ReadRateLimit = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.readRateLimit", 10000);
 	public static final DynamicIntProperty WriteRateLimit = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.writeRateLimit", 2000);
 
-	public static final DynamicIntProperty NumReadersPerConn = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numReadersPerConn", 2);
-	public static final DynamicIntProperty NumWritersPerConn = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numWritersPerConn", 1);
+//	public static final DynamicIntProperty NumReadersPerConn = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numReadersPerConn", 2);
+//	public static final DynamicIntProperty NumWritersPerConn = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numWritersPerConn", 1);
 }

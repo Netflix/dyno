@@ -28,7 +28,7 @@ public class SampleData {
 		}
 
 		for (int i=0; i<NumValues.get(); i++) {
-			values.add(UUID.randomUUID().toString());
+			values.add(constructRandomValue());
 		}
 	}
 	
@@ -40,5 +40,31 @@ public class SampleData {
 	public String getRandomKey() {
 		int randomKeyIndex = kRandom.nextInt(NumKeys.get());
 		return keys.get(randomKeyIndex);
+	}
+	
+	private String constructRandomValue() {
+		
+		int requriredLength = DemoConfig.DataSize.get();  /// bytes ... note that each char is 2 bytes
+
+		String s = UUID.randomUUID().toString(); 
+		int sLength = s.length();
+		
+		StringBuilder sb = new StringBuilder();
+		int lengthSoFar = 0;
+		
+		do {
+			sb.append(s);
+			lengthSoFar += sLength;
+		} while (lengthSoFar < requriredLength);
+		
+		String ss = sb.toString();
+
+		return ss;
+	}
+	
+	public static void main(String args[]) {
+		
+		SampleData sd = new SampleData();
+		System.out.println(sd.constructRandomValue().getBytes().length);
 	}
 }

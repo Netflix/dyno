@@ -15,6 +15,8 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool;
 
+import com.netflix.dyno.connectionpool.RetryPolicy.RetryPolicyFactory;
+
 
 public interface ConnectionPoolConfiguration {
 
@@ -33,11 +35,6 @@ public interface ConnectionPoolConfiguration {
      * @return Maximum number of connections to allocate for a single host's pool
      */
     public int getMaxConnsPerHost();
-
-    /**
-     * @return Initial number of connections created when a connection pool is started
-     */
-    public int getInitConnsPerHost();
 
     /**
      * @return Maximum amount of time to wait for a connection to free up when a
@@ -60,44 +57,13 @@ public interface ConnectionPoolConfiguration {
     /**
      * @return Socket connect timeout
      */
-    int getConnectTimeout();
-
-//    /**
-//     * @return Window size for limiting the number of connection open requests
-//     */
-//    int getConnectionLimiterWindowSize();
-//
-//    /**
-//     * @return Maximum number of connection attempts in a given window
-//     */
-//    int getConnectionLimiterMaxPendingCount();
-//
-//
-//    /**
-//     * @return Return the ratio for keeping a minimum number of hosts in the pool even if they are slow
-//     * or are blocked.  For example, a ratio of 0.75 with a connection pool of 12 hosts will 
-//     * ensure that no more than 4 hosts can be quaratined.
-//     */
-//    float getMinHostInPoolRatio();
+    public int getConnectTimeout();
     
-
-    /**
-     * @return Maximum number of pending connect attempts per host
-     */
-    public int getMaxPendingConnectionsPerHost();
-
-    /**
-     * @return Get max number of blocked clients for a host.
-     */
-    public int getMaxBlockedThreadsPerHost();
-
-    /**
-     * @return  Shut down a host if it times out too many time within this window
-     */
-    public int getTimeoutWindow();
-
-    /**
-     * @return Number of allowed timeouts within getTimeoutWindow() milliseconds
-     */
-    public int getMaxTimeoutCount();
+    public int getPoolShutdownDelay();
+    
+    public boolean localDcAffinity(); 
+    
+    ErrorRateMonitorConfig getErrorCheckConfig();
+    
+    RetryPolicyFactory getRetryPolicyFactory();
 }

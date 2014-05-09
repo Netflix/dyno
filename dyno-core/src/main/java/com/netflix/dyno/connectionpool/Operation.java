@@ -4,7 +4,7 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
 
 
 
-public interface Operation<CL, R> {
+public interface Operation<CL, R> extends BaseOperation<CL, R> {
     /**
      * Execute the operation on the client object and return the results.
      * 
@@ -14,4 +14,5 @@ public interface Operation<CL, R> {
      * @throws DynoException
      */
     R execute(CL client, ConnectionContext state) throws DynoException;
+    
 }
