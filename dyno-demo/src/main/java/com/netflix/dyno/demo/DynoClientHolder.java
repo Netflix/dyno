@@ -48,9 +48,20 @@ public class DynoClientHolder {
 		String appName = "dynomite";
 		
 		List<Host> hosts = new ArrayList<Host>();
-		hosts.add(new Host("ec2-54-237-47-72.compute-1.amazonaws.com",  11211).setDC("us-east-1c").setStatus(Status.Up));
-		hosts.add(new Host("ec2-54-198-49-149.compute-1.amazonaws.com", 11211).setDC("us-east-1c").setStatus(Status.Up));
-		hosts.add(new Host("ec2-54-205-213-52.compute-1.amazonaws.com", 11211).setDC("us-east-1c").setStatus(Status.Up));
+		
+		String asg = System.getenv("NETFLIX_AUTO_SCALE_GROUP");
+		if (asg.contains("pappy-v018")) {
+			
+			hosts.add(new Host("ec2-54-205-194-198.compute-1.amazonaws.com",  8102).setDC("us-east-1c").setStatus(Status.Up));
+			hosts.add(new Host("ec2-107-22-154-125.compute-1.amazonaws.com", 8102).setDC("us-east-1c").setStatus(Status.Up));
+			hosts.add(new Host("ec2-54-234-199-127.compute-1.amazonaws.com", 8102).setDC("us-east-1c").setStatus(Status.Up));
+			
+		} else {
+            
+			hosts.add(new Host("ec2-54-237-33-198.compute-1.amazonaws.com",  8102).setDC("us-east-1c").setStatus(Status.Up));
+			hosts.add(new Host("ec2-23-23-28-219.compute-1.amazonaws.com", 8102).setDC("us-east-1c").setStatus(Status.Up));
+			hosts.add(new Host("ec2-54-237-223-228.compute-1.amazonaws.com", 8102).setDC("us-east-1c").setStatus(Status.Up));
+		}
 
 		ConnectionPoolConfiguration cpConfig = new ConnectionPoolConfigurationImpl(appName).setLocalDcAffinity(false);
 
@@ -83,11 +94,11 @@ public class DynoClientHolder {
 	public void removeOneHost() throws Exception {
 		
 		List<Host> upHosts = new ArrayList<Host>();
-		upHosts.add(new Host("ec2-54-237-47-72.compute-1.amazonaws.com",  11211).setDC("us-east-1c").setStatus(Status.Up));
-		upHosts.add(new Host("ec2-54-198-49-149.compute-1.amazonaws.com", 11211).setDC("us-east-1c").setStatus(Status.Up));
-
+		upHosts.add(new Host("ec2-54-197-69-207.compute-1.amazonaws.com",  11211).setDC("us-east-1c").setStatus(Status.Up));
+		upHosts.add(new Host("ec2-54-197-132-216.compute-1.amazonaws.com", 11211).setDC("us-east-1d").setStatus(Status.Up));
+		
 		List<Host> downHosts = new ArrayList<Host>();
-		downHosts.add(new Host("ec2-54-205-213-52.compute-1.amazonaws.com", 11211).setDC("us-east-1c").setStatus(Status.Down));
+		downHosts.add(new Host("ec2-54-196-135-128.compute-1.amazonaws.com", 11211).setDC("us-east-1e").setStatus(Status.Up));
 
 		Future<Boolean> f = cpRef.get().updateHosts(upHosts, downHosts);
 		f.get();

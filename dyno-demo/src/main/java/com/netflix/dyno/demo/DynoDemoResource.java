@@ -3,6 +3,7 @@ package com.netflix.dyno.demo;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 
@@ -111,6 +112,39 @@ public class DynoDemoResource {
 		}
 	}
 
+	
+	@Path("/readSingle/{key}")
+	@GET
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.TEXT_PLAIN)
+	public String readSingle(@PathParam("key") String key) throws Exception {
+
+		Logger.info("Stopping dyno demo test"); 
+		try {
+			System.out.println("Key: " + key);
+			return "\n" + DynoDemo.getInstance().getDriver().readSingle(key) + "\n";
+		} catch (Exception e) {
+			Logger.error("Error stopping dyno test", e);
+			return "dyno stop failed! " + e.getMessage();
+		}
+	}
+	
+	@Path("/writeSingle/{key}/{val}")
+	@GET
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.TEXT_PLAIN)
+	public String writeSingle(@PathParam("key") String key, @PathParam("val") String value) throws Exception {
+
+		Logger.info("Stopping dyno demo test"); 
+		try {
+			System.out.println("Key: " + key + ", value: " + value);
+			return "\n" + DynoDemo.getInstance().getDriver().writeSingle(key, value) + "\n";
+		} catch (Exception e) {
+			Logger.error("Error stopping dyno test", e);
+			return "dyno stop failed! " + e.getMessage();
+		}
+	}
+	
 	@Path("/status")
 	@GET
 	@Consumes(MediaType.TEXT_PLAIN)

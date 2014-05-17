@@ -22,6 +22,7 @@ import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionPool;
 import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.OperationResult;
+import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 
 /**
@@ -117,7 +118,12 @@ public class DynoMCacheClient {
 
 				@Override
 				public T execute(MemcachedClient client, ConnectionContext state) throws DynoException {
-					return (T) client.get(getCanonicalizedKey(key));
+					try { 
+						return (T) client.get(key);
+					} catch(Exception e) {
+						Logger.warn("Throwing dyno connect ex after receiving ex from mc client " + e.getMessage());
+						throw new DynoConnectException(e);
+					}
 				}
 
 				@Override

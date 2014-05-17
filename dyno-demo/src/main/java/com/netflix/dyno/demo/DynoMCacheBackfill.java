@@ -21,6 +21,8 @@ public class DynoMCacheBackfill {
 	
 	
 	public void backfill() throws Exception {
+		
+		final long start = System.currentTimeMillis();
 	
 		final DynoMCacheClient client = DynoClientHolder.getInstance().get();
 		
@@ -79,48 +81,8 @@ public class DynoMCacheBackfill {
 
 		Logger.info("Backfiller waiting on latch");
 		latch.await();
-		Logger.info("Backfiller latch done!");
+		Logger.info("Backfiller latch done! in " + (System.currentTimeMillis()-start) + " ms");
 
 		threadPool.shutdownNow();
-
-		
-//		ExecutorService thPool = Executors.newFixedThreadPool(1);
-//		
-//		Future<Void> f = thPool.submit(new Callable<Void>() {
-//
-//			@Override
-//			public Void call() throws Exception {
-//				
-//				boolean done = false;
-//				while (!done) {
-//					System.out.println("Count so far " + count.get());
-//					Thread.sleep(1000);
-//					if (count.get() >= 1000000) {
-//						done = true;
-//					}
-//				}
-//				return null;
-//			}
-//		});
-
-//		try {
-//			for (int i=0; i<1000000; i++) {
-//				client.set("test" + i, "value_" + i).get();
-//				count.incrementAndGet();
-//				//System.out.println("Count : " + count.get());
-//			}
-//		} catch (Exception e) {
-//			e.printStackTrace();
-//		}
-		
-//		try {
-//			f.get();
-//		} catch (Exception e) {
-//			e.printStackTrace();
-//		}
-
-//			thPool.shutdownNow();
-//			pool.shutdown();
-
 	}
 }

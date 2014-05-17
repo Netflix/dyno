@@ -286,7 +286,9 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 				}
 				
 			} catch(Throwable t) {
-				t.printStackTrace();
+				
+				Logger.error("Caught throwable", t);
+				throw new RuntimeException(t);
 			} finally {
 				if (result != null) {
 					result.setLatency(System.currentTimeMillis()-startTime, TimeUnit.MILLISECONDS);
@@ -298,6 +300,7 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 			
 		} while(retry.allowRetry());
 		
+		Logger.info("Throwing last ex " + lastException.getMessage());
 		throw lastException;
 	}
 

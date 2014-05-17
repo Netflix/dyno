@@ -144,6 +144,7 @@ public class DynoDriver {
 					Thread thread = Thread.currentThread();
 					while (!thread.isInterrupted()) {
 						operation.process(client, stats);
+						//Thread.sleep(1000);
 					}
 					Logger.info("DynoWorker shutting down");
 					return null;
@@ -241,6 +242,21 @@ public class DynoDriver {
 		DynoClientHolder.getInstance().get();
 	}
 	
+	public String readSingle(String key) {
+		
+		DynoMCacheClient client = DynoClientHolder.getInstance().get();
+		return client.<String>get(key).getResult();
+	}
+	
+
+	public String writeSingle(String key, String value) {
+		
+		DynoMCacheClient client = DynoClientHolder.getInstance().get();
+		client.set(key, value);
+		return "done";
+	}
+	
+	
 	class DynoDriverStats {
 		
 		@Monitor(name="readers", type=DataSourceType.COUNTER)
@@ -253,6 +269,8 @@ public class DynoDriver {
 			return writeWorkers.size();
 		}
 	}
+	
+	
 	
 //	public static void main(String args[]) {
 //		

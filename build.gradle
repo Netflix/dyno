@@ -37,6 +37,7 @@ subprojects {
         compile "com.netflix.servo:servo-core:0.5.5"
         compile 'com.netflix.eureka:eureka-client:1.1.110'
         compile "com.google.guava:guava:15.0"
+        compile "org.apache.commons:commons-io:1.3.2"
         compile "junit:junit:4.11"
     }
 }
