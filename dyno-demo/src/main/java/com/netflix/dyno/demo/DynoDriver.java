@@ -13,6 +13,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -133,6 +134,11 @@ public class DynoDriver {
 		
 		final DynoStats stats = DynoStats.getInstance();
 		final DynoMCacheClient client = DynoClientHolder.getInstance().get();
+		//final MemcachedClient client = DynoClientHolder.getInstance().get();
+		
+		System.out.println("\n\nStarting with threads: " + numWorkers.get() + "\n\n");
+		
+		final AtomicBoolean stop = new AtomicBoolean(false);
 		
 		for (int i=0; i<numWorkers.get(); i++) {
 			
@@ -142,8 +148,11 @@ public class DynoDriver {
 				public Void call() throws Exception {
 
 					Thread thread = Thread.currentThread();
-					while (!thread.isInterrupted()) {
-						operation.process(client, stats);
+					while (!thread.isInterrupted() && !stop.get()) {
+						boolean success = operation.process(client, stats);
+						if (!success) {
+							stop.set(true);
+						}
 						//Thread.sleep(1000);
 					}
 					Logger.info("DynoWorker shutting down");
@@ -184,25 +193,32 @@ public class DynoDriver {
 
 	private interface DynoOperation { 
 		
-		void process(DynoMCacheClient dynoClient, DynoStats stats); 
+		boolean process(Object dynoClient, DynoStats stats); 
 	}
 	
 	private class DynoReadOperation implements DynoOperation {
 
 		@Override
-		public void process(DynoMCacheClient dynoClient, DynoStats stats) {
+		public boolean process(Object dynoClient, DynoStats stats) {
 			Long startTime = System.currentTimeMillis();
 			try { 
-				String value = (String) dynoClient.get(SampleData.getInstance().getRandomKey()).getResult();
+				//MemcachedClient client = (MemcachedClient)dynoClient;
+				//String value = (String) client.get(SampleData.getInstance().getRandomKey());
+				DynoMCacheClient client = (DynoMCacheClient)dynoClient;
+				String key = SampleData.getInstance().getRandomKey();
+				String value = (String) client.get(key).getResult();
 				if (value != null) {
 					stats.cacheHit();
 				} else {
+					System.out.println("Miss for key: " + key);
 					stats.cacheMiss();
 				}
 				stats.success();
+				return true;
 			} catch (Exception e) {
 				stats.failure();
 				Logger.error("Failed to process dyno read operation", e);
+				return false;
 			} finally {
 				stats.recordReadLatency(System.currentTimeMillis() - startTime);
 			}
@@ -212,17 +228,22 @@ public class DynoDriver {
 	private class DynoWriteOperation implements DynoOperation {
 
 		@Override
-		public void process(DynoMCacheClient dynoClient, DynoStats stats) {
+		public boolean process(Object dynoClient, DynoStats stats) {
 			Long startTime = System.currentTimeMillis();
 			try { 
 				String key = SampleData.getInstance().getRandomKey();
 				String value = SampleData.getInstance().getRandomValue();
 				
-				dynoClient.set(key, value);
+				//MemcachedClient client = (MemcachedClient)dynoClient;
+				//client.set(key, 0, value);
+				DynoMCacheClient client = (DynoMCacheClient)dynoClient;
+				client.set(key, value);
 				stats.success();
+				return true;
 			} catch (Exception e) {
 				stats.failure();
 				Logger.error("Failed to process dyno write operation", e);
+				return false;
 			} finally {
 				stats.recordWriteLatency(System.currentTimeMillis() - startTime);
 			}
@@ -244,14 +265,20 @@ public class DynoDriver {
 	
 	public String readSingle(String key) {
 		
-		DynoMCacheClient client = DynoClientHolder.getInstance().get();
+		Object dClient = DynoClientHolder.getInstance().get();
+		//MemcachedClient client = (MemcachedClient)dClient;
+		//	return (String) client.get(key);
+		DynoMCacheClient client = (DynoMCacheClient)dClient;
 		return client.<String>get(key).getResult();
 	}
 	
 
 	public String writeSingle(String key, String value) {
 		
-		DynoMCacheClient client = DynoClientHolder.getInstance().get();
+		Object dClient = DynoClientHolder.getInstance().get();
+		//MemcachedClient client = (MemcachedClient)dClient;
+		//client.set(key, 0, value);
+		DynoMCacheClient client = (DynoMCacheClient)dClient;
 		client.set(key, value);
 		return "done";
 	}

@@ -1,5 +1,10 @@
 package com.netflix.dyno.memcache;
 
+import java.util.Iterator;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
+
 import net.spy.memcached.MemcachedNode;
 
 import com.netflix.dyno.connectionpool.impl.CircularList;
@@ -22,8 +27,28 @@ public class RoundRobinLocator extends InstrumentedLocator {
 	}
 
 	@Override
-	public CircularList<MemcachedNode> getNodeSequence(String key) {
-		return remoteZoneList;
+	public Iterator<MemcachedNode> getNodeSequence(String key) {
+		
+		final AtomicInteger count = new AtomicInteger(remoteZoneList.getEntireList().size());
+		
+		return new Iterator<MemcachedNode>() {
+
+			@Override
+			public boolean hasNext() {
+				return count.get() > 0;
+			}
+
+			@Override
+			public MemcachedNode next() {
+				count.decrementAndGet();
+				return remoteZoneList.getNextElement();
+			}
+
+			@Override
+			public void remove() {
+				throw new NotImplementedException();
+			}
+		};
 	}
 
 }

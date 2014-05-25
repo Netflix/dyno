@@ -38,6 +38,7 @@ subprojects {
         compile 'com.netflix.eureka:eureka-client:1.1.110'
         compile "com.google.guava:guava:15.0"
         compile "org.apache.commons:commons-io:1.3.2"
+        compile "com.googlecode.json-simple:json-simple:1.1"
         compile "junit:junit:4.11"
     }
 }
@@ -55,6 +56,7 @@ project(':dyno-core') {
         compile "org.slf4j:slf4j-api:1.7.5"
         compile "net.spy:spymemcached:2.9.1"
         compile "org.apache.commons:commons-math:2.2"
+        compile "org.mockito:mockito-all:1.9.5"
         testCompile "junit:junit:4.11"
     }
 }
@@ -73,7 +75,6 @@ project(':dyno-memcache') {
     dependencies {
         compile  project(':dyno-core')
         compile  project(':dyno-contrib')
-        compile "org.mockito:mockito-all:1.9.5"
         compile "org.slf4j:slf4j-log4j12:1.7.2"
     }
 }

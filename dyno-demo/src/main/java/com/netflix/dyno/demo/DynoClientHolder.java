@@ -1,23 +1,24 @@
 package com.netflix.dyno.demo;
 
+import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
+
+import javax.annotation.Nullable;
 
 import net.spy.memcached.MemcachedClient;
 
-import com.netflix.dyno.connectionpool.ConnectionPool;
-import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
+import com.google.common.base.Function;
+import com.google.common.collect.Collections2;
+import com.netflix.config.DynamicIntProperty;
+import com.netflix.config.DynamicPropertyFactory;
+import com.netflix.config.DynamicStringProperty;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
-import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
-import com.netflix.dyno.contrib.DynoCPMonitor;
-import com.netflix.dyno.contrib.DynoOPMonitor;
 import com.netflix.dyno.memcache.DynoMCacheClient;
-import com.netflix.dyno.memcache.MemcachedConnectionFactory;
-import com.netflix.dyno.memcache.RollingMemcachedConnectionPoolImpl;
 
 public class DynoClientHolder {
 
@@ -28,12 +29,11 @@ public class DynoClientHolder {
 	}
 	
 	private final AtomicReference<DynoMCacheClient> ref = new AtomicReference<DynoMCacheClient>(null);
-	private final AtomicReference<ConnectionPool<MemcachedClient>> cpRef 
-		= new AtomicReference<ConnectionPool<MemcachedClient>>(null);
-	
+//	private final AtomicReference<MemcachedClient> ref = new AtomicReference<MemcachedClient>(null);
+
 	private DynoClientHolder() {
 		try {
-			ref.set(init());
+			ref.set(init2());
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
@@ -43,64 +43,79 @@ public class DynoClientHolder {
 		return ref.get();
 	}
 	
-	private DynoMCacheClient init() throws Exception {
-		
-		String appName = "dynomite";
-		
-		List<Host> hosts = new ArrayList<Host>();
-		
-		String asg = System.getenv("NETFLIX_AUTO_SCALE_GROUP");
-		if (asg.contains("pappy-v018")) {
-			
-			hosts.add(new Host("ec2-54-205-194-198.compute-1.amazonaws.com",  8102).setDC("us-east-1c").setStatus(Status.Up));
-			hosts.add(new Host("ec2-107-22-154-125.compute-1.amazonaws.com", 8102).setDC("us-east-1c").setStatus(Status.Up));
-			hosts.add(new Host("ec2-54-234-199-127.compute-1.amazonaws.com", 8102).setDC("us-east-1c").setStatus(Status.Up));
-			
-		} else {
-            
-			hosts.add(new Host("ec2-54-237-33-198.compute-1.amazonaws.com",  8102).setDC("us-east-1c").setStatus(Status.Up));
-			hosts.add(new Host("ec2-23-23-28-219.compute-1.amazonaws.com", 8102).setDC("us-east-1c").setStatus(Status.Up));
-			hosts.add(new Host("ec2-54-237-223-228.compute-1.amazonaws.com", 8102).setDC("us-east-1c").setStatus(Status.Up));
-		}
+//	public MemcachedClient get() {
+//		return ref.get();
+//	}
 
-		ConnectionPoolConfiguration cpConfig = new ConnectionPoolConfigurationImpl(appName).setLocalDcAffinity(false);
-
-		//		CountingConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
-//		OperationMonitor opMonitor = new LastOperationMonitor();
+	private DynoMCacheClient init2() throws Exception {
 		
-		DynoCPMonitor cpMonitor = new DynoCPMonitor("Demo");
-		DynoOPMonitor opMonitor = new DynoOPMonitor("Demo");
-		
-		MemcachedConnectionFactory connFactory = new MemcachedConnectionFactory(cpConfig, cpMonitor);
-
-		RollingMemcachedConnectionPoolImpl<MemcachedClient> pool = 
-				new RollingMemcachedConnectionPoolImpl<MemcachedClient>("pappyDemo", connFactory, cpConfig, cpMonitor, opMonitor);
-		
-		pool.updateHosts(hosts, Collections.<Host> emptyList());
-		
-		cpRef.set(pool);
-		
+		DynoMCacheClient client = 
+				DynoMCacheClient.Builder.withName("Demo")
+				.withDynomiteClusterName("dynomite_memcached_puneet")
+				.build();
+				
 		try {
 			Thread.sleep(150);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 		
-		final DynoMCacheClient client = new DynoMCacheClient("Puneet", pool);
-		
 		return client;
+	}
+	
+	
+	public MemcachedClient init() {
+		
+		final DynamicStringProperty HostList = DynamicPropertyFactory.getInstance().getStringProperty("dyno.demo.hosts", null);
+		final DynamicIntProperty HostPort = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.port", 8102);
+
+		int port = HostPort.get();
+		final List<Host> hosts = new ArrayList<Host>();
+
+		String hostList = HostList.get();
+		if (hostList == null || hostList.isEmpty()) {
+			hosts.add(new Host("ec2-54-237-33-198.compute-1.amazonaws.com",  port).setDC("us-east-1c").setStatus(Status.Up));
+			hosts.add(new Host("ec2-23-23-28-219.compute-1.amazonaws.com", port).setDC("us-east-1c").setStatus(Status.Up));
+			hosts.add(new Host("ec2-54-237-223-228.compute-1.amazonaws.com", port).setDC("us-east-1c").setStatus(Status.Up));
+		} else {
+			String[] parts = hostList.split(",");
+			for (String part : parts) {
+				hosts.add(new Host(part,  port).setDC("us-east-1c").setStatus(Status.Up));
+			}
+		}
+
+//		hosts.add(new Host("ec2-54-82-176-215.compute-1.amazonaws.com",  8102).setDC("us-east-1c").setStatus(Status.Up));
+//		hosts.add(new Host("ec2-54-83-87-174.compute-1.amazonaws.com", 8102).setDC("us-east-1c").setStatus(Status.Up));
+//		hosts.add(new Host("ec2-54-81-138-73.compute-1.amazonaws.com", 8102).setDC("us-east-1c").setStatus(Status.Up));
+		
+		Collection<InetSocketAddress> addrs = Collections2.transform(hosts, new Function<Host, InetSocketAddress>() {
+
+			@Override
+			@Nullable
+			public InetSocketAddress apply(@Nullable Host input) {
+				return input.getSocketAddress();
+			}
+		});
+		
+		System.out.println("CREATING MemcachedClient for nodes: " + addrs);
+		try {
+			return new MemcachedClient(new ArrayList<InetSocketAddress>(addrs));
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+
 	}
 	
 	public void removeOneHost() throws Exception {
 		
-		List<Host> upHosts = new ArrayList<Host>();
-		upHosts.add(new Host("ec2-54-197-69-207.compute-1.amazonaws.com",  11211).setDC("us-east-1c").setStatus(Status.Up));
-		upHosts.add(new Host("ec2-54-197-132-216.compute-1.amazonaws.com", 11211).setDC("us-east-1d").setStatus(Status.Up));
-		
-		List<Host> downHosts = new ArrayList<Host>();
-		downHosts.add(new Host("ec2-54-196-135-128.compute-1.amazonaws.com", 11211).setDC("us-east-1e").setStatus(Status.Up));
-
-		Future<Boolean> f = cpRef.get().updateHosts(upHosts, downHosts);
-		f.get();
+//		List<Host> upHosts = new ArrayList<Host>();
+//		upHosts.add(new Host("ec2-54-197-69-207.compute-1.amazonaws.com",  11211).setDC("us-east-1c").setStatus(Status.Up));
+//		upHosts.add(new Host("ec2-54-197-132-216.compute-1.amazonaws.com", 11211).setDC("us-east-1d").setStatus(Status.Up));
+//		
+//		List<Host> downHosts = new ArrayList<Host>();
+//		downHosts.add(new Host("ec2-54-196-135-128.compute-1.amazonaws.com", 11211).setDC("us-east-1e").setStatus(Status.Up));
+//
+//		Future<Boolean> f = cpRef.get().updateHosts(upHosts, downHosts);
+//		f.get();
 	}
 }

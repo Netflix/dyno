@@ -63,7 +63,11 @@ public interface ConnectionPoolConfiguration {
     
     public boolean localDcAffinity(); 
     
-    ErrorRateMonitorConfig getErrorCheckConfig();
+    public ErrorRateMonitorConfig getErrorCheckConfig();
     
-    RetryPolicyFactory getRetryPolicyFactory();
+    public RetryPolicyFactory getRetryPolicyFactory();
+    
+    public HostSupplier getHostSupplier();
+    
+    public TokenMapSupplier getTokenSupplier();
 }

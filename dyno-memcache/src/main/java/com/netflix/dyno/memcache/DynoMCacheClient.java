@@ -24,6 +24,10 @@ import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
+import com.netflix.dyno.contrib.DynoCPMonitor;
+import com.netflix.dyno.contrib.DynoOPMonitor;
+import com.netflix.dyno.contrib.EurekaHostsSupplier;
 
 /**
  * Dyno client for Memcached that uses the {@link RollingMemcachedConnectionPoolImpl} for managing connections to {@link MemcachedClient}s
@@ -294,5 +298,60 @@ public class DynoMCacheClient {
 
 	public String toString() {
 		return this.cacheName;
+	}
+	
+	public static class Builder {
+		
+		private String appName;
+		private String clusterName;
+		private ConnectionPoolConfigurationImpl cpConfig;
+		
+		public Builder(String name) {
+			appName = name;
+			cpConfig = new ConnectionPoolConfigurationImpl(appName);
+		}
+		
+		public Builder withPort(int port) {
+			cpConfig.setPort(port);
+			return this;
+		}
+
+
+		public Builder withDynomiteClusterName(String cluster) {
+			clusterName = cluster;
+			return this;
+		}
+
+		public DynoMCacheClient build() {
+
+			assert(appName != null);
+			assert(clusterName != null);
+			
+			cpConfig.withHostSupplier(new EurekaHostsSupplier(clusterName, cpConfig));
+
+//			CountingConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
+//			OperationMonitor opMonitor = new LastOperationMonitor();
+			DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);
+			DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
+			
+			MemcachedConnectionFactory connFactory = new MemcachedConnectionFactory(cpConfig, cpMonitor);
+
+			RollingMemcachedConnectionPoolImpl<MemcachedClient> pool = 
+					new RollingMemcachedConnectionPoolImpl<MemcachedClient>(appName, connFactory, cpConfig, cpMonitor, opMonitor);
+			
+			try {
+				pool.start().get();
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+			
+			final DynoMCacheClient client = new DynoMCacheClient(appName, pool);
+			
+			return client;
+		}
+		
+		public static Builder withName(String name) {
+			return new Builder(name);
+		}
 	}
 }

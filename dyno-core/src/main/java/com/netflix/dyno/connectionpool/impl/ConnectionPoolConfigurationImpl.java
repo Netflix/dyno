@@ -5,13 +5,15 @@ import java.util.List;
 
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
 import com.netflix.dyno.connectionpool.ErrorRateMonitorConfig;
+import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.RetryPolicy;
 import com.netflix.dyno.connectionpool.RetryPolicy.RetryPolicyFactory;
+import com.netflix.dyno.connectionpool.TokenMapSupplier;
 
 public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfiguration {
 	
 	// DEFAULTS 
-	private static final int DEFAULT_PORT = 11211; 
+	private static final int DEFAULT_PORT = 8102; 
 	private static final int DEFAULT_MAX_CONNS_PER_HOST = 1; 
 	private static final int DEFAULT_MAX_TIMEOUT_WHEN_EXHAUSTED = 2000; 
 	private static final int DEFAULT_MAX_FAILOVER_COUNT = 3; 
@@ -19,6 +21,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private static final int DEFAULT_SOCKET_TIMEOUT = 12000; 
 	private static final int DEFAULT_POOL_SHUTDOWN_DELAY = 60000; 
 	private static final boolean DEFAULT_LOCAL_DC_AFFINITY = true; 
+	private HostSupplier hostSupplier;
+	private TokenMapSupplier tokenSupplier;
 
 	private final String name;
 	private int port = DEFAULT_PORT; 
@@ -69,8 +73,9 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		return maxFailoverCount;
 	}
 
-	public void setPort(int port) {
+	public ConnectionPoolConfigurationImpl setPort(int port) {
 		this.port = port;
+		return this;
 	}
 
 	@Override
@@ -146,6 +151,24 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		return this;
 	}
 	
+	public HostSupplier getHostSupplier() {
+		return hostSupplier;
+	}
+
+	public ConnectionPoolConfigurationImpl withHostSupplier(HostSupplier hSupplier) {
+		hostSupplier = hSupplier;
+		return this;
+	}
+
+	public TokenMapSupplier getTokenSupplier() {
+		return tokenSupplier;
+	}
+
+	public ConnectionPoolConfigurationImpl withTokenSupplier(TokenMapSupplier tSupplier) {
+		tokenSupplier = tSupplier;
+		return this;
+	}
+
 	public static class ErrorRateMonitorConfigImpl implements ErrorRateMonitorConfig {
 
 		int window = 60; 

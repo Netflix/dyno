@@ -15,8 +15,6 @@ import net.spy.memcached.NodeLocator;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.Host.Status;
-import com.netflix.dyno.connectionpool.impl.CircularList;
 
 /**
  * This class encapsulates a custom {@link SpyMemcachedRRLocator} for our custom local zone aware round robin load balancing
@@ -50,18 +48,8 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 	 */
 	public NodeLocator createLocator(List<MemcachedNode> list) {
 		
-		String asg = System.getenv("NETFLIX_AUTO_SCALE_GROUP");
-		innerState.updateMemcachedNodes(list);
 		return new TokenAwareLocator(this);
-//
-//		if (asg.contains("pappy-v018")) {
-//			System.out.println("Going with TOKEN AWARE");
-//			return new TokenAwareLocator(this);
-//			
-//		} else {
-//			System.out.println("Going with ROUND ROBIN");
 //			return new RoundRobinLocator(this);
-//		}
 	}
 
 	public MemcachedNode getMemcachedNodeForHost(Host host) {
@@ -89,6 +77,9 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 		return cpMonitor;
 	}
 	
+	public ConnectionPoolConfiguration getCPConfig() {
+		return cpConfig;
+	}
 	public static abstract class InstrumentedLocator implements NodeLocator {
 		
 		private final SpyMemcachedConnectionFactory connFactory; 
@@ -99,7 +90,7 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 
 		public abstract MemcachedNode getPrimaryNode(String key);
 		
-		public abstract CircularList<MemcachedNode> getNodeSequence(String key);
+		public abstract Iterator<MemcachedNode> getNodeSequence(String key);
 
 		public SpyMemcachedConnectionFactory getConnectionFactory() {
 			return connFactory;
@@ -111,6 +102,10 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 			MemcachedNode node = null;
 			try {
 				node = getPrimaryNode(k);
+				
+				if (node == null) {
+					System.out.println("\n\nBorrowing NULL primary node: " + node + "\n\n");
+				}
 				return node;
 			} finally {
 				
@@ -123,29 +118,28 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 				}
 			}
 		}
-
+		
+		/**
+		 * Simple wrapper around Iterator<MemcachedNode> so that we can track connection pool stats
+		 */
 		@Override
 		public Iterator<MemcachedNode> getSequence(String k) {
 			
-			final CircularList<MemcachedNode> cList = getNodeSequence(k);
+			final Iterator<MemcachedNode> nodeIter = this.getNodeSequence(k);
 			
-			final int size = cList.getEntireList().size();
-
 			return new Iterator<MemcachedNode>() {
-
-				int count = size;
 
 				@Override
 				public boolean hasNext() {
-					return count > 0;
+					return nodeIter.hasNext();
 				}
 
 				@Override
 				public MemcachedNode next() {
-					count--;
+					
 					MemcachedNode node = null;
 					try {
-						node = cList.getNextElement();
+						node = nodeIter.next();
 						return node;
 						
 					} finally {

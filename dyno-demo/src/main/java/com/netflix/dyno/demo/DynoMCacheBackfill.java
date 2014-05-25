@@ -25,6 +25,7 @@ public class DynoMCacheBackfill {
 		final long start = System.currentTimeMillis();
 	
 		final DynoMCacheClient client = DynoClientHolder.getInstance().get();
+		//final MemcachedClient client = DynoClientHolder.getInstance().get();
 		
 		final int numThreads = 10; 
 		final int numKeysPerThread = DemoConfig.NumKeys.get()/numThreads;
@@ -53,6 +54,7 @@ public class DynoMCacheBackfill {
 					while(k<endKey) {
 						try {
 							client.set(""+k, SampleData.getInstance().getRandomValue()).get();
+							//client.set(""+k, 0, SampleData.getInstance().getRandomValue()).get();
 							k++;
 							count.incrementAndGet();
 						} catch (Exception e) {

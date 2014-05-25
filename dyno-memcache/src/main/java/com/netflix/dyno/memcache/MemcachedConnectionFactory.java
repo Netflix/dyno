@@ -53,7 +53,7 @@ public class MemcachedConnectionFactory implements ConnectionFactory<MemcachedCl
 
 			@Override
 			public void connectionLost(SocketAddress sa) {
-				Logger.info("Connection lost for SocketAddress: " + sa);
+				Logger.info("\n\n HERE -----> Connection lost for SocketAddress: " + sa);
 				
 				Host hostThatIsLost = saToHostMap.get(sa);
 				if (hostThatIsLost != null) {
