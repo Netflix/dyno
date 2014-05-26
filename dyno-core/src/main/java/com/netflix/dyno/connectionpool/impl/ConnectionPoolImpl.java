@@ -9,6 +9,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -58,6 +59,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	private final ConnectionPoolConfiguration cpConfiguration; 
 	private final ConnectionPoolMonitor cpMonitor; 
 	
+	private final ExecutorService recoveryThreadPool = Executors.newFixedThreadPool(1);
+	
 	private final HostSelectionStrategy<CL> selectionStrategy = new RoundRobinSelection<CL>(cpMap); 
 	
 	public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon) {
@@ -78,7 +81,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			return false;
 		}
 		
-		SimpleAsyncConnectionPoolImpl<CL> hostPool = new SimpleAsyncConnectionPoolImpl<CL>(host, connFactory, cpConfiguration, cpMonitor);
+		HostConnectionPoolImpl<CL> hostPool = new HostConnectionPoolImpl<CL>(host, connFactory, cpConfiguration, cpMonitor, recoveryThreadPool);
 		
 		HostConnectionPool<CL> prevPool = cpMap.putIfAbsent(host, hostPool);
 		if (prevPool == null) {
@@ -149,7 +152,15 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 	@Override
 	public Future<Boolean> updateHosts(Collection<Host> hostsUp, Collection<Host> hostsDown) {
-		throw new RuntimeException("Not implemented");
+		
+		boolean condition = false;
+		for (Host hostUp : hostsUp) {
+			condition |= addHost(hostUp);
+		}
+		for (Host hostDown : hostsDown) {
+			condition |= removeHost(hostDown);
+		}
+		return getEmptyFutureTask(condition);
 	}
 
 	@Override
@@ -200,7 +211,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				}
 				
 			} catch(Throwable t) {
-				t.printStackTrace();
+				throw new RuntimeException(t);
 			} finally {
 				if (connection != null) {
 					connection.getParentConnectionPool().returnConnection(connection);
@@ -217,6 +228,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		for (Host host : cpMap.keySet()) {
 			removeHost(host);
 		}
+		recoveryThreadPool.shutdownNow();
 	}
 
 	@Override
@@ -224,7 +236,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		for (Host host : cpMap.keySet()) {
 			cpMap.get(host).primeConnections();
 		}
-		return null;
+		return getEmptyFutureTask(true);
 	}
 	
 	private class ConnectionPoolHealthTracker { 
@@ -260,6 +272,23 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		}
 	}
 	
+	private Future<Boolean> getEmptyFutureTask(final Boolean condition) {
+		
+		final Callable<Boolean> task = new Callable<Boolean>() {
+			@Override
+			public Boolean call() throws Exception {
+				return condition;
+			}
+		};
+		
+		try { 
+			task.call();
+		} catch (Exception e) {
+			// do nothing here.
+		}
+		return new FutureTask<Boolean>(task);
+	}
+
 	
 	public static class UnitTest {
 		
@@ -648,6 +677,12 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				public String getName() {
 					return "TestOperation";
 				}
+				
+
+				@Override
+				public String getKey() {
+					return "TestOperation";
+				}
 			});
 		}
 
@@ -676,6 +711,11 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 								@Override
 								public String getName() {
+									return "TestOperation";
+								}
+
+								@Override
+								public String getKey() {
 									return "TestOperation";
 								}
 							});

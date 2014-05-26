@@ -22,9 +22,9 @@ public class DynoOPMonitor implements OperationMonitor {
 	private final String TimerPrefix;
 
 	public DynoOPMonitor(String prefix) {
-		SuccessPrefix = prefix + "__" + Success + "__";
-		ErrorPrefix   = prefix + "__" + Error + "__";
-		TimerPrefix   = prefix + "__";
+		SuccessPrefix = "Dyno__" + prefix + "__" + Success + "__";
+		ErrorPrefix   = "Dyno__" + prefix + "__" + Error + "__";
+		TimerPrefix   = "Dyno__" + prefix + "__";
 	}
 	
 	@Override

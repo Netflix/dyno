@@ -84,7 +84,7 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 	private final ExecutorService threadPool = Executors.newFixedThreadPool(1); 
 	
 	// Status tracking the state of this connection pool
-	private final AtomicBoolean active = new AtomicBoolean(true);
+	private final AtomicBoolean active = new AtomicBoolean(false);
 	private final AtomicBoolean reconnecting = new AtomicBoolean(false);
 	
 	// Inner state of the pool. Note that this state flips when there is a bad connection to a host of a change in the hosts supplied
@@ -286,7 +286,9 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 				}
 				
 			} catch(Throwable t) {
-				t.printStackTrace();
+				
+				Logger.error("Caught throwable", t);
+				throw new RuntimeException(t);
 			} finally {
 				if (result != null) {
 					result.setLatency(System.currentTimeMillis()-startTime, TimeUnit.MILLISECONDS);
@@ -298,6 +300,7 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 			
 		} while(retry.allowRetry());
 		
+		Logger.info("Throwing last ex " + lastException.getMessage());
 		throw lastException;
 	}
 
@@ -370,10 +373,25 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 		}
 		
 		active.set(true);
+		return processUpdateFromHostSupplier();
+	}
+	
+	private Future<Boolean> processUpdateFromHostSupplier() throws DynoException {
+
+		Collection<Host> hosts = cpConfiguration.getHostSupplier().getHosts();
 		
-		HostStatusTracker hostTracker = innerState.get().hostTracker;
-		return (reconnect(hostTracker.getActiveHosts(), hostTracker.getInactiveHosts()));
+		List<Host> hostsUp = new ArrayList<Host>();
+		List<Host> hostsDown = new ArrayList<Host>();
 		
+		for (Host host : hosts) {
+			if (host.isUp()) {
+				hostsUp.add(host);
+			} else {
+				hostsDown.add(host);
+			}
+		}
+		
+		return reconnect(hostsUp, hostsDown);
 	}
 	
 	private Future<Boolean> getEmptyFutureTask(final Boolean condition) {
@@ -833,6 +851,12 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 										@Override
 										public String getName() {
 											return "testOperation";
+										}
+										
+
+										@Override
+										public String getKey() {
+											return "TestOperation";
 										}
 									});
 								} catch (DynoException e) {

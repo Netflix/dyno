@@ -15,7 +15,6 @@ import net.spy.memcached.NodeLocator;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.impl.CircularList;
 
 /**
  * This class encapsulates a custom {@link SpyMemcachedRRLocator} for our custom local zone aware round robin load balancing
@@ -48,71 +47,107 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 	 * returns a instance of {@link KetamaNodeLocator}.
 	 */
 	public NodeLocator createLocator(List<MemcachedNode> list) {
-		innerState.updateMemcachedNodes(list);
-		return new SpyMemcachedRRLocator();
+		
+		return new TokenAwareLocator(this);
+//			return new RoundRobinLocator(this);
 	}
 
-	/**
-	 * Impl of {@link NodeLocator} for custom local zone aware RR load balancing
-	 * @author poberai
-	 *
-	 */
-	private class SpyMemcachedRRLocator implements NodeLocator {
+	public MemcachedNode getMemcachedNodeForHost(Host host) {
+		return innerState.saToMCNodeMap.get(host.getSocketAddress());
+	}
 
+	public Host getHostForMemcachedNode(MemcachedNode node) {
+		return innerState.saToHostMap.get(node.getSocketAddress());
+	}
+	
+	public Collection<MemcachedNode> getAllNodes() {
+		return innerState.allMCNodes;
+	}
+	
+
+	public Collection<MemcachedNode> getAllLocalZoneNodes() {
+		return innerState.localZoneMCNodes;
+	}
+
+	public Collection<MemcachedNode> getAllRemoteZoneNodes() {
+		return innerState.remoteZoneMCNodes;
+	}
+	
+	public ConnectionPoolMonitor getCPMonitor() {
+		return cpMonitor;
+	}
+	
+	public ConnectionPoolConfiguration getCPConfig() {
+		return cpConfig;
+	}
+	public static abstract class InstrumentedLocator implements NodeLocator {
+		
+		private final SpyMemcachedConnectionFactory connFactory; 
+		
+		public InstrumentedLocator(SpyMemcachedConnectionFactory cFactory) {
+			this.connFactory = cFactory;
+		}
+
+		public abstract MemcachedNode getPrimaryNode(String key);
+		
+		public abstract Iterator<MemcachedNode> getNodeSequence(String key);
+
+		public SpyMemcachedConnectionFactory getConnectionFactory() {
+			return connFactory;
+		}
+		
 		@Override
 		public MemcachedNode getPrimary(String k) {
 			
-			MemcachedNode node = null; 
+			MemcachedNode node = null;
 			try {
-				node = innerState.localZoneMCNodes.getNextElement();
+				node = getPrimaryNode(k);
+				
+				if (node == null) {
+					System.out.println("\n\nBorrowing NULL primary node: " + node + "\n\n");
+				}
 				return node;
 			} finally {
-			
+				
 				// record stats for this host
 				if (node != null) {
-					Host host = innerState.saToHostMap.get(node.getSocketAddress());
+					Host host = connFactory.getHostForMemcachedNode(node);
 					if (host != null) {
-						cpMonitor.incConnectionBorrowed(host, -1);
+						connFactory.getCPMonitor().incConnectionBorrowed(host, -1);
 					}
 				}
 			}
 		}
-
+		
+		/**
+		 * Simple wrapper around Iterator<MemcachedNode> so that we can track connection pool stats
+		 */
 		@Override
 		public Iterator<MemcachedNode> getSequence(String k) {
 			
-			System.out.println("\nGet sequence called! " + innerState.remoteZoneMCNodes.getEntireList() + "\n");
-			StackTraceElement[] elements = Thread.currentThread().getStackTrace();
-			for (StackTraceElement el : elements) {
-				System.out.println(el.toString());
-			}
-
-			final CircularList<MemcachedNode> cList = innerState.remoteZoneMCNodes;
-			final int size = cList.getEntireList().size();
-
+			final Iterator<MemcachedNode> nodeIter = this.getNodeSequence(k);
+			
 			return new Iterator<MemcachedNode>() {
-
-				int count = size;
 
 				@Override
 				public boolean hasNext() {
-					return count > 0;
+					return nodeIter.hasNext();
 				}
 
 				@Override
 				public MemcachedNode next() {
-					count--;
+					
 					MemcachedNode node = null;
 					try {
-						node = cList.getNextElement();
+						node = nodeIter.next();
 						return node;
 						
 					} finally {
 						// record this for stats
 						if (node != null) {
-							Host host = innerState.saToHostMap.get(node.getSocketAddress());
+							Host host = connFactory.getHostForMemcachedNode(node);
 							if (host != null) {
-								cpMonitor.incFailover(host, null);
+								connFactory.getCPMonitor().incFailover(host, null);
 							}
 						}
 					}
@@ -127,7 +162,7 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 
 		@Override
 		public Collection<MemcachedNode> getAll() {
-			return innerState.saToMCNodeMap.values();
+			return connFactory.getAllNodes();
 		}
 
 		@Override
@@ -141,7 +176,8 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 		}
 
 	}
-
+	
+	
 	/**
 	 * Inner state tracking the local zone nodes in a circular list for RR load balancing. 
 	 * It also tracks the remote zone nodes to fall back to during problems. 
@@ -154,23 +190,22 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 	 */
 	private class InnerState { 
 
+
+		private final List<MemcachedNode> allMCNodes = new ArrayList<MemcachedNode>();
 		// Used to lookup the primary node for an operation
-		private final CircularList<MemcachedNode> localZoneMCNodes = new CircularList<MemcachedNode>(null);
+		private final List<MemcachedNode> localZoneMCNodes = new ArrayList<MemcachedNode>();
 		// used to lookup the backup nodes
-		private final CircularList<MemcachedNode> remoteZoneMCNodes = new CircularList<MemcachedNode>(null);
+		private final List<MemcachedNode> remoteZoneMCNodes = new ArrayList<MemcachedNode>();
 
 		// Maps to go from Host -> Node and vice versa
 		private final ConcurrentHashMap<SocketAddress, MemcachedNode> saToMCNodeMap = new ConcurrentHashMap<SocketAddress, MemcachedNode>();
 		private final ConcurrentHashMap<SocketAddress, Host> saToHostMap = new ConcurrentHashMap<SocketAddress, Host>();
-
+		
 		private InnerState() {
 		}
 
 		private InnerState(Collection<Host> hosts) {
-			this.updateHosts(hosts);
-		}
-
-		private void updateHosts(Collection<Host> hosts) {
+			
 			for (Host host : hosts) {
 				saToHostMap.put(host.getSocketAddress(), host);
 			}
@@ -178,32 +213,33 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 
 		private void updateMemcachedNodes(Collection<MemcachedNode> nodes) {
 
-			List<MemcachedNode> localMCNodes = new ArrayList<MemcachedNode>();
-			List<MemcachedNode> remoteMCNodes = new ArrayList<MemcachedNode>();
-			
 			for (MemcachedNode node : nodes) {
 
-				saToMCNodeMap.put(node.getSocketAddress(), node);
-
-				Host host = saToHostMap.get(node.getSocketAddress());
-				if (host != null) {
-					if (cpConfig.localDcAffinity()) {
-						if (host.getDC().equalsIgnoreCase(localDC)) {
-							localMCNodes.add(node);
-						} else {
-							// This is a remote zone host
-							remoteMCNodes.add(node);
-						}
-					} else { 
-						localMCNodes.add(node);
-						remoteMCNodes.add(node);
+				allMCNodes.add(node);
+				
+				SocketAddress sa = node.getSocketAddress();
+				saToMCNodeMap.put(sa, node);
+				
+				Host host = saToHostMap.get(sa);
+				if (host == null) {
+					throw new RuntimeException("Host not found for sa: " + sa + 
+							", all hosts currently tracked: " + saToHostMap.values().toString());
+				}
+				
+				if (cpConfig.localDcAffinity()) {
+					if (host.getDC().equalsIgnoreCase(localDC)) {
+						localZoneMCNodes.add(node);
+					} else {
+						// This is a remote zone host
+						remoteZoneMCNodes.add(node);
 					}
- 				}
+				} else { 
+					// add to both 
+					localZoneMCNodes.add(node);
+					remoteZoneMCNodes.add(node);
+				}
 			}
-
-			// Update the circular iterator with remote nodes
-			localZoneMCNodes.swapWithList(localMCNodes);
-			remoteZoneMCNodes.swapWithList(remoteMCNodes);
 		}
 	}
+	
 }

@@ -22,7 +22,12 @@ import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionPool;
 import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.OperationResult;
+import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
+import com.netflix.dyno.contrib.DynoCPMonitor;
+import com.netflix.dyno.contrib.DynoOPMonitor;
+import com.netflix.dyno.contrib.EurekaHostsSupplier;
 
 /**
  * Dyno client for Memcached that uses the {@link RollingMemcachedConnectionPoolImpl} for managing connections to {@link MemcachedClient}s
@@ -32,17 +37,17 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
  *
  */
 public class DynoMCacheClient {
-	
+
 	private static final Logger Logger = LoggerFactory.getLogger(DynoMCacheClient.class);
-	
+
 	private static final String SEPARATOR = ":";
 	private final String cacheName;
 	private final String cacheNamePrefix;
-	
+
 	private final int defaultTTL = 0;
-	
+
 	private final ConnectionPool<MemcachedClient> connPool;
-	
+
 	public DynoMCacheClient(String name, ConnectionPool<MemcachedClient> pool) {
 		this.cacheName = name;
 		this.cacheNamePrefix = name + SEPARATOR;
@@ -52,13 +57,13 @@ public class DynoMCacheClient {
 	private enum OpName { 
 		Set, Delete, Get, GetAndTouch, GetBulk, GetAsync;
 	}
-	
+
 	public <T> Future<OperationResult<Boolean>> set(final String key, final T value) throws DynoException {
 		return set(key, value, defaultTTL);
 	}
-	
+
 	public <T> Future<OperationResult<Boolean>> set(final String key, final T value, final int exp) throws DynoException {
-	
+
 		return connPool.executeAsync(new AsyncOperation<MemcachedClient, Boolean>() {
 
 			@Override
@@ -70,101 +75,134 @@ public class DynoMCacheClient {
 			public String getName() {
 				return OpName.Set.name();
 			}
+
+			@Override
+			public String getKey() {
+				return key;
+			}
 		});
 	}
 
 	public <T> Future<OperationResult<Boolean>> set(final String key, final T value, final Transcoder<T> tc) throws DynoException {
 		return set(key, value, tc, defaultTTL);
 	}
-	
-	 public <T> Future<OperationResult<Boolean>> set(final String key, final T value, final Transcoder<T> tc, final int timeToLive) throws DynoException {
 
-			return connPool.executeAsync(new AsyncOperation<MemcachedClient, Boolean>() {
+	public <T> Future<OperationResult<Boolean>> set(final String key, final T value, final Transcoder<T> tc, final int timeToLive) throws DynoException {
 
-				@Override
-				public Future<Boolean> executeAsync(MemcachedClient client) throws DynoException {
-					return client.set(getCanonicalizedKey(key), timeToLive, value, tc);
+		return connPool.executeAsync(new AsyncOperation<MemcachedClient, Boolean>() {
+
+			@Override
+			public Future<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+				return client.set(getCanonicalizedKey(key), timeToLive, value, tc);
+			}
+
+			@Override
+			public String getName() {
+				return OpName.Set.name();
+			}
+
+			@Override
+			public String getKey() {
+				return key;
+			}
+		});
+
+	}
+
+	public Future<OperationResult<Boolean>> delete(final String key) throws DynoException {
+
+		return connPool.executeAsync(new AsyncOperation<MemcachedClient, Boolean>() {
+
+			@Override
+			public Future<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+				return client.delete(getCanonicalizedKey(key));
+			}
+
+			@Override
+			public String getName() {
+				return OpName.Delete.name();
+			}
+
+			@Override
+			public String getKey() {
+				return key;
+			}
+		});
+	}
+
+	public <T> OperationResult<T> get(final String key) {
+
+		return connPool.executeWithFailover(new Operation<MemcachedClient, T>() {
+
+			@Override
+			public T execute(MemcachedClient client, ConnectionContext state) throws DynoException {
+				try { 
+					return (T) client.get(key);
+				} catch(Exception e) {
+					Logger.warn("Throwing dyno connect ex after receiving ex from mc client " + e.getMessage());
+					throw new DynoConnectException(e);
 				}
+			}
 
-				@Override
-				public String getName() {
-					return OpName.Set.name();
-				}
-				
-			});
+			@Override
+			public String getName() {
+				return OpName.Get.name();
+			}
 
-	 }
-	 
-	 public Future<OperationResult<Boolean>> delete(final String key) throws DynoException {
+			@Override
+			public String getKey() {
+				return key;
+			}
+		});
+	}
 
-		 return connPool.executeAsync(new AsyncOperation<MemcachedClient, Boolean>() {
+	<T> OperationResult<T> getAndTouch(final String key, final int timeToLive) throws DynoException {
 
-			 @Override
-			 public Future<Boolean> executeAsync(MemcachedClient client) throws DynoException {
-				 return client.delete(getCanonicalizedKey(key));
-			 }
+		return connPool.executeWithFailover(new Operation<MemcachedClient, T>() {
 
-			 @Override
-			 public String getName() {
-				 return OpName.Delete.name();
-			 }
-		 });
-	 }
-	 
-		public <T> OperationResult<T> get(final String key) {
-			
-			return connPool.executeWithFailover(new Operation<MemcachedClient, T>() {
+			@Override
+			public T execute(MemcachedClient client, ConnectionContext state) throws DynoException {
+				return (T) client.getAndTouch(getCanonicalizedKey(key), timeToLive).getValue();
+			}
 
-				@Override
-				public T execute(MemcachedClient client, ConnectionContext state) throws DynoException {
-					return (T) client.get(getCanonicalizedKey(key));
-				}
+			@Override
+			public String getName() {
+				return OpName.GetAndTouch.name();
+			}
 
-				@Override
-				public String getName() {
-					return OpName.Get.name();
-				}
-				
-			});
-		}
-		
-		<T> OperationResult<T> getAndTouch(final String key, final int timeToLive) throws DynoException {
-		
-			return connPool.executeWithFailover(new Operation<MemcachedClient, T>() {
+			@Override
+			public String getKey() {
+				return key;
+			}
+		});
+	}
 
-				@Override
-				public T execute(MemcachedClient client, ConnectionContext state) throws DynoException {
-					return (T) client.getAndTouch(getCanonicalizedKey(key), timeToLive).getValue();
-				}
+	public <T> OperationResult<T> getAndTouch(final String key, final int timeToLive, final Transcoder<T> tc) {
 
-				@Override
-				public String getName() {
-					return OpName.GetAndTouch.name();
-				}
-			});
-		}
-		
-		public <T> OperationResult<T> getAndTouch(final String key, final int timeToLive, final Transcoder<T> tc) {
-			
-			return connPool.executeWithFailover(new Operation<MemcachedClient, T>() {
+		return connPool.executeWithFailover(new Operation<MemcachedClient, T>() {
 
-				@Override
-				public T execute(MemcachedClient client, ConnectionContext state) throws DynoException {
-					
-					CASValue<T> casValue = client.getAndTouch(getCanonicalizedKey(key), timeToLive, tc);
-					return casValue.getValue();
-				}
+			@Override
+			public T execute(MemcachedClient client, ConnectionContext state) throws DynoException {
 
-				@Override
-				public String getName() {
-					return OpName.GetAndTouch.name();
-				}
-			});
-		}
+				CASValue<T> casValue = client.getAndTouch(getCanonicalizedKey(key), timeToLive, tc);
+				return casValue.getValue();
+			}
 
-		public <T> OperationResult<Map<String, T>> getBulk(final String... keys) throws DynoException {
-		 
-		 return connPool.executeWithFailover(new Operation<MemcachedClient, Map<String, T>>() {
+			@Override
+			public String getName() {
+				return OpName.GetAndTouch.name();
+			}
+
+			@Override
+			public String getKey() {
+				return key;
+			}
+		});
+	}
+
+	public <T> OperationResult<Map<String, T>> getBulk(final String... keys) throws DynoException {
+
+		return connPool.executeWithFailover(new Operation<MemcachedClient, Map<String, T>>() {
 
 			@Override
 			public Map<String, T> execute(MemcachedClient client, ConnectionContext state) throws DynoException {
@@ -175,12 +213,17 @@ public class DynoMCacheClient {
 			public String getName() {
 				return OpName.GetBulk.name();
 			}
+
+			@Override
+			public String getKey() {
+				return null;
+			}
 		});
-	 }
-	 
-	 public <T> OperationResult<Map<String, T>> getBulk(final Transcoder<T> tc, final String... keys) throws DynoException {
-		 
-		 return connPool.executeWithFailover(new Operation<MemcachedClient, Map<String, T>>() {
+	}
+
+	public <T> OperationResult<Map<String, T>> getBulk(final Transcoder<T> tc, final String... keys) throws DynoException {
+
+		return connPool.executeWithFailover(new Operation<MemcachedClient, Map<String, T>>() {
 
 			@Override
 			public Map<String, T> execute(MemcachedClient client, ConnectionContext state) throws DynoException {
@@ -191,12 +234,17 @@ public class DynoMCacheClient {
 			public String getName() {
 				return OpName.GetBulk.name();
 			}
+
+			@Override
+			public String getKey() {
+				return null;
+			}
 		});
-	 }
-	 
-	 public <T> OperationResult<Map<String, T>> getBulk(final Collection<String> keys) throws DynoException {
-		 
-		 return connPool.executeWithFailover(new Operation<MemcachedClient, Map<String, T>>() {
+	}
+
+	public <T> OperationResult<Map<String, T>> getBulk(final Collection<String> keys) throws DynoException {
+
+		return connPool.executeWithFailover(new Operation<MemcachedClient, Map<String, T>>() {
 
 			@Override
 			public Map<String, T> execute(MemcachedClient client, ConnectionContext state) throws DynoException {
@@ -207,12 +255,17 @@ public class DynoMCacheClient {
 			public String getName() {
 				return OpName.GetBulk.name();
 			}
-		});
-	 }
 
-	 public <T> OperationResult<Map<String, T>> getBulk(final Collection<String> keys, final Transcoder<T> tc) throws DynoException {
-		 
-		 return connPool.executeWithFailover(new Operation<MemcachedClient, Map<String, T>>() {
+			@Override
+			public String getKey() {
+				return null;
+			}
+		});
+	}
+
+	public <T> OperationResult<Map<String, T>> getBulk(final Collection<String> keys, final Transcoder<T> tc) throws DynoException {
+
+		return connPool.executeWithFailover(new Operation<MemcachedClient, Map<String, T>>() {
 
 			@Override
 			public Map<String, T> execute(MemcachedClient client, ConnectionContext state) throws DynoException {
@@ -223,13 +276,18 @@ public class DynoMCacheClient {
 			public String getName() {
 				return OpName.GetBulk.name();
 			}
+
+			@Override
+			public String getKey() {
+				return null;
+			}
 		});
-	 }
-	 
-		
-	 public <T> Future<OperationResult<T>> getAsync(final String key) throws DynoException {
-		 	
-		 return connPool.executeAsync(new AsyncOperation<MemcachedClient, T>() {
+	}
+
+
+	public <T> Future<OperationResult<T>> getAsync(final String key) throws DynoException {
+
+		return connPool.executeAsync(new AsyncOperation<MemcachedClient, T>() {
 
 			@Override
 			public Future<T> executeAsync(MemcachedClient client) throws DynoException {
@@ -240,12 +298,17 @@ public class DynoMCacheClient {
 			public String getName() {
 				return OpName.GetAsync.name();
 			}
+
+			@Override
+			public String getKey() {
+				return key;
+			}
 		});
-	 }
-	 
-	 public <T> Future<OperationResult<T>> getAsync(final String key, final Transcoder<T> tc) throws DynoException {
-		 
-		 return connPool.executeAsync(new AsyncOperation<MemcachedClient, T>() {
+	}
+
+	public <T> Future<OperationResult<T>> getAsync(final String key, final Transcoder<T> tc) throws DynoException {
+
+		return connPool.executeAsync(new AsyncOperation<MemcachedClient, T>() {
 
 			@Override
 			public Future<T> executeAsync(MemcachedClient client) throws DynoException {
@@ -256,37 +319,97 @@ public class DynoMCacheClient {
 			public String getName() {
 				return OpName.GetAsync.name();
 			}
+
+			@Override
+			public String getKey() {
+				return key;
+			}
 		});
-	 }
-	 
+	}
 
-	 protected String getCanonicalizedKey(String key) {
-		 //return cacheNamePrefix + key;
-		 return key;
-	 }
 
-	 protected Collection<String> getCanonicalizedKeys(final Collection<String> keys) {
+	protected String getCanonicalizedKey(String key) {
+		//return cacheNamePrefix + key;
+		return key;
+	}
 
-		 return Collections2.transform(keys, new Function<String, String>() {
+	protected Collection<String> getCanonicalizedKeys(final Collection<String> keys) {
 
-			 @Override
-			 @Nullable
-			 public String apply(@Nullable String input) {
-				 return cacheNamePrefix + input;
-			 }
-		 });
-	 }
-	 
-	 protected Collection<String> getCanonicalizedKeys(final String ... keys) {
+		return Collections2.transform(keys, new Function<String, String>() {
 
-		 List<String> cKeys = new ArrayList<String>();
-		 for (String key : keys) {
-			 cKeys.add(cacheNamePrefix + key);
-		 }
-		 return cKeys;
-	 }
+			@Override
+			@Nullable
+			public String apply(@Nullable String input) {
+				return cacheNamePrefix + input;
+			}
+		});
+	}
+
+	protected Collection<String> getCanonicalizedKeys(final String ... keys) {
+
+		List<String> cKeys = new ArrayList<String>();
+		for (String key : keys) {
+			cKeys.add(cacheNamePrefix + key);
+		}
+		return cKeys;
+	}
 
 	public String toString() {
 		return this.cacheName;
+	}
+
+	public static class Builder {
+
+		private String appName;
+		private String clusterName;
+		private ConnectionPoolConfigurationImpl cpConfig;
+
+		public Builder(String name) {
+			appName = name;
+			cpConfig = new ConnectionPoolConfigurationImpl(appName);
+		}
+
+		public Builder withPort(int port) {
+			cpConfig.setPort(port);
+			return this;
+		}
+
+
+		public Builder withDynomiteClusterName(String cluster) {
+			clusterName = cluster;
+			return this;
+		}
+
+		public DynoMCacheClient build() {
+
+			assert(appName != null);
+			assert(clusterName != null);
+
+			cpConfig.withHostSupplier(new EurekaHostsSupplier(clusterName, cpConfig));
+
+			//			CountingConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
+			//			OperationMonitor opMonitor = new LastOperationMonitor();
+			DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);
+			DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
+
+			MemcachedConnectionFactory connFactory = new MemcachedConnectionFactory(cpConfig, cpMonitor);
+
+			RollingMemcachedConnectionPoolImpl<MemcachedClient> pool = 
+					new RollingMemcachedConnectionPoolImpl<MemcachedClient>(appName, connFactory, cpConfig, cpMonitor, opMonitor);
+
+			try {
+				pool.start().get();
+			} catch (Exception e) {
+				throw new RuntimeException(e);
+			}
+
+			final DynoMCacheClient client = new DynoMCacheClient(appName, pool);
+
+			return client;
+		}
+
+		public static Builder withName(String name) {
+			return new Builder(name);
+		}
 	}
 }

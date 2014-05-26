@@ -1,8 +1,8 @@
 package com.netflix.dyno.connectionpool;
 
-import java.util.List;
+import java.util.Collection;
 
 public interface HostSupplier {
 
-	public List<Host> getHosts();
+	public Collection<Host> getHosts();
 }
