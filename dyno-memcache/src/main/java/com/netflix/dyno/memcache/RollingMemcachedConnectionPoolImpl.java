@@ -852,6 +852,12 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 										public String getName() {
 											return "testOperation";
 										}
+										
+
+										@Override
+										public String getKey() {
+											return "TestOperation";
+										}
 									});
 								} catch (DynoException e) {
 									e.printStackTrace();

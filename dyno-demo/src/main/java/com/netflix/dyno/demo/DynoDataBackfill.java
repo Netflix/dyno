@@ -9,14 +9,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.netflix.dyno.memcache.DynoMCacheClient;
+import com.netflix.dyno.demo.DynoDriver.DynoClient;
 
-public class DynoMCacheBackfill {
+public class DynoDataBackfill {
 
-	private static final Logger Logger = LoggerFactory.getLogger(DynoMCacheBackfill.class);
+	private static final Logger Logger = LoggerFactory.getLogger(DynoDataBackfill.class);
 	
-	public DynoMCacheBackfill() {
-		
+	private final DynoClient client;
+	
+	public DynoDataBackfill(DynoClient client) {
+		this.client = client;
 	}
 	
 	
@@ -24,9 +26,6 @@ public class DynoMCacheBackfill {
 		
 		final long start = System.currentTimeMillis();
 	
-		final DynoMCacheClient client = DynoClientHolder.getInstance().get();
-		//final MemcachedClient client = DynoClientHolder.getInstance().get();
-		
 		final int numThreads = 10; 
 		final int numKeysPerThread = DemoConfig.NumKeys.get()/numThreads;
 		
@@ -53,7 +52,7 @@ public class DynoMCacheBackfill {
 					
 					while(k<endKey) {
 						try {
-							client.set(""+k, SampleData.getInstance().getRandomValue()).get();
+							client.set(""+k, SampleData.getInstance().getRandomValue());
 							//client.set(""+k, 0, SampleData.getInstance().getRandomValue()).get();
 							k++;
 							count.incrementAndGet();

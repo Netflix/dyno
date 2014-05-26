@@ -5,39 +5,37 @@ import static com.netflix.dyno.demo.DemoConfig.NumWriters;
 import static com.netflix.dyno.demo.DemoConfig.ReadEnabled;
 import static com.netflix.dyno.demo.DemoConfig.WriteEnabled;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.netflix.config.DynamicBooleanProperty;
 import com.netflix.config.DynamicIntProperty;
-import com.netflix.dyno.memcache.DynoMCacheClient;
 import com.netflix.servo.DefaultMonitorRegistry;
 import com.netflix.servo.annotations.DataSourceType;
 import com.netflix.servo.annotations.Monitor;
 import com.netflix.servo.monitor.Monitors;
 
-public class DynoDriver {
+public abstract class DynoDriver {
 
 	private static final Logger Logger = LoggerFactory.getLogger(DynoDriver.class);
 	
-	private final List<DynoWorker> readWorkers = new ArrayList<DynoWorker>();
-	private final List<DynoWorker> writeWorkers = new ArrayList<DynoWorker>();
+	private final AtomicInteger readWorkers = new AtomicInteger(0);
+	private final AtomicInteger writeWorkers = new AtomicInteger(0);
+
 	private final AtomicReference<ExecutorService> tpReadRef = new AtomicReference<ExecutorService>(null);
 	private final AtomicReference<ExecutorService> tpWriteRef = new AtomicReference<ExecutorService>(null);
 	
 	private final AtomicBoolean readsStarted = new AtomicBoolean(false);
 	private final AtomicBoolean writesStarted = new AtomicBoolean(false);
 	
-	public DynoDriver() {
+	protected DynoDriver() {
 		
 		NumReaders.addCallback(new Runnable() {
 			@Override
@@ -58,22 +56,20 @@ public class DynoDriver {
 		
 	public void checkAndInitReads() {
 		
-		if (readWorkers.size() != NumReaders.get()) {
+		if (readWorkers.get() != NumReaders.get()) {
 			// First stop the old workers, if any
 			stopReads();
+			startReadsInternal();
 		}
-		
-		startReads();
 	}
 	
 	public void checkAndInitWrites() {
 		
-		if (writeWorkers.size() != NumWriters.get()) {
+		if (writeWorkers.get() != NumWriters.get()) {
 			// First stop the old workers, if any
 			stopWrites();
+			startWritesInternal();
 		}
-		
-		startWrites();
 	}
 
 	/** FUNCTIONALITY FOR STARTING THE DYNO WORKERS */
@@ -90,9 +86,15 @@ public class DynoDriver {
 			Logger.info("Reads already started ... ignoring");
 			return;
 		}
+		startReadsInternal();
+	}
+	
+	private void startReadsInternal() {
+		
 		Logger.info("Starting DynoDriver reads...");
 		startOperation(ReadEnabled,
 				       NumReaders,
+				       readWorkers,
 				       tpReadRef,
 				       new DynoReadOperation());
 		readsStarted.set(true);
@@ -105,9 +107,15 @@ public class DynoDriver {
 			return;
 		}
 
+		startWritesInternal();
+	}
+
+	private void startWritesInternal() {
+		
 		Logger.info("Starting DynoDriver writes...");
 		startOperation(WriteEnabled,
 				       NumWriters,
+				       writeWorkers,
 				       tpWriteRef,
 				       new DynoWriteOperation());
 		
@@ -115,7 +123,8 @@ public class DynoDriver {
 	}
 
 	public void startOperation(DynamicBooleanProperty operationEnabled, 
-							   DynamicIntProperty numWorkers,
+							   DynamicIntProperty numWorkersConfig,
+							   AtomicInteger numWorkers,
 							   AtomicReference<ExecutorService> tpRef, 
 							   final DynoOperation operation) {
 		 
@@ -124,7 +133,7 @@ public class DynoDriver {
 			return;
 		}
 		
-		int totalWorkerPoolSize = numWorkers.get();
+		int totalWorkerPoolSize = numWorkersConfig.get();
 		ExecutorService threadPool = Executors.newFixedThreadPool(totalWorkerPoolSize);
 		 
 		boolean success = tpRef.compareAndSet(null, threadPool);
@@ -133,14 +142,10 @@ public class DynoDriver {
 		}
 		
 		final DynoStats stats = DynoStats.getInstance();
-		final DynoMCacheClient client = DynoClientHolder.getInstance().get();
-		//final MemcachedClient client = DynoClientHolder.getInstance().get();
 		
-		System.out.println("\n\nStarting with threads: " + numWorkers.get() + "\n\n");
+		System.out.println("\n\nStarting with threads: " + numWorkersConfig.get() + "\n\n");
 		
-		final AtomicBoolean stop = new AtomicBoolean(false);
-		
-		for (int i=0; i<numWorkers.get(); i++) {
+		for (int i=0; i<numWorkersConfig.get(); i++) {
 			
 			threadPool.submit(new Callable<Void>() {
 
@@ -148,17 +153,15 @@ public class DynoDriver {
 				public Void call() throws Exception {
 
 					Thread thread = Thread.currentThread();
-					while (!thread.isInterrupted() && !stop.get()) {
-						boolean success = operation.process(client, stats);
-						if (!success) {
-							stop.set(true);
-						}
+					while (!thread.isInterrupted()) {
+						operation.process(stats);
 						//Thread.sleep(1000);
 					}
 					Logger.info("DynoWorker shutting down");
 					return null;
 				}
 			});
+			numWorkers.incrementAndGet();
 		}
 		
 	}
@@ -170,43 +173,52 @@ public class DynoDriver {
 	}
 	
 	public void stopReads() {
-		stopOperation(readWorkers, tpReadRef);
+		stopOperation(tpReadRef);
 	}
 	
 	public void stopWrites() {
-		stopOperation(writeWorkers, tpWriteRef);
+		stopOperation(tpWriteRef);
 	}
 	
-	public void stopOperation(List<DynoWorker> listWorkers, AtomicReference<ExecutorService> tpRef) {
-		
-		for (DynoWorker worker : listWorkers) {
-			worker.shutdown();
-		}
-		listWorkers.clear();
+	public void stopOperation(AtomicReference<ExecutorService> tpRef) {
 		
 		ExecutorService tp = tpRef.get();
 		if (tp != null) {
 			tp.shutdownNow();
 			tpRef.set(null);
 		}
+		
+		while(!tp.isShutdown()) {
+			try {
+				Logger.info("Waiting for worker pool to stop, sleeping for 1 sec");
+				Thread.sleep(1000);
+			} catch (InterruptedException e) {
+			}
+		}
 	}
 
 	private interface DynoOperation { 
 		
-		boolean process(Object dynoClient, DynoStats stats); 
+		boolean process(DynoStats stats); 
 	}
+	
+	public interface DynoClient {
+		
+		void init();
+		String get(String key) throws Exception;
+		void set(String key, String value);
+	}
+	
+	public abstract DynoClient getDynoClient();
 	
 	private class DynoReadOperation implements DynoOperation {
 
 		@Override
-		public boolean process(Object dynoClient, DynoStats stats) {
+		public boolean process(DynoStats stats) {
 			Long startTime = System.currentTimeMillis();
 			try { 
-				//MemcachedClient client = (MemcachedClient)dynoClient;
-				//String value = (String) client.get(SampleData.getInstance().getRandomKey());
-				DynoMCacheClient client = (DynoMCacheClient)dynoClient;
 				String key = SampleData.getInstance().getRandomKey();
-				String value = (String) client.get(key).getResult();
+				String value = (String) getDynoClient().get(key);
 				if (value != null) {
 					stats.cacheHit();
 				} else {
@@ -228,16 +240,13 @@ public class DynoDriver {
 	private class DynoWriteOperation implements DynoOperation {
 
 		@Override
-		public boolean process(Object dynoClient, DynoStats stats) {
+		public boolean process(DynoStats stats) {
 			Long startTime = System.currentTimeMillis();
 			try { 
 				String key = SampleData.getInstance().getRandomKey();
 				String value = SampleData.getInstance().getRandomValue();
 				
-				//MemcachedClient client = (MemcachedClient)dynoClient;
-				//client.set(key, 0, value);
-				DynoMCacheClient client = (DynoMCacheClient)dynoClient;
-				client.set(key, value);
+				getDynoClient().set(key, value);
 				stats.success();
 				return true;
 			} catch (Exception e) {
@@ -251,7 +260,7 @@ public class DynoDriver {
 	}
 	
 	public String getStatus() {
-		return "NumReaders: " + readWorkers.size() + " NumWriters: " + writeWorkers.size() + "\n" + 
+		return "NumReaders: " + readWorkers.get() + " NumWriters: " + writeWorkers.get() + "\n" + 
 				DynoStats.getInstance().getStatus();
 	}
 	
@@ -260,26 +269,16 @@ public class DynoDriver {
 	}
 
 	public void init() {
-		DynoClientHolder.getInstance().get();
+		getDynoClient().init();
 	}
 	
-	public String readSingle(String key) {
-		
-		Object dClient = DynoClientHolder.getInstance().get();
-		//MemcachedClient client = (MemcachedClient)dClient;
-		//	return (String) client.get(key);
-		DynoMCacheClient client = (DynoMCacheClient)dClient;
-		return client.<String>get(key).getResult();
+	public String readSingle(String key) throws Exception {
+		return getDynoClient().get(key);
 	}
 	
 
 	public String writeSingle(String key, String value) {
-		
-		Object dClient = DynoClientHolder.getInstance().get();
-		//MemcachedClient client = (MemcachedClient)dClient;
-		//client.set(key, 0, value);
-		DynoMCacheClient client = (DynoMCacheClient)dClient;
-		client.set(key, value);
+		getDynoClient().set(key, value);
 		return "done";
 	}
 	
@@ -288,12 +287,12 @@ public class DynoDriver {
 		
 		@Monitor(name="readers", type=DataSourceType.COUNTER)
 		public int getNumReaders() {
-			return readWorkers.size();
+			return readWorkers.get();
 		}
 		
 		@Monitor(name="writers", type=DataSourceType.COUNTER)
 		public int getNumWriters() {
-			return writeWorkers.size();
+			return writeWorkers.get();
 		}
 	}
 	

@@ -1,4 +1,4 @@
-package com.netflix.dyno.demo;
+package com.netflix.dyno.demo.memcached;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
@@ -10,12 +10,14 @@ import javax.ws.rs.core.MediaType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@Path("/dyno/demo")
-public class DynoDemoResource {
+import com.netflix.dyno.demo.DynoDataBackfill;
 
-	private static final Logger Logger = LoggerFactory.getLogger(DynoDemoResource.class);
+@Path("/dyno/demo/memcached")
+public class DynoMCacheDemoResource {
 
-	public DynoDemoResource() {
+	private static final Logger Logger = LoggerFactory.getLogger(DynoMCacheDemoResource.class);
+
+	public DynoMCacheDemoResource() {
 	}
 
 	@Path("/dataFill/start")
@@ -26,7 +28,7 @@ public class DynoDemoResource {
 
 		Logger.info("Starting dyno data fill"); 
 		try {
-			new DynoMCacheBackfill().backfill();
+			new DynoDataBackfill(DynoMCacheDriver.getInstance().getDynoClient()).backfill();
 			return "data fill done!" + "\n";
 		} catch (Exception e) {
 			Logger.error("Error starting datafill", e);
@@ -44,7 +46,7 @@ public class DynoDemoResource {
 	@Produces(MediaType.TEXT_PLAIN)
 	public String dynoInit() throws Exception {
 
-		DynoDemo.getInstance().getDriver().init();
+		DynoMCacheDriver.getInstance().init();
 		return "Dyno client inited!" + "\n";
 	}
 	
@@ -56,7 +58,7 @@ public class DynoDemoResource {
 
 		Logger.info("Starting dyno demo test"); 
 		try {
-			DynoDemo.getInstance().getDriver().start();
+			DynoMCacheDriver.getInstance().start();
 			return "Dyno test started!" + "\n";
 		} catch (Exception e) {
 			Logger.error("Error starting dyno test", e);
@@ -72,7 +74,7 @@ public class DynoDemoResource {
 
 		Logger.info("Starting dyno demo test"); 
 		try {
-			DynoDemo.getInstance().getDriver().startReads();
+			DynoMCacheDriver.getInstance().startReads();
 			return "Dyno test started!" + "\n";
 		} catch (Exception e) {
 			Logger.error("Error starting dyno test", e);
@@ -88,7 +90,7 @@ public class DynoDemoResource {
 
 		Logger.info("Starting dyno demo test"); 
 		try {
-			DynoDemo.getInstance().getDriver().startWrites();
+			DynoMCacheDriver.getInstance().startWrites();
 			return "Dyno test started!" + "\n";
 		} catch (Exception e) {
 			Logger.error("Error starting dyno test", e);
@@ -104,7 +106,7 @@ public class DynoDemoResource {
 
 		Logger.info("Stopping dyno demo test"); 
 		try {
-			DynoDemo.getInstance().getDriver().stop();
+			DynoMCacheDriver.getInstance().stop();
 			return "Dyno test stopped!" + "\n";
 		} catch (Exception e) {
 			Logger.error("Error stopping dyno test", e);
@@ -122,7 +124,7 @@ public class DynoDemoResource {
 		Logger.info("Stopping dyno demo test"); 
 		try {
 			System.out.println("Key: " + key);
-			return "\n" + DynoDemo.getInstance().getDriver().readSingle(key) + "\n";
+			return "\n" + DynoMCacheDriver.getInstance().readSingle(key) + "\n";
 		} catch (Exception e) {
 			Logger.error("Error stopping dyno test", e);
 			return "dyno stop failed! " + e.getMessage();
@@ -138,7 +140,7 @@ public class DynoDemoResource {
 		Logger.info("Stopping dyno demo test"); 
 		try {
 			System.out.println("Key: " + key + ", value: " + value);
-			return "\n" + DynoDemo.getInstance().getDriver().writeSingle(key, value) + "\n";
+			return "\n" + DynoMCacheDriver.getInstance().writeSingle(key, value) + "\n";
 		} catch (Exception e) {
 			Logger.error("Error stopping dyno test", e);
 			return "dyno stop failed! " + e.getMessage();
@@ -153,7 +155,7 @@ public class DynoDemoResource {
 
 		Logger.info("Stating dyno data fill"); 
 		try {
-			return DynoDemo.getInstance().getDriver().getStatus();
+			return DynoMCacheDriver.getInstance().getStatus();
 		} catch (Exception e) {
 			Logger.error("Error getting dyno status", e);
 			return "dyno status failed! " + e.getMessage();
@@ -165,8 +167,6 @@ public class DynoDemoResource {
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.TEXT_PLAIN)
 	public String removeOneHost() throws Exception {
-
-		DynoClientHolder.getInstance().removeOneHost();
-		return "Dyno client rmoved one host!" + "\n";
+		return "Not implemented!!" + "\n";
 	}
 }

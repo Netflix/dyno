@@ -55,6 +55,7 @@ project(':dyno-core') {
     dependencies {
         compile "org.slf4j:slf4j-api:1.7.5"
         compile "net.spy:spymemcached:2.9.1"
+        compile "redis.clients:jedis:2.2.1"
         compile "org.apache.commons:commons-math:2.2"
         compile "org.mockito:mockito-all:1.9.5"
         testCompile "junit:junit:4.11"
@@ -79,6 +80,16 @@ project(':dyno-memcache') {
     }
 }
 
+project(':dyno-jedis') {
+    apply plugin: 'osgi'
+    apply plugin: 'java'
+    dependencies {
+        compile  project(':dyno-core')
+        compile  project(':dyno-contrib')
+        compile "org.slf4j:slf4j-log4j12:1.7.2"
+    }
+}
+
 project(':dyno-demo') {
     apply plugin: 'osgi'
     apply plugin: 'java'
@@ -86,5 +97,6 @@ project(':dyno-demo') {
         compile  project(':dyno-core')
         compile  project(':dyno-contrib')
         compile  project(':dyno-memcache')
+        compile  project(':dyno-jedis')
     }
 }
