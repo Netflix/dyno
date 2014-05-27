@@ -3,8 +3,9 @@ package com.netflix.dyno.jedis;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.commons.lang.NotImplementedException;
+
 import redis.clients.jedis.Jedis;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;

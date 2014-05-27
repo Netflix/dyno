@@ -7,7 +7,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import net.spy.memcached.MemcachedNode;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
+
+import org.apache.commons.lang.NotImplementedException;
 
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostToken;
