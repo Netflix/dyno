@@ -210,7 +210,7 @@ public class HostStatusTracker {
 			// Round 7. all active hosts go from active to inactive
 			tracker = tracker.computeNewHostStatus(getHostSet(), getHostSet("D", "H", "F", "X", "Y", "A", "K", "C"));
 
-			verifySet(tracker.activeHosts, null);
+			verifySet(tracker.activeHosts, "");
 			verifySet(tracker.inactiveHosts, "E", "J", "H", "D", "F", "B", "X", "Y", "A", "K", "C");
 			
 			// Round 8. 'X' 'Y' 'A' and 'C' go from inactive to active and 'K' disappears from down list
@@ -228,13 +228,13 @@ public class HostStatusTracker {
 			// Round 9. All active hosts disappear
 			tracker = tracker.computeNewHostStatus(getHostSet(), getHostSet("K", "J"));
 
-			verifySet(tracker.activeHosts, null);
+			verifySet(tracker.activeHosts, "");
 			verifySet(tracker.inactiveHosts, "E", "J", "H", "D", "F", "B",  "K", "X", "Y", "A", "C");
 
 			// Round 10. All hosts disappear
 			tracker = tracker.computeNewHostStatus(getHostSet(), getHostSet());
 
-			verifySet(tracker.activeHosts, null);
+			verifySet(tracker.activeHosts, "");
 			verifySet(tracker.inactiveHosts, "E", "J", "H", "D", "F", "B",  "K", "X", "Y", "A", "C");
 		}
 		
@@ -243,7 +243,9 @@ public class HostStatusTracker {
 			Set<Host> set = new HashSet<Host>();
 			if (names != null && names.length > 0) {
 				for (String name : names) {
-					set.add(new Host(name, 1234));
+					if (!name.isEmpty()) {
+						set.add(new Host(name, 1234));
+					}
 				}
 			}
 			return set;

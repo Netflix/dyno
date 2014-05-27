@@ -2,11 +2,8 @@ package com.netflix.dyno.memcache;
 
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
-
 import net.spy.memcached.MemcachedNode;
-
+import org.apache.commons.lang.NotImplementedException;
 import com.netflix.dyno.connectionpool.impl.CircularList;
 import com.netflix.dyno.memcache.SpyMemcachedConnectionFactory.InstrumentedLocator;
 
