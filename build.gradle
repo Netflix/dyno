@@ -46,6 +46,10 @@ subprojects {
 project(':dyno') {
     dependencies {
         compile  project(':dyno-core')
+        compile  project(':dyno-contrib')
+        compile  project(':dyno-memcache')
+        compile  project(':dyno-jedis')
+        compile  project(':dyno-demo')
     }
 }
 
