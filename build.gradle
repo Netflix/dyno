@@ -33,12 +33,14 @@ subprojects {
         compile "org.slf4j:slf4j-api:1.7.5"
         compile "org.slf4j:slf4j-log4j12:1.7.2"
         compile "net.spy:spymemcached:2.10.2+"
+        compile "com.google.guava:guava:15.0"
+        compile "com.google.inject:guice:3.0"
+        compile "commons-io:commons-io:2.2"
+        compile "com.googlecode.json-simple:json-simple:1.1"
         compile "com.netflix.archaius:archaius-core:0.5.6"
         compile "com.netflix.servo:servo-core:0.5.5"
         compile 'com.netflix.eureka:eureka-client:1.1.110'
-        compile "com.google.guava:guava:15.0"
-        compile "commons-io:commons-io:2.2"
-        compile "com.googlecode.json-simple:json-simple:1.1"
+        
         compile "junit:junit:4.11"
     }
 }
@@ -70,6 +72,8 @@ project(':dyno-contrib') {
     apply plugin: 'osgi'
     apply plugin: 'java'
     dependencies {
+    
+    
         compile  project(':dyno-core')
     }
 }
