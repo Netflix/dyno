@@ -6,13 +6,12 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.List;
 
-import org.apache.commons.io.FileUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.google.common.primitives.UnsignedInts;
 import com.netflix.dyno.connectionpool.HashPartitioner;
 import com.netflix.dyno.connectionpool.HostToken;
+import com.netflix.dyno.connectionpool.impl.utils.IOUtilities;
 
 public class Murmur1HashPartitioner implements HashPartitioner {
 
@@ -26,7 +25,7 @@ public class Murmur1HashPartitioner implements HashPartitioner {
         }
         ByteBuffer bb = ByteBuffer.wrap(key.getBytes(charset));
         byte[] b = bb.array();
-        return UnsignedInts.toLong(Murmur1Hash.hash(b, b.length));
+        return UnsignedIntsUtils.toLong(Murmur1Hash.hash(b, b.length));
 	}
 	
     @Override
@@ -35,7 +34,7 @@ public class Murmur1HashPartitioner implements HashPartitioner {
 		ByteBuffer bb = ByteBuffer.allocate(8).putLong(0, key);
 		bb.rewind();
         byte[] b = bb.array();
-        return UnsignedInts.toLong(Murmur1Hash.hash(b, b.length));
+        return UnsignedIntsUtils.toLong(Murmur1Hash.hash(b, b.length));
 	}
 
     @Override
@@ -44,7 +43,7 @@ public class Murmur1HashPartitioner implements HashPartitioner {
         bb.putInt(key);
         bb.rewind();
         byte[] b = bb.array();
-        return UnsignedInts.toLong(Murmur1Hash.hash(b, b.length));
+        return UnsignedIntsUtils.toLong(Murmur1Hash.hash(b, b.length));
 	}
 
 	@Override
@@ -70,7 +69,7 @@ public class Murmur1HashPartitioner implements HashPartitioner {
 		}
 		
 		private List<String> readInTestTokens() throws IOException {
-			return FileUtils.readLines(new File("./src/main/java/TestTokens.txt"));
+			return IOUtilities.readLines(new File("./src/main/java/TestTokens.txt"));
 		}
 	}
 

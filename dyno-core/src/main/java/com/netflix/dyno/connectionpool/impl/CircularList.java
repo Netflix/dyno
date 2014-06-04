@@ -16,8 +16,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import javax.annotation.Nullable;
-
 import org.apache.commons.math.stat.descriptive.SummaryStatistics;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -25,8 +23,8 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import com.google.common.base.Predicate;
-import com.google.common.collect.Maps;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 
 public class CircularList<T> {
 
@@ -201,9 +199,9 @@ public class CircularList<T> {
 			
 			Map<Integer, Integer> result = future.get();
 			
-			Map<Integer, Integer> subMap = Maps.filterKeys(result, new Predicate<Integer>() {
+			Map<Integer, Integer> subMap = CollectionUtils.filterKeys(result, new Predicate<Integer>() {
 				@Override
-				public boolean apply(@Nullable Integer input) {
+				public boolean apply(Integer input) {
 					return input != null && input < 10 ;
 				}
 			});
@@ -211,7 +209,7 @@ public class CircularList<T> {
 			List<Integer> list = new ArrayList<Integer>(subMap.values());
 			checkValues(list);
 			
-			subMap = Maps.difference(result, subMap).entriesOnlyOnLeft();
+			subMap = CollectionUtils.difference(result, subMap).entriesOnlyOnLeft();
 			list = new ArrayList<Integer>(subMap.values());
 			checkValues(list);
 		}
@@ -254,9 +252,9 @@ public class CircularList<T> {
 			
 			Map<Integer, Integer> result = future.get();
 
-			Map<Integer, Integer> subMap = Maps.filterKeys(result, new Predicate<Integer>() {
+			Map<Integer, Integer> subMap = CollectionUtils.filterKeys(result, new Predicate<Integer>() {
 				@Override
-				public boolean apply(@Nullable Integer input) {
+				public boolean apply(Integer input) {
 					return !removedElements.contains(input);
 				}
 			});
@@ -338,16 +336,16 @@ public class CircularList<T> {
 			
 			Map<Integer, Integer> result = getTotalMap(futures);
 			
-			Map<Integer, Integer> subMap = Maps.filterKeys(result, new Predicate<Integer>() {
+			Map<Integer, Integer> subMap = CollectionUtils.filterKeys(result, new Predicate<Integer>() {
 				@Override
-				public boolean apply(@Nullable Integer input) {
+				public boolean apply(Integer input) {
 					return input < 10;
 				}
 			});
 			
 			checkValues(new ArrayList<Integer>(subMap.values()));
 			
-			subMap = Maps.difference(result, subMap).entriesOnlyOnLeft();
+			subMap = CollectionUtils.difference(result, subMap).entriesOnlyOnLeft();
 			checkValues(new ArrayList<Integer>(subMap.values()));
 		}
 
@@ -393,10 +391,11 @@ public class CircularList<T> {
 			
 			Map<Integer, Integer> result = getTotalMap(futures);
 			
-			Map<Integer, Integer> subMap = Maps.filterKeys(result, new Predicate<Integer>() {
+			Map<Integer, Integer> subMap = CollectionUtils.filterKeys(result, new Predicate<Integer>() {
+
 				@Override
-				public boolean apply(@Nullable Integer input) {
-					return !removedElements.contains(input);
+				public boolean apply(Integer x) {
+					return !removedElements.contains(x);
 				}
 			});
 			

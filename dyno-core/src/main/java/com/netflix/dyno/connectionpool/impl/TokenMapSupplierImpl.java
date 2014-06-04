@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
@@ -24,14 +23,12 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.netflix.config.DynamicIntProperty;
-import com.netflix.config.DynamicPropertyFactory;
-import com.netflix.config.DynamicStringProperty;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.HostToken;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
+import com.netflix.dyno.connectionpool.impl.utils.IOUtilities;
 
 /**
  * An Example of the JSON payload that we get from a dynomite server
@@ -54,10 +51,8 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 
 	private static final Logger Logger = LoggerFactory.getLogger(TokenMapSupplierImpl.class);
 	
-	private static final DynamicStringProperty ServerUrl = 
-			DynamicPropertyFactory.getInstance().getStringProperty("dynomite.tokenMap.url", "http://{hostname}:8080/REST/v1/admin/cluster_describe");
-	
-	private static final DynamicIntProperty NumRetries = DynamicPropertyFactory.getInstance().getIntProperty("dynomite.tokenMap.retries", 2);
+	private static final String ServerUrl = "http://{hostname}:8080/REST/v1/admin/cluster_describe";
+	private static final Integer NumRetries = 2;
 
 	private final ConcurrentHashMap<String, Host> hostMap = new ConcurrentHashMap<String, Host>();
 	private final ConcurrentHashMap<String, HostToken> hostTokenMap = new ConcurrentHashMap<String, HostToken>();
@@ -98,7 +93,7 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 	
 	private String getHttpResponseWithRetries() {
 
-		int count = NumRetries.get();
+		int count = NumRetries;
 		Exception lastEx = null;
 		
 		String response = null;
@@ -124,7 +119,7 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 		
 	private String getResponseViaHttp() throws Exception {
 		
-		String url = ServerUrl.get();
+		String url = ServerUrl;
 		url = url.replace("{hostname}", getRandomHost());
 		
 		Logger.info("Making http call to url: " + url);
@@ -142,7 +137,7 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 		InputStream in = null;
 		try {
 			in = response.getEntity().getContent();
-			return IOUtils.toString(in);
+			return IOUtilities.toString(in);
 		} finally {
 			if (in != null) {
 				in.close();

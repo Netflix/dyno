@@ -5,14 +5,12 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
-import javax.annotation.Nullable;
-
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.google.common.base.Function;
-import com.google.common.collect.Collections2;
 import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
 
 public class HostStatusTracker {
 	
@@ -258,12 +256,11 @@ public class HostStatusTracker {
 				expected = new HashSet<String>(Arrays.asList(names));
 			}
 			
-			Set<String> result = new HashSet<String>( Collections2.transform(set, new Function<Host, String>() {
+			Set<String> result = new HashSet<String>( CollectionUtils.transform(set, new Transform<Host, String>() {
 
 				@Override
-				@Nullable
-				public String apply(@Nullable Host input) {
-					return input.getHostName();
+				public String get(Host x) {
+					return x.getHostName();
 				}
 			}));
 			

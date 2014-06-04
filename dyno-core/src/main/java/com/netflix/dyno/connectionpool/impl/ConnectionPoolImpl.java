@@ -15,17 +15,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import javax.annotation.Nullable;
-
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Predicate;
-import com.google.common.collect.Collections2;
-import com.google.common.util.concurrent.ListenableFuture;
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionContext;
@@ -49,6 +44,8 @@ import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl.ErrorRateMonitorConfigImpl;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 
 public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
@@ -143,10 +140,10 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	@Override
 	public List<HostConnectionPool<CL>> getActivePools() {
 		
-		return new ArrayList<HostConnectionPool<CL>>(Collections2.filter(getPools(), new com.google.common.base.Predicate<HostConnectionPool<CL>>() {
+		return new ArrayList<HostConnectionPool<CL>>(CollectionUtils.filter(getPools(), new Predicate<HostConnectionPool<CL>>() {
 
 			@Override
-			public boolean apply(@Nullable HostConnectionPool<CL> hostPool) {
+			public boolean apply(HostConnectionPool<CL> hostPool) {
 				if (hostPool == null) {
 					return false;
 				}
@@ -260,9 +257,9 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			Collection<Host> hostsUp = null;
 			
 			if (hosts != null && !hosts.isEmpty()) {
-				hostsUp = Collections2.filter(hosts, new Predicate<Host>() {
+				hostsUp = CollectionUtils.filter(hosts, new Predicate<Host>() {
 					@Override
-					public boolean apply(@Nullable Host input) {
+					public boolean apply(Host input) {
 						return input.isUp();
 					}
 				});
@@ -407,7 +404,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			}
 
 			@Override
-			public <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<TestClient, R> op) throws DynoException {
+			public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<TestClient, R> op) throws DynoException {
 				throw new RuntimeException("Not Implemented");
 			}
 		}

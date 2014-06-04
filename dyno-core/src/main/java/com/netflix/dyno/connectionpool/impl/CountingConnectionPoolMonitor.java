@@ -5,8 +5,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
-import net.spy.memcached.OperationTimeoutException;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,8 +58,6 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     			this.poolExhastedCount.incrementAndGet();
     		} else if (reason instanceof TimeoutException) {
     			this.socketTimeoutCount.incrementAndGet();
-    		} else if (reason instanceof OperationTimeoutException) {
-    			this.operationTimeoutCount.incrementAndGet();
     		} else if (reason instanceof BadRequestException) {
     			this.badRequestCount.incrementAndGet();
     		} else if (reason instanceof NoAvailableHostsException ) {

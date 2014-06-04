@@ -21,7 +21,6 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.util.concurrent.ListenableFuture;
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionFactory;
@@ -444,7 +443,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 			}
 
 			@Override
-			public <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<TestClient, R> op) throws DynoException {
+			public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<TestClient, R> op) throws DynoException {
 				throw new RuntimeException("Not Implemented");
 			}
 			
