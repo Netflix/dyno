@@ -19,6 +19,10 @@ import com.netflix.dyno.connectionpool.RetryPolicy.RetryPolicyFactory;
 
 
 public interface ConnectionPoolConfiguration {
+	
+	public static enum LoadBalancingStrategy {
+		RoundRobin, TokenAware;
+	}
 
     /**
      * @return Unique name assigned to this connection pool
@@ -55,6 +59,11 @@ public interface ConnectionPoolConfiguration {
     public int getSocketTimeout();
 
     /**
+     * @return LoadBalancingStrategy
+     */
+    public LoadBalancingStrategy getLoadBalancingStrategy();
+    
+    /**
      * @return Socket connect timeout
      */
     public int getConnectTimeout();
@@ -70,4 +79,6 @@ public interface ConnectionPoolConfiguration {
     public HostSupplier getHostSupplier();
     
     public TokenMapSupplier getTokenSupplier();
+    
+    
 }

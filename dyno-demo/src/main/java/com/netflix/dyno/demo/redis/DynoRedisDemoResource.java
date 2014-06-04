@@ -121,9 +121,7 @@ public class DynoRedisDemoResource {
 	@Produces(MediaType.TEXT_PLAIN)
 	public String readSingle(@PathParam("key") String key) throws Exception {
 
-		Logger.info("Stopping dyno demo test"); 
 		try {
-			System.out.println("Key: " + key);
 			return "\n" + DynoRedisDriver.getInstance().readSingle(key) + "\n";
 		} catch (Exception e) {
 			Logger.error("Error stopping dyno test", e);
@@ -137,9 +135,7 @@ public class DynoRedisDemoResource {
 	@Produces(MediaType.TEXT_PLAIN)
 	public String writeSingle(@PathParam("key") String key, @PathParam("val") String value) throws Exception {
 
-		Logger.info("Stopping dyno demo test"); 
 		try {
-			System.out.println("Key: " + key + ", value: " + value);
 			return "\n" + DynoRedisDriver.getInstance().writeSingle(key, value) + "\n";
 		} catch (Exception e) {
 			Logger.error("Error stopping dyno test", e);
@@ -153,7 +149,6 @@ public class DynoRedisDemoResource {
 	@Produces(MediaType.TEXT_PLAIN)
 	public String dynoStatus() throws Exception {
 
-		Logger.info("Stating dyno data fill"); 
 		try {
 			return DynoRedisDriver.getInstance().getStatus();
 		} catch (Exception e) {

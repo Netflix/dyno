@@ -65,15 +65,15 @@ public class DynoStats {
 		return cacheMiss.get();
 	}
 
-	private double getCacheHitRatio() {
-		int hits = cacheHits.get();
-		int miss = cacheMiss.get();
+	private float getCacheHitRatio() {
+		long hits = cacheHits.get();
+		long miss = cacheMiss.get();
 		
 		if (hits + miss == 0) {
 			return 0;
 		}
 		
-		return (double)((double)(hits*100)/(double)(hits+miss));
+		return (float)((float)(hits*100L)/(float)(hits+miss));
 	}
 
 	public void recordReadLatency(long duration) {

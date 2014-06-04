@@ -7,6 +7,7 @@ import redis.clients.jedis.Jedis;
 
 import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionPool;
+import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
 import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
@@ -82,17 +83,15 @@ public class DynoJedisClient {
 		
 		public Builder(String name) {
 			appName = name;
-			cpConfig = new ConnectionPoolConfigurationImpl(appName);
 		}
-		
-		public Builder withPort(int port) {
-			cpConfig.setPort(port);
-			return this;
-		}
-
 
 		public Builder withDynomiteClusterName(String cluster) {
 			clusterName = cluster;
+			return this;
+		}
+
+		public Builder withCPConfig(ConnectionPoolConfigurationImpl config) {
+			cpConfig = config;
 			return this;
 		}
 
@@ -100,12 +99,8 @@ public class DynoJedisClient {
 
 			assert(appName != null);
 			assert(clusterName != null);
+			assert(cpConfig != null);
 			
-			cpConfig.setPort(22122);
-			cpConfig.withHostSupplier(new EurekaHostsSupplier(clusterName, cpConfig));
-
-//			CountingConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
-//			OperationMonitor opMonitor = new LastOperationMonitor();
 			DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);
 			DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
 			
@@ -120,7 +115,6 @@ public class DynoJedisClient {
 			}
 			
 			final DynoJedisClient client = new DynoJedisClient(appName, pool);
-			
 			return client;
 		}
 		
