@@ -17,6 +17,7 @@ allprojects {
 
 apply plugin: 'idea'
 apply plugin: 'osgi'
+apply plugin: 'project-report'
 
 apply from: file('gradle/convention.gradle')
 apply from: file('gradle/maven.gradle')
@@ -32,15 +33,9 @@ subprojects {
         compile "joda-time:joda-time:2.3"
         compile "org.slf4j:slf4j-api:1.7.5"
         compile "org.slf4j:slf4j-log4j12:1.7.2"
-        compile "net.spy:spymemcached:2.10.2+"
-        compile "com.google.guava:guava:15.0"
-        compile "com.google.inject:guice:3.0"
-        compile "commons-io:commons-io:2.2"
         compile "com.googlecode.json-simple:json-simple:1.1"
-        compile "com.netflix.archaius:archaius-core:0.5.6"
-        compile "com.netflix.servo:servo-core:0.5.5"
-        compile 'com.netflix.eureka:eureka-client:1.1.110'
-        
+        compile "org.apache.httpcomponents:httpclient:4.2.1"
+        compile "com.sun.jersey:jersey-core:1.11"
         compile "junit:junit:4.11"
     }
 }
@@ -58,10 +53,10 @@ project(':dyno') {
 project(':dyno-core') {
     apply plugin: 'osgi'
     apply plugin: 'java'
+    apply plugin: 'project-report'
+    
     dependencies {
         compile "org.slf4j:slf4j-api:1.7.5"
-        compile "net.spy:spymemcached:2.9.1"
-        compile "redis.clients:jedis:2.2.1"
         compile "org.apache.commons:commons-math:2.2"
         compile "org.mockito:mockito-all:1.9.5"
         testCompile "junit:junit:4.11"
@@ -71,36 +66,46 @@ project(':dyno-core') {
 project(':dyno-contrib') {
     apply plugin: 'osgi'
     apply plugin: 'java'
+    apply plugin: 'project-report'
+    
     dependencies {
-    
-    
         compile  project(':dyno-core')
+        compile "com.google.inject:guice:3.0"
+        compile "com.netflix.archaius:archaius-core:0.5.6"
+        compile "com.netflix.servo:servo-core:0.5.5"
+        compile 'com.netflix.eureka:eureka-client:1.1.110'
     }
 }
 
 project(':dyno-memcache') {
     apply plugin: 'osgi'
     apply plugin: 'java'
+    apply plugin: 'project-report'
+
     dependencies {
         compile  project(':dyno-core')
         compile  project(':dyno-contrib')
-        compile "org.slf4j:slf4j-log4j12:1.7.2"
+        compile "net.spy:spymemcached:2.10.2+"
     }
 }
 
 project(':dyno-jedis') {
     apply plugin: 'osgi'
     apply plugin: 'java'
+    apply plugin: 'project-report'
+
     dependencies {
         compile  project(':dyno-core')
         compile  project(':dyno-contrib')
-        compile "org.slf4j:slf4j-log4j12:1.7.2"
+        compile "redis.clients:jedis:2.2.1"
     }
 }
 
 project(':dyno-demo') {
     apply plugin: 'osgi'
     apply plugin: 'java'
+    apply plugin: 'project-report'
+
     dependencies {
         compile  project(':dyno-core')
         compile  project(':dyno-contrib')

@@ -4,7 +4,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.List;
 
-import com.google.common.primitives.UnsignedInts;
 import com.netflix.dyno.connectionpool.HashPartitioner;
 import com.netflix.dyno.connectionpool.HostToken;
 
@@ -21,7 +20,7 @@ public class Murmur3HashPartitioner implements HashPartitioner {
 
 		ByteBuffer bb = ByteBuffer.allocate(8).putLong(0, key);
 		byte[] b = bb.array();
-		return UnsignedInts.toLong(Murmur3Hash.hash32(b, b.length));
+		return UnsignedIntsUtils.toLong(Murmur3Hash.hash32(b, b.length));
 	}
 
 	@Override
@@ -32,7 +31,7 @@ public class Murmur3HashPartitioner implements HashPartitioner {
 		bb.rewind();
 
 		byte[] b = bb.array();
-		return UnsignedInts.toLong(Murmur3Hash.hash32(b, b.length));
+		return UnsignedIntsUtils.toLong(Murmur3Hash.hash32(b, b.length));
 	}
 
 	@Override
@@ -42,7 +41,7 @@ public class Murmur3HashPartitioner implements HashPartitioner {
 		}
 		ByteBuffer bb = ByteBuffer.wrap(key.getBytes(charset));
 		byte[] b = bb.array();
-		return UnsignedInts.toLong(Murmur3Hash.hash32(b, b.length));
+		return UnsignedIntsUtils.toLong(Murmur3Hash.hash32(b, b.length));
 	}
 
 	@Override

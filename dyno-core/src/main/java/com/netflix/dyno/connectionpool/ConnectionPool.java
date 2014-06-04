@@ -20,8 +20,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Future;
 
-import net.spy.memcached.ops.OperationException;
-
 import com.netflix.dyno.connectionpool.exception.DynoException;
 
 /**

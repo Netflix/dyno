@@ -59,14 +59,6 @@ public interface Connection<CL> {
     public void open() throws DynoException;
 
     /**
-     * Open a connection asynchronously and call the callback on connection or
-     * failure
-     * 
-     * @param callback
-     */
-    //public void openAsync(AsyncOpenCallback<CL> callback);
-
-    /**
      * Can be used by clients to indicate connection exception. 
      * This can be analyzed by connection pools later
      * e.g remove host from connection pool etc. 

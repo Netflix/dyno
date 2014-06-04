@@ -16,11 +16,11 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.RateLimiter;
 import com.netflix.dyno.connectionpool.ErrorRateMonitorConfig;
 import com.netflix.dyno.connectionpool.ErrorRateMonitorConfig.ErrorThreshold;
 import com.netflix.dyno.connectionpool.impl.RateTracker.Bucket;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
+import com.netflix.dyno.connectionpool.impl.utils.RateLimiterUtil;
 
 public class ErrorRateMonitor {
 
@@ -172,7 +172,7 @@ public class ErrorRateMonitor {
 			errorMonitor.addPolicy(new SimpleErrorCheckPolicy(130, 8, 80));   // 80% of 10 seconds, if error rate > 120 then alert 
 			errorMonitor.addPolicy(new SimpleErrorCheckPolicy(200, 4, 80));  // 80% of 5 seconds, if error rate > 200 then alert 
 			
-			List<Integer> rates = Lists.newArrayList(90, 120, 180);
+			List<Integer> rates = CollectionUtils.newArrayList(90, 120, 180);
 			int errorCount = runTest(9, errorMonitor, rates);
 			
 			Assert.assertEquals(0, errorCount);
@@ -185,7 +185,7 @@ public class ErrorRateMonitor {
 			errorMonitor.addPolicy(new SimpleErrorCheckPolicy(130, 8, 80));   // 80% of 10 seconds, if error rate > 120 then alert 
 			errorMonitor.addPolicy(new SimpleErrorCheckPolicy(200, 4, 80));  // 80% of 5 seconds, if error rate > 200 then alert 
 			
-			List<Integer> rates = Lists.newArrayList(130, 140, 180);
+			List<Integer> rates = CollectionUtils.newArrayList(130, 140, 180);
 			int errorCount = runTest(9, errorMonitor, rates);
 			
 			Assert.assertEquals(1, errorCount);
@@ -198,7 +198,7 @@ public class ErrorRateMonitor {
 			errorMonitor.addPolicy(new SimpleErrorCheckPolicy(130, 10, 80));   // 80% of 10 seconds, if error rate > 120 then alert 
 			errorMonitor.addPolicy(new SimpleErrorCheckPolicy(200, 4, 80));  // 80% of 5 seconds, if error rate > 200 then alert 
 			
-			List<Integer> rates = Lists.newArrayList(110, 250);
+			List<Integer> rates = new ArrayList<Integer>(); rates.add(110); rates.add(250);
 			int errorCount = runTest(10, errorMonitor, rates);
 			
 			Assert.assertEquals(1, errorCount);
@@ -209,7 +209,7 @@ public class ErrorRateMonitor {
 			int numThreads = 5; 
 			ExecutorService threadPool = Executors.newFixedThreadPool(numThreads);
 			
-			final AtomicReference<RateLimiter> limiter = new AtomicReference<RateLimiter>(RateLimiter.create(rates.get(0)));
+			final AtomicReference<RateLimiterUtil> limiter = new AtomicReference<RateLimiterUtil>(RateLimiterUtil.create(rates.get(0)));
 			final AtomicBoolean stop = new AtomicBoolean(false);
 			
 			final CyclicBarrier barrier = new CyclicBarrier(numThreads+1);
@@ -248,7 +248,7 @@ public class ErrorRateMonitor {
 				Thread.sleep(sleepPerIteration*1000);
 				if (round < rates.size()) {
 					System.out.println("Changing rate to " + rates.get(round));
-					limiter.set(RateLimiter.create(rates.get(round)));
+					limiter.set(RateLimiterUtil.create(rates.get(round)));
 				}
 				round++;
 			} while (round <= numIterations);

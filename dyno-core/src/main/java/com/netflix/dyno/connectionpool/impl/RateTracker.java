@@ -21,8 +21,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Assert;
 import org.junit.Test;
 
-import com.google.common.util.concurrent.RateLimiter;
 import com.netflix.dyno.connectionpool.exception.DynoException;
+import com.netflix.dyno.connectionpool.impl.utils.RateLimiterUtil;
 
 public class RateTracker {
 	
@@ -279,7 +279,7 @@ public class RateTracker {
 			int numThreads = 5; 
 			ExecutorService threadPool = Executors.newFixedThreadPool(numThreads);
 			
-			final AtomicReference<RateLimiter> limiter = new AtomicReference<RateLimiter>(RateLimiter.create(100));
+			final AtomicReference<RateLimiterUtil> limiter = new AtomicReference<RateLimiterUtil>(RateLimiterUtil.create(100));
 			
 			final AtomicBoolean stop = new AtomicBoolean(false);
 			
@@ -313,19 +313,19 @@ public class RateTracker {
 
 			Thread.sleep(4000);
 			System.out.println("Changing rate to 120");
-			limiter.set(RateLimiter.create(120));
+			limiter.set(RateLimiterUtil.create(120));
 			
 			Thread.sleep(4000);
 			System.out.println("Changing rate to 80");
-			limiter.set(RateLimiter.create(80));
+			limiter.set(RateLimiterUtil.create(80));
 
 			Thread.sleep(4000);
 			System.out.println("Changing rate to 200");
-			limiter.set(RateLimiter.create(200));
+			limiter.set(RateLimiterUtil.create(200));
 
 			Thread.sleep(4000);
 			System.out.println("Changing rate to 100");
-			limiter.set(RateLimiter.create(100));
+			limiter.set(RateLimiterUtil.create(100));
 
 			stop.set(true);
 			
