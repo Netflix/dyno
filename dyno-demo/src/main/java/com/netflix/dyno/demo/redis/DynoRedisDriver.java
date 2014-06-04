@@ -2,6 +2,9 @@ package com.netflix.dyno.demo.redis;
 
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancingStrategy;
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
+import com.netflix.dyno.contrib.EurekaHostsSupplier;
 import com.netflix.dyno.demo.DynoDriver;
 import com.netflix.dyno.jedis.DynoJedisClient;
 
@@ -22,14 +25,21 @@ public class DynoRedisDriver extends DynoDriver {
 
 	public DynoClient dynoClientWrapper = new DynoClient () {
 
+		
 		@Override
 		public void init() {
 
 			if (client.get() != null) {
 				return;
 			}
+
 			client.set(DynoJedisClient.Builder.withName("Demo")
 						.withDynomiteClusterName("dynomite_redis_puneet")
+						.withCPConfig(new ConnectionPoolConfigurationImpl("dynomite_redis_puneet")
+									.setPort(22122)
+									.setMaxConnsPerHost(3)
+									.withHostSupplier(new EurekaHostsSupplier("dynomite_redis_puneet", 22122))
+									.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware))
 						.build());
 		}
 

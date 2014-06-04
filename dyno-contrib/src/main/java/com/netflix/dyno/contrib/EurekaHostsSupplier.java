@@ -15,12 +15,9 @@ import com.netflix.appinfo.AmazonInfo;
 import com.netflix.appinfo.AmazonInfo.MetaDataKey;
 import com.netflix.appinfo.InstanceInfo;
 import com.netflix.appinfo.InstanceInfo.InstanceStatus;
-import com.netflix.appinfo.MyDataCenterInstanceConfig;
-import com.netflix.discovery.DefaultEurekaClientConfig;
 import com.netflix.discovery.DiscoveryClient;
 import com.netflix.discovery.DiscoveryManager;
 import com.netflix.discovery.shared.Application;
-import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostSupplier;
 
@@ -38,16 +35,13 @@ public class EurekaHostsSupplier implements HostSupplier {
 
 	// The C* cluster name for discovering nodes
 	private final String applicationName;
-	private final ConnectionPoolConfiguration cpConfig; 
+	private final int port;
 	
 	private final AtomicReference<List<Host>> cachedRef = new AtomicReference<List<Host>>(null);
 	
-	public EurekaHostsSupplier(String applicationName, ConnectionPoolConfiguration cpConfig) {
-		
+	public EurekaHostsSupplier(String applicationName, int cpPort) {
 		this.applicationName = applicationName.toUpperCase();
-		this.cpConfig = cpConfig;
-		// initialize eureka client.  make sure eureka properties are properly configured in config.properties
-		DiscoveryManager.getInstance().initComponent(new MyDataCenterInstanceConfig(), new DefaultEurekaClientConfig());
+		this.port = cpPort;
 	}
 
 	@Override
@@ -64,7 +58,9 @@ public class EurekaHostsSupplier implements HostSupplier {
 	}
 	
 	private List<Host> getUpdateFromEureka() {
-		DiscoveryClient discoveryClient = DiscoveryManager.getInstance().getDiscoveryClient();
+		
+		DiscoveryClient discoveryClient = null;
+		discoveryClient = LibInstanceHolder.getDiscoveryClient();
 		if (discoveryClient == null) {
 			Logger.error("Error getting discovery client");
 			throw new RuntimeException("Failed to create discovery client");
@@ -91,7 +87,7 @@ public class EurekaHostsSupplier implements HostSupplier {
 					@Override
 					public Host apply(InstanceInfo info) {
 						
-						Host host = new Host(info.getHostName(), cpConfig.getPort());
+						Host host = new Host(info.getHostName(), port);
 						Host.Status status = info.getStatus() == InstanceStatus.UP ? Host.Status.Up : Host.Status.Down;
 						host.setStatus(status);
 
@@ -118,4 +114,5 @@ public class EurekaHostsSupplier implements HostSupplier {
 		
 		return hosts;
 	}
+
 }

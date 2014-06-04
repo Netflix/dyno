@@ -2,8 +2,8 @@ package com.netflix.dyno.demo.memcached;
 
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.demo.DynoDriver;
-import com.netflix.dyno.demo.DynoDriver.DynoClient;
 import com.netflix.dyno.memcache.DynoMCacheClient;
 
 public class DynoMCacheDriver extends DynoDriver {
@@ -26,9 +26,9 @@ public class DynoMCacheDriver extends DynoDriver {
 		public void init() {
 			 client.set(DynoMCacheClient.Builder.withName("Demo")
 						.withDynomiteClusterName("dynomite_memcached_puneet")
+						.withConnectionPoolConfig(new ConnectionPoolConfigurationImpl("dynomite_memcached_puneet")
+												  .setPort(8102))						
 						.build());
-						
-
 		}
 
 		@Override

@@ -223,6 +223,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 			
 			try { 
 				Connection<CL> connection = connFactory.createConnection((HostConnectionPool<CL>) pool, null);
+				connection.open();
 				availableConnections.add(connection);
 
 				monitor.incConnectionCreated(host);

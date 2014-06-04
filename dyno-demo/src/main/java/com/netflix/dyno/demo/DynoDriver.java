@@ -295,25 +295,4 @@ public abstract class DynoDriver {
 			return writeWorkers.get();
 		}
 	}
-	
-	
-	
-//	public static void main(String args[]) {
-//		
-//		//DynoDriver.getInstance().backfillData();
-//		
-//		DynoDriver driver = new DynoDriver();
-//		
-//		driver.startReads();
-//		
-//		try {
-//			Thread.sleep(10000);
-//		} catch (InterruptedException e) {
-//			e.printStackTrace();
-//		}
-//		
-//		driver.stop();
-//		
-//		System.out.println(DynoStats.getInstance().getStatus());
-//	}
 }

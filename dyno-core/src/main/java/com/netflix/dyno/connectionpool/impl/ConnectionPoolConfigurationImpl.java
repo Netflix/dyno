@@ -21,6 +21,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private static final int DEFAULT_SOCKET_TIMEOUT = 12000; 
 	private static final int DEFAULT_POOL_SHUTDOWN_DELAY = 60000; 
 	private static final boolean DEFAULT_LOCAL_DC_AFFINITY = true; 
+	private static final LoadBalancingStrategy DEFAULT_LB_STRATEGY = LoadBalancingStrategy.RoundRobin; 
+
 	private HostSupplier hostSupplier;
 	private TokenMapSupplier tokenSupplier;
 
@@ -33,6 +35,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private int socketTimeout = DEFAULT_SOCKET_TIMEOUT; 
 	private int poolShutdownDelay = DEFAULT_POOL_SHUTDOWN_DELAY; 
 	private boolean localDcAffinity = DEFAULT_LOCAL_DC_AFFINITY; 
+	private LoadBalancingStrategy lbStrategy = DEFAULT_LB_STRATEGY; 
 	
 	private RetryPolicyFactory retryFactory = new RetryPolicyFactory() {
 
@@ -134,6 +137,15 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		return this;
 	}
 
+	@Override
+	public LoadBalancingStrategy getLoadBalancingStrategy() {
+		return lbStrategy;
+	}
+
+	public ConnectionPoolConfigurationImpl setLoadBalancingStrategy(LoadBalancingStrategy strategy) {
+		this.lbStrategy = strategy;
+		return this;
+	}
 
 	public ConnectionPoolConfigurationImpl setRetryPolicyFactory(RetryPolicyFactory factory) {
 		this.retryFactory = factory;
@@ -228,4 +240,5 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 			});
 		}
 	}
+
 }

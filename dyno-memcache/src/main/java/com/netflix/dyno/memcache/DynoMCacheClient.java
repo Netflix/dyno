@@ -27,7 +27,6 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.contrib.DynoCPMonitor;
 import com.netflix.dyno.contrib.DynoOPMonitor;
-import com.netflix.dyno.contrib.EurekaHostsSupplier;
 
 /**
  * Dyno client for Memcached that uses the {@link RollingMemcachedConnectionPoolImpl} for managing connections to {@link MemcachedClient}s
@@ -366,17 +365,15 @@ public class DynoMCacheClient {
 
 		public Builder(String name) {
 			appName = name;
-			cpConfig = new ConnectionPoolConfigurationImpl(appName);
 		}
-
-		public Builder withPort(int port) {
-			cpConfig.setPort(port);
-			return this;
-		}
-
 
 		public Builder withDynomiteClusterName(String cluster) {
 			clusterName = cluster;
+			return this;
+		}
+
+		public Builder withConnectionPoolConfig(ConnectionPoolConfigurationImpl config) {
+			cpConfig = config;
 			return this;
 		}
 
@@ -384,8 +381,7 @@ public class DynoMCacheClient {
 
 			assert(appName != null);
 			assert(clusterName != null);
-
-			cpConfig.withHostSupplier(new EurekaHostsSupplier(clusterName, cpConfig));
+			assert(cpConfig != null);
 
 			//			CountingConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
 			//			OperationMonitor opMonitor = new LastOperationMonitor();

@@ -23,6 +23,7 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.netflix.dyno.connectionpool.AsyncOperation;
@@ -36,6 +37,7 @@ import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostConnectionStats;
+import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.RetryPolicy;
@@ -61,16 +63,22 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	
 	private final ExecutorService recoveryThreadPool = Executors.newFixedThreadPool(1);
 	
-	private final HostSelectionStrategy<CL> selectionStrategy = new RoundRobinSelection<CL>(cpMap); 
+	private final AtomicBoolean started = new AtomicBoolean(false);
+	
+	private HostSelectionStrategy<CL> selectionStrategy; 
 	
 	public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon) {
 		this.connFactory = cFactory;
 		this.cpConfiguration = cpConfig;
 		this.cpMonitor = cpMon;
 	}
-	
+
 	@Override
 	public boolean addHost(Host host) {
+		return addHost(host, true);
+	}
+
+	public boolean addHost(Host host, boolean refreshLoadBalancer) {
 		
 		HostConnectionPool<CL> connPool = cpMap.get(host);
 		
@@ -86,11 +94,13 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		HostConnectionPool<CL> prevPool = cpMap.putIfAbsent(host, hostPool);
 		if (prevPool == null) {
 			// This is the first time we are adding this pool. 
-			Logger.info("Adding host conneciton pool for host: " + host);
+			Logger.info("Adding host connection pool for host: " + host);
 			
 			try {
 				hostPool.primeConnections();
-				selectionStrategy.addHost(host, hostPool);
+				if (refreshLoadBalancer) {
+					selectionStrategy.addHost(host, hostPool);
+				}
 				cpMonitor.hostAdded(host, hostPool);
 				
 				return true;
@@ -103,7 +113,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			return false;
 		}
 	}
-
+	
 	@Override
 	public boolean removeHost(Host host) {
 		 
@@ -233,10 +243,59 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 	@Override
 	public Future<Boolean> start() throws DynoException {
-		for (Host host : cpMap.keySet()) {
-			cpMap.get(host).primeConnections();
+		
+		if (started.get()) {
+			return getEmptyFutureTask(false);
 		}
+		
+		if (cpMap.isEmpty()) {
+			
+			HostSupplier hostSupplier = cpConfiguration.getHostSupplier();
+			if (hostSupplier == null) {
+				throw new DynoException("Host supplier not configured!");
+			}
+			
+			Collection<Host> hosts = hostSupplier.getHosts();
+
+			Collection<Host> hostsUp = null;
+			
+			if (hosts != null && !hosts.isEmpty()) {
+				hostsUp = Collections2.filter(hosts, new Predicate<Host>() {
+					@Override
+					public boolean apply(@Nullable Host input) {
+						return input.isUp();
+					}
+				});
+			}
+			
+			if (hostsUp == null || hostsUp.isEmpty()) {
+				throw new NoAvailableHostsException("Host Supplier found no available hosts");
+			}
+
+			boolean success = started.compareAndSet(false, true);
+			if (success) {
+				
+				for (Host host : hostsUp) {
+					addHost(host, false);  // don't init the load balancer yet
+				}
+				initSelectionStrategy();
+			}
+		}
+		
 		return getEmptyFutureTask(true);
+	}
+	
+	private void initSelectionStrategy() {
+		switch (cpConfiguration.getLoadBalancingStrategy()) {
+		case RoundRobin:
+			this.selectionStrategy = new RoundRobinSelection<CL>(cpMap);
+			break;
+		case TokenAware:
+			this.selectionStrategy = new TokenAwareSelection<CL>(cpConfiguration.getHostSupplier(), cpMap);
+			break;
+		default :
+			throw new RuntimeException("LoadBalancing strategy not supported! " + cpConfiguration.getLoadBalancingStrategy().name());
+		}
 	}
 	
 	private class ConnectionPoolHealthTracker { 
@@ -274,19 +333,15 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	
 	private Future<Boolean> getEmptyFutureTask(final Boolean condition) {
 		
-		final Callable<Boolean> task = new Callable<Boolean>() {
+		FutureTask<Boolean> future = new FutureTask<Boolean>(new Callable<Boolean>() {
 			@Override
 			public Boolean call() throws Exception {
 				return condition;
 			}
-		};
+		});
 		
-		try { 
-			task.call();
-		} catch (Exception e) {
-			// do nothing here.
-		}
-		return new FutureTask<Boolean>(task);
+		future.run();
+		return future;
 	}
 
 	

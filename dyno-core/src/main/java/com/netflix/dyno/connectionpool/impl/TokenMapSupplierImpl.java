@@ -60,6 +60,7 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 	private static final DynamicIntProperty NumRetries = DynamicPropertyFactory.getInstance().getIntProperty("dynomite.tokenMap.retries", 2);
 
 	private final ConcurrentHashMap<String, Host> hostMap = new ConcurrentHashMap<String, Host>();
+	private final ConcurrentHashMap<String, HostToken> hostTokenMap = new ConcurrentHashMap<String, HostToken>();
 	
 	private final String localZone;
 	
@@ -75,8 +76,24 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 	@Override
 	public List<HostToken> getTokens() {
 
-		String jsonPayload = getHttpResponseWithRetries();
-		return parseTokenListFromJson(jsonPayload);
+		if (hostTokenMap.size() == 0) {
+			String jsonPayload = getHttpResponseWithRetries();
+			parseTokenListFromJson(jsonPayload);
+		}
+		
+		return new ArrayList<HostToken>(hostTokenMap.values());
+	}
+	
+	public HostToken getTokenForHost(Host host) {
+		HostToken hostToken = hostTokenMap.get(host.getHostName());
+		if (hostToken == null) {
+			// we haven't seen this host before, add to map
+			hostMap.put(host.getHostName(), host);
+			// refresh token map from backend hosts
+			String jsonPayload = getHttpResponseWithRetries();
+			parseTokenListFromJson(jsonPayload);
+		}
+		return hostTokenMap.get(host.getHostName());
 	}
 	
 	private String getHttpResponseWithRetries() {
@@ -155,9 +172,7 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 	}
 
 
-	private List<HostToken> parseTokenListFromJson(String json) {
-		
-		List<HostToken> list = new ArrayList<HostToken>();
+	private void parseTokenListFromJson(String json) {
 		
 		JSONParser parser = new JSONParser();
 		try {
@@ -181,7 +196,8 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 					continue;  
 				}
 				
-				list.add(new HostToken(token, host));
+				HostToken hostToken = new HostToken(token, host);
+				hostTokenMap.put(hostname, hostToken);
 			}
 			
 		} catch (ParseException e) {
@@ -189,7 +205,7 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 			throw new RuntimeException(e);
 		}
 
-		return list;
+		return;
 	}
 	
 	public static class UnitTest {
@@ -222,7 +238,8 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 			when(mockSupplier.getHosts()).thenReturn(hostList);
 			
 			TokenMapSupplierImpl tokenSupplier = new TokenMapSupplierImpl(mockSupplier);
-			List<HostToken> hTokens = tokenSupplier.parseTokenListFromJson(json);
+			tokenSupplier.parseTokenListFromJson(json);
+			List<HostToken> hTokens = new ArrayList<HostToken>(tokenSupplier.hostTokenMap.values());
 			
 			Assert.assertTrue(hTokens.get(0).getToken().equals(3051939411L));
 			Assert.assertTrue(hTokens.get(0).getHost().getHostName().equals("ec2-54-237-143-4.compute-1.amazonaws.com"));

@@ -43,19 +43,36 @@ public class BinarySearchTokenMapper implements HashPartitioner {
 			initSearchMecahnism(hostTokens);
 		}
 		
+		return getToken(keyHash);
+	}
+
+	public HostToken getToken(Long keyHash) {
 		Long token = binarySearch.get().getTokenOwner(keyHash);
 		return tokenMap.get(token);
 	}
 
-	private void initSearchMecahnism(Collection<HostToken> hostTokens) {
+	public void initSearchMecahnism(Collection<HostToken> hostTokens) {
 
 		for (HostToken hostToken : hostTokens) {
 			tokenMap.put(hostToken.getToken(), hostToken);
 		}
-		
+		initBinarySearch();
+	}
+	
+	public void addHostToken(HostToken hostToken) {
+
+		tokenMap.put(hostToken.getToken(), hostToken);
+		initBinarySearch();
+	}
+	
+	private void initBinarySearch() {
 		List<Long> tokens = new ArrayList<Long>(tokenMap.keySet());
 		Collections.sort(tokens);
 		
 		binarySearch.set(new DynoBinarySearch<Long>(tokens));
+	}
+
+	public boolean isEmpty() {
+		return this.tokenMap.size() == 0;
 	}
 }
