@@ -74,7 +74,7 @@ public class DynoJedisClient {
 			}
 		}).getResult();
 	}
-
+	
 	public static class Builder {
 		
 		private String appName;

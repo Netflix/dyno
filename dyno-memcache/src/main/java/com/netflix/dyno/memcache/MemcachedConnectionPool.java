@@ -170,6 +170,12 @@ public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 		shutdown();
 	}
 
+	@Override
+	public void reconnect() {
+		shutdown();
+		primeConnections();
+	}
+
 	/**
 	 * Shuts down the connection pool. Note that calling this method causes all the connections to be immediately closed. 
 	 * Hence this will cancel any in flight requests. 

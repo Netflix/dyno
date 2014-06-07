@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.commons.lang.NotImplementedException;
 
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.exceptions.JedisConnectionException;
 
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;
@@ -18,6 +19,7 @@ import com.netflix.dyno.connectionpool.OperationMonitor;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
+import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
 import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
 
@@ -64,12 +66,15 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 				opResult = new OperationResultImpl<R>(opName, result, opMonitor);
 				return opResult;
 				
-			} catch (DynoException ex) {
+			} catch (JedisConnectionException ex) {
 				opMonitor.recordFailure(opName, ex.getMessage());
-				if (ex instanceof DynoConnectException) {
-					lastDynoException = (DynoConnectException) ex;
-				}
-				throw ex;
+				lastDynoException = (DynoConnectException) new FatalConnectionException(ex).setAttempt(1);
+				throw lastDynoException;
+
+			} catch (RuntimeException ex) {
+				opMonitor.recordFailure(opName, ex.getMessage());
+				lastDynoException = (DynoConnectException) new FatalConnectionException(ex).setAttempt(1);
+				throw lastDynoException;
 				
 			} finally {
 				long duration = System.currentTimeMillis() - startTime;
@@ -87,6 +92,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 		@Override
 		public void close() {
 			jedisClient.quit();
+			jedisClient.disconnect();
 		}
 
 		@Override

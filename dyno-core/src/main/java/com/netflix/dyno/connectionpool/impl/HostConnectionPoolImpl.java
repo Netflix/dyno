@@ -53,7 +53,6 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 	private final ConnectionFactory<CL> connFactory; 
 	private final ConnectionPoolConfiguration cpConfig; 
 	private final ConnectionPoolMonitor monitor; 
-	private final ExecutorService recoveryThreadPool;
 	
 	private final ConnectionPoolState<CL> cpNotInited = new ConnectionPoolNotInited();
 	private final ConnectionPoolState<CL> cpActive = new ConnectionPoolActive(this);
@@ -69,7 +68,6 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		this.connFactory = conFactory;
 		this.cpConfig = cpConfig;
 		this.monitor = poolMonitor;
-		this.recoveryThreadPool = thPool;
 	}
 	
 	@Override
@@ -92,41 +90,33 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		
 		ConnectionPoolState<CL> currentState = cpState.get();
 		
-		if (currentState != cpActive) {
+		if (currentState == cpDown) {
 			if (Logger.isDebugEnabled()) {
-				Logger.debug("CP is not active, hence ignoring mark as down request");
+				Logger.debug("CP is already down, hence ignoring mark as down request");
 			}
 			return;
 		}
 		
 		if (!(cpState.compareAndSet(currentState, cpDown))) {
 			// someone already beat us to it
-			Logger.info("Someone already beat us to marking the host as down, ignoring request");
 			return;
 		}
 		
 		monitor.hostDown(host, reason);
-		
-		final HostConnectionPool<CL> pool = this;
-		
-		recoveryThreadPool.submit(new Callable<Void>() {
+	}
 
-			@Override
-			public Void call() throws Exception {
-				
-				Thread.currentThread().setName("DynoConnectionRevivor");
-			
-				reconnect(cpDown);
-				
-				if (!cpState.compareAndSet(cpReconnecting, cpActive)) {
-					throw new IllegalStateException();
-				}
-				
-				System.out.println("Done Reconnecting. Host up");
-				monitor.hostUp(host, pool);
-				return null;
-			}
-		});
+	@Override
+	public void reconnect() {
+		
+		markAsDown(null);
+		reconnect(cpDown);
+	
+		if (cpState.get() == cpActive) {
+			System.out.println("Done Reconnecting. Host up");
+			monitor.hostUp(host, this);
+		} else {
+			System.out.println("Host NOT up");
+		}
 	}
 
 	@Override
@@ -169,15 +159,15 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				cpActive.createConnection();
 				successfullyCreated++;
 			} catch (DynoException e) {
-				Logger.info("Will retry priming connection");
+				Logger.error("Failed to prime connection", e);
 			}
 		}
 		
-		if (!(cpState.compareAndSet(cpReconnecting, cpActive))) {
-			throw new IllegalStateException("something went wrong with prime connections");
-		} else {
-			return successfullyCreated;
-		}
+		if (successfullyCreated == cpConfig.getMaxConnsPerHost())
+			if (!(cpState.compareAndSet(cpReconnecting, cpActive))) {
+				throw new IllegalStateException("something went wrong with prime connections");
+			}
+		return successfullyCreated;
 	}
 
 	@Override
@@ -240,18 +230,20 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		@Override
 		public boolean returnConnection(Connection<CL> connection) {
 			try {
-				DynoConnectException e = connection.getLastException();
+				//DynoConnectException e = connection.getLastException();
 				
 				if (numActiveConnections.get() > cpConfig.getMaxConnsPerHost()) {
 					
 					// Just close the connection
 					return closeConnection(connection);
 					
-				} else if (e != null && e instanceof FatalConnectionException) {
-					
-					// create another connection and then close this one
-					reviveSingleConnection();
-					return closeConnection(connection);
+//				} else if (e != null && e instanceof FatalConnectionException) {
+//					
+//					// create another connection and then close this one
+//					System.out.println("\nReviving single connection\n");
+//					reviveSingleConnection();
+//					System.out.println("\nClosing single connection\n");
+//					return closeConnection(connection);
 					
 				} else {
 					// add connection back to the pool
@@ -263,29 +255,31 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 			}
 		}
 
-		private void reviveSingleConnection() {
-			
-			recoveryThreadPool.submit(new Callable<Void>() {
-
-				@Override
-				public Void call() throws Exception {
-					
-					if (cpState.get() != cpActive) {
-						// Do not create the connection
-						return null;
-					}
-					
-					Connection<CL> connection = cpState.get().createConnection();
-
-					// Check again if the pool has been shutdown
-					if (cpState.get() != cpActive) {
-						// Do not create the connection
-						cpState.get().closeConnection(connection);
-					}
-					return null;
-				}
-			});
-		}
+//		private void reviveSingleConnection() {
+//			
+//			recoveryThreadPool.submit(new Callable<Void>() {
+//
+//				@Override
+//				public Void call() throws Exception {
+//					
+//					if (cpState.get() != cpActive) {
+//						// Do not create the connection
+//						return null;
+//					}
+//					
+//					System.out.println("\nCreating connection from recoveryThreadPool\n");
+//					Connection<CL> connection = cpState.get().createConnection();
+//					System.out.println("\nFinished Creating connection from recoveryThreadPool\n");
+//					
+//					// Check again if the pool has been shutdown
+//					if (cpState.get() != cpActive) {
+//						// Do not create the connection
+//						cpState.get().closeConnection(connection);
+//					}
+//					return null;
+//				}
+//			});
+//		}
 		
 		@Override
 		public boolean closeConnection(Connection<CL> connection) {
@@ -293,7 +287,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				connection.close();
 				return true;
 			} catch (Exception e) {
-				Logger.error("Failed to close connection for host: " + host, e);
+				Logger.error("Failed to close connection for host: " + host + " " + e.getMessage());
 				return false;
 			} finally {
 				numActiveConnections.decrementAndGet();
@@ -359,7 +353,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				connection.close();
 				return true;
 			} catch (Exception e) {
-				Logger.error("Failed to close connection for host: " + host, e);
+				Logger.warn("Failed to close connection for host: " + host + " " + e.getMessage());
 				return false;
 			} finally {
 				numActiveConnections.decrementAndGet();

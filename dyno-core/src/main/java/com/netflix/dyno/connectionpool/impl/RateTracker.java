@@ -155,10 +155,7 @@ public class RateTracker {
 			bucketCreateCount.incrementAndGet();
 			
 			Bucket  newBucket = new Bucket(timestamp);
-			
-			//queue.peekFirst();
 			queue.removeLast();
-			
 			queue.addFirst(newBucket);
 		}
 		
@@ -222,6 +219,10 @@ public class RateTracker {
 			
 			Bucket other = (Bucket) obj;
 			return this.lastTimestamp.get() == other.lastTimestamp.get();
+		}
+		
+		public String toString() {
+			return "" + this.count();
 		}
 	}
 	

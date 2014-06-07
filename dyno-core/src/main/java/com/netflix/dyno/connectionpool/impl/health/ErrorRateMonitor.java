@@ -1,4 +1,4 @@
-package com.netflix.dyno.connectionpool.impl;
+package com.netflix.dyno.connectionpool.impl.health;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,6 +18,7 @@ import org.junit.Test;
 
 import com.netflix.dyno.connectionpool.ErrorRateMonitorConfig;
 import com.netflix.dyno.connectionpool.ErrorRateMonitorConfig.ErrorThreshold;
+import com.netflix.dyno.connectionpool.impl.RateTracker;
 import com.netflix.dyno.connectionpool.impl.RateTracker.Bucket;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.RateLimiterUtil;
@@ -60,18 +61,17 @@ public class ErrorRateMonitor {
 		
 		this.rateTracker.trackRate(count);
 		
-		if ((timestamp - suppressCheckTimestamp.get()) <= suppressErrorWindow) {
-			// don't check error. This is to prevent repeatedly firing alerts 
-			return true; 
-		}
-		
 		if ((timestamp - lastCheckTimestamp.get()) >= errorCheckFrequencySeconds) {
 			
+			if ((timestamp - suppressCheckTimestamp.get()) <= suppressErrorWindow) {
+				// don't check error. This is to prevent repeatedly firing alerts 
+				return true; 
+			}
+
 			String expected = errorCheckLock.get();
 			boolean casWon = errorCheckLock.compareAndSet(expected, UUID.randomUUID().toString());
 			
 			if (casWon) {
-				
 				// record that we checked
 				lastCheckTimestamp.set(timestamp);
 				
@@ -131,8 +131,6 @@ public class ErrorRateMonitor {
 			
 			return numBucketsOverThreshold >= minViolationBucketThreshold;
 		}
-		
-		
 	}
 	
 	public static class UnitTest {

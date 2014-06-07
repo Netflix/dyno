@@ -36,9 +36,12 @@ public class DynoRedisDriver extends DynoDriver {
 			client.set(DynoJedisClient.Builder.withName("Demo")
 						.withDynomiteClusterName("dynomite_redis_puneet")
 						.withCPConfig(new ConnectionPoolConfigurationImpl("dynomite_redis_puneet")
-									.setPort(22122)
-									.setMaxConnsPerHost(3)
-									.withHostSupplier(new EurekaHostsSupplier("dynomite_redis_puneet", 22122))
+									//.setPort(22122)
+									.setPort(8102)
+									.setMaxTimeoutWhenExhausted(100)
+									//.setMaxConnsPerHost(3)
+									//.withHostSupplier(new EurekaHostsSupplier("dynomite_redis_puneet", 22122))
+									.withHostSupplier(new EurekaHostsSupplier("dynomite_redis_puneet", 8102))
 									.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware))
 						.build());
 		}
