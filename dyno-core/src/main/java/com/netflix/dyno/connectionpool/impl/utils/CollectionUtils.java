@@ -13,6 +13,10 @@ public class CollectionUtils {
 		public Y get(X x); 
 	}
 	
+	public interface MapEntryTransform<X,Y,Z> {
+		public Z get(X x, Y y); 
+	}
+	
 	public static interface Predicate<X> {
 		public boolean apply(X x); 
 	}
@@ -60,16 +64,16 @@ public class CollectionUtils {
 		return toMap;
 	}
 	
-	public static <X,Y,Z> void transform(Map<X,Y> from, Map<X,Z> to, Transform<Y,Z> transform) {
+	public static <X,Y,Z> void transform(Map<X,Y> from, Map<X,Z> to, MapEntryTransform<X,Y,Z> transform) {
 		
 		for (X x : from.keySet()) {
 			Y fromValue = from.get(x);
-			Z toValue = transform.get(fromValue);
+			Z toValue = transform.get(x, fromValue);
 			to.put(x, toValue);
 		}
 	}
 
-	public static <X,Y,Z> Map<X,Z> transform(Map<X,Y> from, Transform<Y,Z> transform) {
+	public static <X,Y,Z> Map<X,Z> transform(Map<X,Y> from, MapEntryTransform<X,Y,Z> transform) {
 		
 		Map<X,Z> toMap = new HashMap<X,Z>();
 		transform(from, toMap, transform);

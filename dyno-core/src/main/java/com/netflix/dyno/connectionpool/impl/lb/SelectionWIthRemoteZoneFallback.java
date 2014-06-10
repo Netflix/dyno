@@ -17,7 +17,7 @@ import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import com.netflix.dyno.connectionpool.impl.CircularList;
 import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
-import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.MapEntryTransform;
 
 public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrategy<CL> {
 
@@ -37,7 +37,7 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 
 	public interface SingleDCSelector { 
 
-		public void init(List<Host> hosts);
+		public void init(String zone, List<Host> hosts);
 
 		public Host getHostForKey(String key);
 
@@ -89,42 +89,50 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 		}
 
 		localSelector = selectorFactory.vendSelector();
-		localSelector.init(localHosts);
+		localSelector.init(localZone, localHosts);
 
-		CollectionUtils.transform(remoteDCHosts, remoteDCSelectors, new Transform<List<Host>, SingleDCSelector>() {
+		CollectionUtils.transform(remoteDCHosts, remoteDCSelectors, new MapEntryTransform<String, List<Host>, SingleDCSelector>() {
 
 			@Override
-			public SingleDCSelector get(List<Host> hosts) {
+			public SingleDCSelector get(String zone, List<Host> hosts) {
 				SingleDCSelector selector = selectorFactory.vendSelector();
-				selector.init(hosts);
+				selector.init(zone, hosts);
 				return selector;
 			}
 		});
+		
+		remoteDCNames.swapWithList(remoteDCSelectors.keySet());
 	}
 
 	@Override
 	public Connection<CL> getConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
 
 		String key = op.getKey();
-
 		Host host = localSelector.getHostForKey(key);
-
 		//System.out.println("Found primary HOST: " + host.getHostName()  + " " + host.getStatus());
 
 		if (!isHostAndHostPoolActive(host)) {
-
-			Host remoteHost = getActiveFallbackHost(key);
-			if (remoteHost == null) {
-				throw new NoAvailableHostsException("Local zone host is down and no remote zone hosts for fallback");
-			} else {
-				host = remoteHost;
-			}
+			return getFallbackConnection(op, duration, unit);
 		}
 
 		HostConnectionPool<CL> hPool = hostPools.get(host);
 		return hPool.borrowConnection(duration, unit);
 	}
 
+	@Override
+	public Connection<CL> getFallbackConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
+
+		String key = op.getKey();
+
+		Host remoteHost = getActiveFallbackHost(key);
+		if (remoteHost == null) {
+			throw new NoAvailableHostsException("Local zone host is down and no remote zone hosts for fallback");
+		} else {
+			HostConnectionPool<CL> hPool = hostPools.get(remoteHost);
+			return hPool.borrowConnection(duration, unit);
+		}
+	}
+	
 	@Override
 	public void addHost(Host host, HostConnectionPool<CL> hostPool) {
 		hostPools.put(host, hostPool);
@@ -161,6 +169,7 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 			return false;
 		} else {
 			HostConnectionPool<CL> hPool = hostPools.get(host);
+			//System.out.println("Host: " + host.getHostName() + " " + host.getStatus() + " active: " + hPool.isActive());
 			return hPool != null && hPool.isActive();
 		}
 	}
@@ -168,7 +177,6 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 	private Host getActiveFallbackHost(String key) {
 
 		int numRemotes = remoteDCNames.getEntireList().size();
-
 		Host host = null; 
 
 		while (numRemotes > 0) {

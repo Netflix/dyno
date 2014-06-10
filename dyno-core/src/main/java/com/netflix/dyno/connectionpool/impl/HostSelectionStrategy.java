@@ -13,6 +13,8 @@ public interface HostSelectionStrategy<CL> {
 
 	public Connection<CL> getConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException;
 	
+	public Connection<CL> getFallbackConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException;
+
 	public void addHost(Host host, HostConnectionPool<CL> hostPool);
 	
 	public void removeHost(Host host, HostConnectionPool<CL> hostPool);

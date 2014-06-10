@@ -190,7 +190,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		private List<ErrorThreshold> thresholds = new ArrayList<ErrorThreshold>();
 
 		public ErrorRateMonitorConfigImpl() {
-			this.addThreshold(50, 20, 80);
+			this.addThreshold(10, 10, 80);
 		}
 		
 		public ErrorRateMonitorConfigImpl(int w, int f, int s) {

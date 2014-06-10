@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancingStrategy;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
+import com.netflix.dyno.connectionpool.impl.RetryNTimes;
 import com.netflix.dyno.contrib.EurekaHostsSupplier;
 import com.netflix.dyno.demo.DynoDriver;
 import com.netflix.dyno.jedis.DynoJedisClient;
@@ -39,6 +40,7 @@ public class DynoRedisDriver extends DynoDriver {
 									//.setPort(22122)
 									.setPort(8102)
 									.setMaxTimeoutWhenExhausted(100)
+									.setRetryPolicyFactory(new RetryNTimes.RetryFactory(1, true))
 									//.setMaxConnsPerHost(3)
 									//.withHostSupplier(new EurekaHostsSupplier("dynomite_redis_puneet", 22122))
 									.withHostSupplier(new EurekaHostsSupplier("dynomite_redis_puneet", 8102))

@@ -9,10 +9,12 @@ import com.netflix.dyno.connectionpool.impl.lb.SelectionWIthRemoteZoneFallback.S
 
 public class RoundRobinSelector implements SingleDCSelector {
 
+	private String zone = null;
 	private final CircularList<Host> circularList = new CircularList<Host>(null);
 
 	@Override
-	public void init(List<Host> hosts) {
+	public void init(String zoneName, List<Host> hosts) {
+		zone = zoneName;
 		circularList.swapWithList(hosts);
 	}
 
@@ -38,6 +40,10 @@ public class RoundRobinSelector implements SingleDCSelector {
 		List<Host> newHostList = new ArrayList<Host>(circularList.getEntireList());
 		newHostList.remove(host);
 		circularList.swapWithList(newHostList);
+	}
+	
+	public String toString() {
+		return "RoundRobinSelector: zone: " + zone + ", list: " + circularList.toString();
 	}
 
 }

@@ -16,27 +16,28 @@ public class TokenAwareSelector implements SingleDCSelector {
 
 	private TokenMapSupplierImpl tokenSupplier; 
 	private final BinarySearchTokenMapper tokenMapper;
-	private final String localZone;
+	private String theZone = null;
 
 	public TokenAwareSelector() {
-		this.localZone = System.getenv("EC2_AVAILABILITY_ZONE");
 		this.tokenMapper = new BinarySearchTokenMapper(new Murmur1HashPartitioner());
 	}
 
 	@Override
-	public void init(List<Host> hosts) {
-
+	public void init(final String zone, List<Host> hosts) {
+		theZone = zone;
 		this.tokenSupplier =  new TokenMapSupplierImpl(hosts);
 		List<HostToken> allHostTokens = tokenSupplier.getTokens();
 		
+		System.out.println("No of tokens from token map supplier for zone: " + zone + " " + allHostTokens.size());
 		Collection<HostToken> localZoneTokens = CollectionUtils.filter(allHostTokens,  new Predicate<HostToken>() {
 
 			@Override
 			public boolean apply(HostToken x) {
-				String zone = x.getHost().getDC();
-				return localZone != null ? localZone.equalsIgnoreCase(zone) : true;
+				String hostDC = x.getHost().getDC();
+				return zone != null ? zone.equalsIgnoreCase(hostDC) : true;
 			}
 		});
+		System.out.println("No of tokens from token map supplier for zone: " + zone + " " + localZoneTokens.size());
 		
 		this.tokenMapper.initSearchMecahnism(localZoneTokens);
 	}
@@ -59,7 +60,7 @@ public class TokenAwareSelector implements SingleDCSelector {
 	@Override
 	public void addHost(Host host) {
 		String zone = host.getDC();
-		boolean isLocal = localZone != null ? localZone.equalsIgnoreCase(zone) : true;
+		boolean isLocal = zone != null ? zone.equalsIgnoreCase(zone) : true;
 		
 		if (isLocal) {
 			HostToken hostToken = tokenSupplier.getTokenForHost(host);
@@ -73,5 +74,9 @@ public class TokenAwareSelector implements SingleDCSelector {
 	public void removeHost(Host host) {
 		// do nothing. Not yet implemented
 		throw new RuntimeException("Not yet implemented");
+	}
+	
+	public String toString() {
+		return "zone: " + theZone + " " + tokenMapper.toString();
 	}
 }

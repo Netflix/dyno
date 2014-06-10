@@ -198,8 +198,13 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			Connection<CL> connection = null;
 			
 			try { 
+				if (lastException != null && retry.allowRemoteDCFallback()) {
+					connection = 
+							selectionStrategy.getFallbackConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
+				} else {
 				connection = 
 						selectionStrategy.getConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
+				}
 				OperationResult<R> result = connection.execute(op);
 				
 				retry.success();
@@ -678,7 +683,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				}
 			};
 			
-			final RetryNTimes retry = new RetryNTimes(3);
+			final RetryNTimes retry = new RetryNTimes(3, false);
 			final RetryPolicyFactory rFactory = new RetryPolicyFactory() {
 				@Override
 				public RetryPolicy getRetryPolicy() {

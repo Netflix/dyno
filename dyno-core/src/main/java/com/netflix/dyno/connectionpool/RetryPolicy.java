@@ -25,6 +25,12 @@ public interface RetryPolicy {
     boolean allowRetry();
 
     /**
+     * Ask the policy is a retry can use a remote dc 
+     * @return true/false
+     */
+    boolean allowRemoteDCFallback();
+    
+    /**
      * Return the number of attempts since begin was called
      * 
      * @return
