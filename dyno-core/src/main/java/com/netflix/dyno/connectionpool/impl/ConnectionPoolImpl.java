@@ -44,6 +44,13 @@ import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl.ErrorRateMonitorConfigImpl;
+import com.netflix.dyno.connectionpool.impl.health.ConnectionPoolHealthTracker;
+import com.netflix.dyno.connectionpool.impl.health.ErrorRateMonitor;
+import com.netflix.dyno.connectionpool.impl.lb.RoundRobinSelector;
+import com.netflix.dyno.connectionpool.impl.lb.SelectionWIthRemoteZoneFallback;
+import com.netflix.dyno.connectionpool.impl.lb.SelectionWIthRemoteZoneFallback.SingleDCSelector;
+import com.netflix.dyno.connectionpool.impl.lb.SelectionWIthRemoteZoneFallback.SingleDCSelectorFactory;
+import com.netflix.dyno.connectionpool.impl.lb.TokenAwareSelector;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 
@@ -52,7 +59,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	private static final Logger Logger = LoggerFactory.getLogger(ConnectionPoolImpl.class);
 	
 	private final ConcurrentHashMap<Host, HostConnectionPool<CL>> cpMap = new ConcurrentHashMap<Host, HostConnectionPool<CL>>();
-	private final ConnectionPoolHealthTracker cpHealthTracker = new ConnectionPoolHealthTracker();
+	private final ConnectionPoolHealthTracker<CL> cpHealthTracker;
 	
 	private final ConnectionFactory<CL> connFactory; 
 	private final ConnectionPoolConfiguration cpConfiguration; 
@@ -68,6 +75,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		this.connFactory = cFactory;
 		this.cpConfiguration = cpConfig;
 		this.cpMonitor = cpMon;
+		
+		this.cpHealthTracker = new ConnectionPoolHealthTracker<CL>(cpConfiguration, recoveryThreadPool);
 	}
 
 	@Override
@@ -117,7 +126,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		HostConnectionPool<CL> hostPool = cpMap.remove(host);
 		if (hostPool != null) {
 			selectionStrategy.removeHost(host, hostPool);
-
 			cpMonitor.hostRemoved(host);
 			hostPool.shutdown();
 			return true;
@@ -125,7 +133,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			return false;
 		}
 	}
-
+	
 	@Override
 	public boolean isHostUp(Host host) {
 		HostConnectionPool<CL> hostPool = cpMap.get(host);
@@ -190,8 +198,13 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			Connection<CL> connection = null;
 			
 			try { 
+				if (lastException != null && retry.allowRemoteDCFallback()) {
+					connection = 
+							selectionStrategy.getFallbackConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
+				} else {
 				connection = 
 						selectionStrategy.getConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
+				}
 				OperationResult<R> result = connection.execute(op);
 				
 				retry.success();
@@ -214,7 +227,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				
 				// Track the connection health so that the pool can be purged at a later point
 				if (connection != null) {
-					cpHealthTracker.trackConnectionError(connection.getParentConnectionPool().getHost(), lastException);
+					cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
 				}
 				
 			} catch(Throwable t) {
@@ -235,6 +248,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		for (Host host : cpMap.keySet()) {
 			removeHost(host);
 		}
+		cpHealthTracker.stop();
 		recoveryThreadPool.shutdownNow();
 	}
 
@@ -245,81 +259,65 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			return getEmptyFutureTask(false);
 		}
 		
-		if (cpMap.isEmpty()) {
-			
-			HostSupplier hostSupplier = cpConfiguration.getHostSupplier();
-			if (hostSupplier == null) {
-				throw new DynoException("Host supplier not configured!");
-			}
-			
-			Collection<Host> hosts = hostSupplier.getHosts();
+		HostSupplier hostSupplier = cpConfiguration.getHostSupplier();
+		if (hostSupplier == null) {
+			throw new DynoException("Host supplier not configured!");
+		}
 
-			Collection<Host> hostsUp = null;
-			
-			if (hosts != null && !hosts.isEmpty()) {
-				hostsUp = CollectionUtils.filter(hosts, new Predicate<Host>() {
-					@Override
-					public boolean apply(Host input) {
-						return input.isUp();
-					}
-				});
-			}
-			
-			if (hostsUp == null || hostsUp.isEmpty()) {
-				throw new NoAvailableHostsException("Host Supplier found no available hosts");
-			}
+		Collection<Host> hosts = hostSupplier.getHosts();
 
-			boolean success = started.compareAndSet(false, true);
-			if (success) {
-				
-				for (Host host : hostsUp) {
-					addHost(host, false);  // don't init the load balancer yet
-				}
-				initSelectionStrategy();
+		List<Host> hostsUp = new ArrayList<Host>(CollectionUtils.filter(hosts, new Predicate<Host>() {
+			@Override
+			public boolean apply(Host input) {
+				return input.isUp();
 			}
+		}));
+
+		if (hostsUp == null || hostsUp.isEmpty()) {
+			throw new NoAvailableHostsException("Host Supplier found no available hosts");
+		}
+
+		boolean success = started.compareAndSet(false, true);
+		if (success) {
+			for (Host host : hostsUp) {
+				addHost(host, false);  // don't init the load balancer yet
+			}
+			selectionStrategy = initSelectionStrategy();
+			cpHealthTracker.start();
 		}
 		
 		return getEmptyFutureTask(true);
 	}
 	
-	private void initSelectionStrategy() {
+	private SelectionWIthRemoteZoneFallback<CL> initSelectionStrategy() {
+		
+		SingleDCSelectorFactory sFactory = null; 
+		
 		switch (cpConfiguration.getLoadBalancingStrategy()) {
 		case RoundRobin:
-			this.selectionStrategy = new RoundRobinSelection<CL>(cpMap);
+			sFactory = new SingleDCSelectorFactory() {
+				@Override
+				public SingleDCSelector vendSelector() {
+					return new RoundRobinSelector();
+				}
+			};
 			break;
 		case TokenAware:
-			this.selectionStrategy = new TokenAwareSelection<CL>(cpConfiguration.getHostSupplier(), cpMap);
+			sFactory = new SingleDCSelectorFactory() {
+				@Override
+				public SingleDCSelector vendSelector() {
+					return new TokenAwareSelector();
+				}
+			};
 			break;
 		default :
 			throw new RuntimeException("LoadBalancing strategy not supported! " + cpConfiguration.getLoadBalancingStrategy().name());
 		}
+		
+		return new SelectionWIthRemoteZoneFallback<CL>(cpMap, sFactory);
 	}
 	
-	private class ConnectionPoolHealthTracker { 
-		
-		private final ConcurrentHashMap<Host, ErrorRateMonitor> errorRates = new ConcurrentHashMap<Host, ErrorRateMonitor>();
-		
-		private void trackConnectionError(Host host, DynoException e) {
-			
-			if (e != null && e instanceof FatalConnectionException) {
-				
-				ErrorRateMonitor errorMonitor = errorRates.get(host);
-				
-				if (errorMonitor == null) {
-					errorMonitor = ErrorRateMonitorFactory.createErrorMonitor(cpConfiguration);
-					errorRates.putIfAbsent(host, errorMonitor);
-					errorMonitor = errorRates.get(host);
-				}
-				
-				boolean shouldFail = errorMonitor.trackErrorRate(1);
-				
-				if (shouldFail) {
-					Logger.warn("Dyno removing host conneciton pool for host: " + host + " due to too many errors");
-					removeHost(host);
-				}
-			}
-		}
-	}
+
 
 	public static class ErrorRateMonitorFactory {
 
@@ -685,7 +683,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				}
 			};
 			
-			final RetryNTimes retry = new RetryNTimes(3);
+			final RetryNTimes retry = new RetryNTimes(3, false);
 			final RetryPolicyFactory rFactory = new RetryPolicyFactory() {
 				@Override
 				public RetryPolicy getRetryPolicy() {
@@ -819,7 +817,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			
 			// Track the connection health so that the pool can be purged at a later point
 			if (connection != null) {
-				cpHealthTracker.trackConnectionError(connection.getParentConnectionPool().getHost(), lastException);
+				cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
 			}
 			
 		} catch(Throwable t) {

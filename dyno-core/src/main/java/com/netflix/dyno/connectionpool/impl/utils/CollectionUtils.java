@@ -13,7 +13,11 @@ public class CollectionUtils {
 		public Y get(X x); 
 	}
 	
-	public interface Predicate<X> {
+	public interface MapEntryTransform<X,Y,Z> {
+		public Z get(X x, Y y); 
+	}
+	
+	public static interface Predicate<X> {
 		public boolean apply(X x); 
 	}
 	
@@ -37,6 +41,17 @@ public class CollectionUtils {
 		}
 		return list;
 	}
+	
+
+	public static <X> X find(Collection<X> from, Predicate<X> predicate) {
+		
+		for (X x : from) {
+			if (predicate.apply(x)) {
+				return x;
+			}
+		}
+		return null;
+	}
 
 	public static <X,Y> Map<X,Y> filterKeys(Map<X,Y> from, Predicate<X> predicate) {
 		
@@ -46,6 +61,22 @@ public class CollectionUtils {
 				toMap.put(x, from.get(x));
 			}
 		}
+		return toMap;
+	}
+	
+	public static <X,Y,Z> void transform(Map<X,Y> from, Map<X,Z> to, MapEntryTransform<X,Y,Z> transform) {
+		
+		for (X x : from.keySet()) {
+			Y fromValue = from.get(x);
+			Z toValue = transform.get(x, fromValue);
+			to.put(x, toValue);
+		}
+	}
+
+	public static <X,Y,Z> Map<X,Z> transform(Map<X,Y> from, MapEntryTransform<X,Y,Z> transform) {
+		
+		Map<X,Z> toMap = new HashMap<X,Z>();
+		transform(from, toMap, transform);
 		return toMap;
 	}
 

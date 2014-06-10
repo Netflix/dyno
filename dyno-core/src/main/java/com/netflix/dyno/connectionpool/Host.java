@@ -34,6 +34,10 @@ public class Host {
 		return port;
 	}
 	
+	public Status getStatus() {
+		return status;
+	}
+
 	public String getDC() {
 		return dc;
 	}

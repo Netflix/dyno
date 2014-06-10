@@ -58,6 +58,15 @@ public class DynoBinarySearch<T extends Comparable<T>> {
 		return rangeList.get(index).getTokenOwner();
 	}
 	
+	public String toString() {
+		
+		StringBuilder sb = new StringBuilder("[DynoBinarySearch:\n");
+		for (DynoTokenRange r : rangeList) {
+			sb.append(r.toString()).append("\n");
+		}
+		sb.append("]");
+		return sb.toString();
+	}
 	
 	private class DynoTokenRange implements Comparable<T> {
 		

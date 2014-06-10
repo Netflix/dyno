@@ -183,12 +183,14 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 
 	public static class ErrorRateMonitorConfigImpl implements ErrorRateMonitorConfig {
 
-		int window = 60; 
-		int suppressWindow = 90; 
+		int window = 20; 
 		int checkFrequency = 1;
+		int suppressWindow = 90; 
 		
+		private List<ErrorThreshold> thresholds = new ArrayList<ErrorThreshold>();
+
 		public ErrorRateMonitorConfigImpl() {
-			
+			this.addThreshold(10, 10, 80);
 		}
 		
 		public ErrorRateMonitorConfigImpl(int w, int f, int s) {
@@ -196,8 +198,6 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 			this.checkFrequency = f;
 			this.suppressWindow = s;
 		}
-		
-		private List<ErrorThreshold> thresholds = new ArrayList<ErrorThreshold>();
 		
 		@Override
 		public int getWindowSizeSeconds() {

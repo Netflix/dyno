@@ -75,4 +75,8 @@ public class BinarySearchTokenMapper implements HashPartitioner {
 	public boolean isEmpty() {
 		return this.tokenMap.size() == 0;
 	}
+	
+	public String toString() {
+		return binarySearch.toString();
+	}
 }

@@ -5,14 +5,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.HostGroup;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostConnectionStats;
+import com.netflix.dyno.connectionpool.HostGroup;
 import com.netflix.dyno.connectionpool.exception.BadRequestException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
@@ -20,8 +17,6 @@ import com.netflix.dyno.connectionpool.exception.TimeoutException;
 
 public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
 	
-    private static Logger LOG = LoggerFactory.getLogger(CountingConnectionPoolMonitor.class);
-    
     // Tracking operation level metrics
     private final AtomicLong operationFailureCount  = new AtomicLong();
     private final AtomicLong operationSuccessCount  = new AtomicLong();
@@ -63,7 +58,6 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     		} else if (reason instanceof NoAvailableHostsException ) {
     			this.noHostsCount.incrementAndGet();
     		} else {
-    			LOG.error(reason.toString(), reason);
     			this.unknownErrorCount.incrementAndGet();
     		}
     	} else {

@@ -40,4 +40,9 @@ public class RunOnce implements RetryPolicy {
 		}
 	}
 
+	@Override
+	public boolean allowRemoteDCFallback() {
+		return false;
+	}
+
 }

@@ -10,6 +10,7 @@ import javax.ws.rs.core.MediaType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.demo.DynoDataBackfill;
 
 @Path("/dyno/demo/redis")
@@ -124,8 +125,11 @@ public class DynoRedisDemoResource {
 		try {
 			return "\n" + DynoRedisDriver.getInstance().readSingle(key) + "\n";
 		} catch (Exception e) {
-			Logger.error("Error stopping dyno test", e);
-			return "dyno stop failed! " + e.getMessage();
+			//Logger.error("ERROR: " +  e.getMessage());
+			if (!(e instanceof DynoException)) {
+				e.printStackTrace();
+			}
+			return "\ndyno readSingle failed! " + e.getMessage();
 		}
 	}
 
@@ -138,8 +142,8 @@ public class DynoRedisDemoResource {
 		try {
 			return "\n" + DynoRedisDriver.getInstance().writeSingle(key, value) + "\n";
 		} catch (Exception e) {
-			Logger.error("Error stopping dyno test", e);
-			return "dyno stop failed! " + e.getMessage();
+			Logger.error("ERROR: " +  e.getMessage());
+			return "dyno writeSingle failed! " + e.getMessage();
 		}
 	}
 

@@ -36,6 +36,7 @@ import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
+import com.netflix.dyno.connectionpool.impl.health.ConnectionRecycler;
 
 public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
@@ -94,11 +95,6 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 			} else if (e != null && e instanceof FatalConnectionException) {
 				
 				// create another connection and then close this one
-//				Connection<CL> connToRemove = connMap.remove(connection);
-//				if (connToRemove == null) {
-//					// This only happens when someone else already beat us to it
-//					return false;
-//				}
 				recycleConnection(connection);
 				return true;
 				
@@ -159,6 +155,11 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 	}
 
 	@Override
+	public void reconnect() {
+		throw new RuntimeException("Not implemented!");
+	}
+	
+	@Override
 	public void shutdown() {
 		
 		Logger.info("Shutting down connection pool for host:" + host);
@@ -180,7 +181,7 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 			throw new DynoException("Connection pool has already been inited, cannot prime connections for host:" + host);
 		}
 		
-		int n = reconnect();
+		int n = reconnectPool();
 		shutdown.compareAndSet(true, false);
 		
 		return n;
@@ -191,7 +192,7 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 		return null;
 	}
 
-	private int reconnect() throws DynoException {
+	private int reconnectPool() throws DynoException {
 		
 		if (reconnecting.get()) {
 			Logger.info("Reconnect in progress, ignoring reconnect connections request");

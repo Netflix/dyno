@@ -5,10 +5,12 @@ import static org.mockito.Mockito.when;
 
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -28,6 +30,8 @@ import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.HostToken;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 import com.netflix.dyno.connectionpool.impl.utils.IOUtilities;
 
 /**
@@ -54,41 +58,68 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 	private static final String ServerUrl = "http://{hostname}:8080/REST/v1/admin/cluster_describe";
 	private static final Integer NumRetries = 2;
 
-	private final ConcurrentHashMap<String, Host> hostMap = new ConcurrentHashMap<String, Host>();
-	private final ConcurrentHashMap<String, HostToken> hostTokenMap = new ConcurrentHashMap<String, HostToken>();
-	
 	private final String localZone;
+	private final List<Host> hosts = new ArrayList<Host>();
+	private int port = -1; 
 	
 	public TokenMapSupplierImpl(HostSupplier hSupplier) {
 		
-		for (Host host : hSupplier.getHosts()) {
-			hostMap.put(host.getHostName(), host);
-		}
 		localZone = System.getenv("EC2_AVAILABILITY_ZONE");
+		
+		Collection<Host> hostList = hSupplier.getHosts();
+		port = hostList.iterator().next().getPort();
+		
+		hosts.addAll(CollectionUtils.filter(hostList, new Predicate<Host>() {
+
+			@Override
+			public boolean apply(Host host) {
+				return isLocalZoneHost(host);
+			}
+		}));
 	}
 	
+	public TokenMapSupplierImpl(List<Host> hostList) {
+		
+		localZone = System.getenv("EC2_AVAILABILITY_ZONE");
+		port = hostList.get(0).getPort();
+		hosts.addAll(hostList);
+	}
 
+	
 	@Override
 	public List<HostToken> getTokens() {
 
-		if (hostTokenMap.size() == 0) {
-			String jsonPayload = getHttpResponseWithRetries();
-			parseTokenListFromJson(jsonPayload);
-		}
+//		String jsonPayload = getHttpResponseWithRetries();
+//		return parseTokenListFromJson(jsonPayload);
 		
-		return new ArrayList<HostToken>(hostTokenMap.values());
+		// Doing this since not all tokens are receied from an individual call to a dynomite server
+		// hence trying them all
+		Map<Long, HostToken> allTokens = new HashMap<Long, HostToken>();
+		
+		for (Host host : hosts) {
+			try {
+				List<HostToken> hostTokens = parseTokenListFromJson(getResponseViaHttp(host.getHostName()));
+				for (HostToken hToken : hostTokens) {
+					allTokens.put(hToken.getToken(), hToken);
+				}
+			} catch (Exception e) {
+			}
+		}
+		return new ArrayList<HostToken>(allTokens.values());
 	}
 	
-	public HostToken getTokenForHost(Host host) {
-		HostToken hostToken = hostTokenMap.get(host.getHostName());
-		if (hostToken == null) {
-			// we haven't seen this host before, add to map
-			hostMap.put(host.getHostName(), host);
-			// refresh token map from backend hosts
-			String jsonPayload = getHttpResponseWithRetries();
-			parseTokenListFromJson(jsonPayload);
-		}
-		return hostTokenMap.get(host.getHostName());
+	public HostToken getTokenForHost(final Host host) {
+		this.hosts.add(host);
+		String jsonPayload = getHttpResponseWithRetries();
+		List<HostToken> hostTokens = parseTokenListFromJson(jsonPayload);
+		
+		return CollectionUtils.find(hostTokens, new Predicate<HostToken>() {
+
+			@Override
+			public boolean apply(HostToken x) {
+				return x.getHost().getHostName().equals(host.getHostName());
+			}
+		});
 	}
 	
 	private String getHttpResponseWithRetries() {
@@ -99,7 +130,7 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 		String response = null;
 		do {
 			try {
-				response = getResponseViaHttp();
+				response = getResponseViaHttp(getRandomHost());
 				if (response != null) {
 					return response;
 				}
@@ -117,10 +148,10 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 		}
 	}
 		
-	private String getResponseViaHttp() throws Exception {
+	private String getResponseViaHttp(String hostname) throws Exception {
 		
 		String url = ServerUrl;
-		url = url.replace("{hostname}", getRandomHost());
+		url = url.replace("{hostname}", hostname);
 		
 		Logger.info("Making http call to url: " + url);
 		
@@ -146,17 +177,17 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 	}
 	
 	private String getRandomHost() {
-		
 		Random random = new Random();
 		
-		List<String> list = new ArrayList<String>();
-		for (Host host : hostMap.values()) {
-			
-			if (host.isUp() && isLocalZoneHost(host)) {
-				list.add(host.getHostName());
+		List<Host> hostsUp = new ArrayList<Host>(CollectionUtils.filter(hosts, new Predicate<Host>() {
+
+			@Override
+			public boolean apply(Host x) {
+				return x.isUp();
 			}
-		}
-		return list.get(random.nextInt(list.size()));
+		}));
+		
+		return hostsUp.get(random.nextInt(hostsUp.size())).getHostName();
 	}
 	
 	private boolean isLocalZoneHost(Host host) {
@@ -167,7 +198,9 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 	}
 
 
-	private void parseTokenListFromJson(String json) {
+	private List<HostToken> parseTokenListFromJson(String json) {
+		
+		List<HostToken> hostTokens = new ArrayList<HostToken>();
 		
 		JSONParser parser = new JSONParser();
 		try {
@@ -184,15 +217,11 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 				
 				Long token = Long.parseLong((String)jItem.get("token"));
 				String hostname = (String)jItem.get("hostname");
+				String zone = (String)jItem.get("zone");
 				
-				Host host = hostMap.get(hostname);
-				if (host == null) {
-					Logger.warn("Found a token that I do not recognize .. ignoring token: " + jItem.toString());
-					continue;  
-				}
-				
+				Host host = new Host(hostname, port, Status.Up).setDC(zone);
 				HostToken hostToken = new HostToken(token, host);
-				hostTokenMap.put(hostname, hostToken);
+				hostTokens.add(hostToken);
 			}
 			
 		} catch (ParseException e) {
@@ -200,7 +229,7 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 			throw new RuntimeException(e);
 		}
 
-		return;
+		return hostTokens;
 	}
 	
 	public static class UnitTest {
@@ -233,8 +262,8 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 			when(mockSupplier.getHosts()).thenReturn(hostList);
 			
 			TokenMapSupplierImpl tokenSupplier = new TokenMapSupplierImpl(mockSupplier);
-			tokenSupplier.parseTokenListFromJson(json);
-			List<HostToken> hTokens = new ArrayList<HostToken>(tokenSupplier.hostTokenMap.values());
+			
+			List<HostToken> hTokens = tokenSupplier.parseTokenListFromJson(json);
 			
 			Assert.assertTrue(hTokens.get(0).getToken().equals(3051939411L));
 			Assert.assertTrue(hTokens.get(0).getHost().getHostName().equals("ec2-54-237-143-4.compute-1.amazonaws.com"));

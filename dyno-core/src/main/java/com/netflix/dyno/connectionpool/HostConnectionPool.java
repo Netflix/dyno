@@ -72,6 +72,13 @@ public interface HostConnectionPool<CL> {
     void markAsDown(DynoException reason);
 
     /**
+     * Recycle all connections in the connection pool. 
+     * Note that the impl should either be able to handle active requests when re-cycling connections 
+     * or should be NOT active when re-cycling connections, so that calling clients can failover to other pools/hosts.
+     */
+    void reconnect();
+
+    /**
      * Completely shut down this connection pool as part of a client shutdown
      */
     void shutdown();
