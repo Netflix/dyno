@@ -157,16 +157,20 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 				
 			String[] parts = retryPolicy.split(":");
 			
-			if (parts.length != 2) {
+			if (parts.length < 2) {
 				return new RunOnce.RetryFactory();
 			}
 			
 			try { 
 				
 				int n = Integer.parseInt(parts[1]);
-				return new RetryNTimes.RetryFactory(n);
+				boolean allowFallback = false;
+				if (parts.length == 3) {
+					allowFallback = Boolean.parseBoolean(parts[2]);
+				}
+				return new RetryNTimes.RetryFactory(n, allowFallback);
 				
-			} catch (NumberFormatException e) {
+			} catch (Exception e) {
 				return new RunOnce.RetryFactory();
 			}
 		}
