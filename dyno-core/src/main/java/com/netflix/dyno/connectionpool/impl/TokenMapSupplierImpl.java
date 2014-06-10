@@ -152,8 +152,10 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 		
 		String url = ServerUrl;
 		url = url.replace("{hostname}", hostname);
-		
-		Logger.info("Making http call to url: " + url);
+
+		if (Logger.isDebugEnabled()) {
+			Logger.debug("Making http call to url: " + url);
+		}
 		
 		HttpClient client = new DefaultHttpClient();
 		HttpGet get = new HttpGet(url);
