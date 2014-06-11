@@ -28,7 +28,6 @@ public class TokenAwareSelector implements SingleDCSelector {
 		this.tokenSupplier =  new TokenMapSupplierImpl(hosts);
 		List<HostToken> allHostTokens = tokenSupplier.getTokens();
 		
-		System.out.println("No of tokens from token map supplier for zone: " + zone + " " + allHostTokens.size());
 		Collection<HostToken> localZoneTokens = CollectionUtils.filter(allHostTokens,  new Predicate<HostToken>() {
 
 			@Override
@@ -37,7 +36,6 @@ public class TokenAwareSelector implements SingleDCSelector {
 				return zone != null ? zone.equalsIgnoreCase(hostDC) : true;
 			}
 		});
-		System.out.println("No of tokens from token map supplier for zone: " + zone + " " + localZoneTokens.size());
 		
 		this.tokenMapper.initSearchMecahnism(localZoneTokens);
 	}
@@ -47,8 +45,6 @@ public class TokenAwareSelector implements SingleDCSelector {
 
 		Long keyHash = tokenMapper.hash(key);
 		HostToken hToken = tokenMapper.getToken(keyHash);
-		System.out.println("Key: " + key + ",  hash: " + keyHash + ", host: " + hToken.getHost().getHostName() + " token: " + hToken.getToken()) ;
-		System.out.println(tokenMapper.toString());
 		return hToken != null ? hToken.getHost() : null;
 	}
 

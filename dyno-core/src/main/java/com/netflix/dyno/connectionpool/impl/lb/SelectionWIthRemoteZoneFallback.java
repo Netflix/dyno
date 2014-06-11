@@ -8,6 +8,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.Host;
@@ -21,6 +24,8 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.MapEntryTransf
 
 public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrategy<CL> {
 
+	private static final Logger Logger = LoggerFactory.getLogger(SelectionWIthRemoteZoneFallback.class);
+	
 	// tracks the local zone
 	private final String localZone;
 	// The selector for the local zone
@@ -169,7 +174,9 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 			return false;
 		} else {
 			HostConnectionPool<CL> hPool = hostPools.get(host);
-			//System.out.println("Host: " + host.getHostName() + " " + host.getStatus() + " active: " + hPool.isActive());
+			if (Logger.isDebugEnabled()) {
+				Logger.debug("Host: " + host.getHostName() + " " + host.getStatus() + " active: " + hPool.isActive());
+			}
 			return hPool != null && hPool.isActive();
 		}
 	}
