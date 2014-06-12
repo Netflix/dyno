@@ -35,7 +35,7 @@ public class DynoConnectException extends DynoException {
         return this.host;
     }
 
-    public DynoException setLatency(long latency) {
+    public DynoConnectException setLatency(long latency) {
         this.latency = latency;
         return this;
     }
@@ -74,7 +74,7 @@ public class DynoConnectException extends DynoException {
         return super.getMessage();
     }
 
-    public DynoException setAttempt(int attemptCount) {
+    public DynoConnectException setAttempt(int attemptCount) {
         this.attemptCount = attemptCount;
         return this;
     }

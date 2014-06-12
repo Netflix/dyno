@@ -114,7 +114,7 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 
 		String key = op.getKey();
 		Host host = localSelector.getHostForKey(key);
-		//System.out.println("Found primary HOST: " + host.getHostName()  + " " + host.getStatus());
+		//System.out.println("KEY: " + key + ", Pprimary HOST: " + host.getHostName());
 
 		if (!isHostAndHostPoolActive(host)) {
 			return getFallbackConnection(op, duration, unit);

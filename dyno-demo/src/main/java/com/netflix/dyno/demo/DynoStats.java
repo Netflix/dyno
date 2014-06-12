@@ -1,7 +1,7 @@
 package com.netflix.dyno.demo;
 
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import com.netflix.servo.DefaultMonitorRegistry;
 import com.netflix.servo.annotations.DataSourceType;
@@ -13,10 +13,10 @@ public class DynoStats {
 
 	private static final DynoStats Instance = new DynoStats();
 	
-	private final AtomicInteger success = new AtomicInteger(0);
-	private final AtomicInteger failure = new AtomicInteger(0);
-	private final AtomicInteger cacheHits = new AtomicInteger(0);
-	private final AtomicInteger cacheMiss = new AtomicInteger(0);
+	private final AtomicLong success = new AtomicLong(0L);
+	private final AtomicLong failure = new AtomicLong(0L);
+	private final AtomicLong cacheHits = new AtomicLong(0L);
+	private final AtomicLong cacheMiss = new AtomicLong(0L);
 
 	private final Timer writeTimer = Monitors.newTimer("writeLatency", TimeUnit.MILLISECONDS);
 	private final Timer readTimer = Monitors.newTimer("readLatency", TimeUnit.MILLISECONDS);
@@ -34,7 +34,7 @@ public class DynoStats {
 	}
 
 	@Monitor(name="success", type=DataSourceType.COUNTER)
-	public int getSucces() {
+	public long getSucces() {
 		return success.get();
 	}
 
@@ -43,7 +43,7 @@ public class DynoStats {
 	}
 
 	@Monitor(name="failure", type=DataSourceType.COUNTER)
-	public int getFailure() {
+	public long getFailure() {
 		return failure.get();
 	}
 
@@ -52,7 +52,7 @@ public class DynoStats {
 	}
 
 	@Monitor(name="cacheHit", type=DataSourceType.COUNTER)
-	public int getCacheHits() {
+	public long getCacheHits() {
 		return cacheHits.get();
 	}
 
@@ -61,7 +61,7 @@ public class DynoStats {
 	}
 	
 	@Monitor(name="cacheMiss", type=DataSourceType.COUNTER)
-	public int getCacheMiss() {
+	public long getCacheMiss() {
 		return cacheMiss.get();
 	}
 

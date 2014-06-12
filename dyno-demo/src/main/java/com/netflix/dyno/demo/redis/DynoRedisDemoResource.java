@@ -29,7 +29,7 @@ public class DynoRedisDemoResource {
 
 		Logger.info("Starting dyno data fill"); 
 		try {
-			new DynoDataBackfill(DynoRedisDriver.getInstance().getDynoClient()).backfill();
+			DynoDataBackfill.Instance.backfill();
 			return "data fill done!" + "\n";
 		} catch (Exception e) {
 			Logger.error("Error starting datafill", e);
@@ -37,6 +37,54 @@ public class DynoRedisDemoResource {
 		}
 	}
 
+	@Path("/dataFill/stop")
+	@GET
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.TEXT_PLAIN)
+	public String stopDataFill() throws Exception {
+
+		Logger.info("stop dyno data fill"); 
+		try {
+			DynoDataBackfill.Instance.stopBackfill();
+			return "data fill stop!" + "\n";
+		} catch (Exception e) {
+			Logger.error("Error stop datafill", e);
+			return "dataFill failed!";
+		}
+	}
+	
+
+	@Path("/dataFill/randomWrites")
+	@GET
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.TEXT_PLAIN)
+	public String startRandomWrites() throws Exception {
+
+		Logger.info("stop dyno data fill"); 
+		try {
+			DynoDataBackfill.Instance.randomWrites();
+			return "data fill stop!" + "\n";
+		} catch (Exception e) {
+			Logger.error("Error stop datafill", e);
+			return "dataFill failed!";
+		}
+	}
+	
+	@Path("/dataFill/shutdown")
+	@GET
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.TEXT_PLAIN)
+	public String shutdownDataFill() throws Exception {
+
+		Logger.info("shutdown dyno data fill"); 
+		try {
+			DynoDataBackfill.Instance.shutdown();
+			return "data fill stop!" + "\n";
+		} catch (Exception e) {
+			Logger.error("Error shutdown datafill", e);
+			return "dataFill failed!";
+		}
+	}
 
 	// ALL DYNO RESOURCES
 
