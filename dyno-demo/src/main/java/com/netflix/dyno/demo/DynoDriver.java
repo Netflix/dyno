@@ -5,11 +5,14 @@ import static com.netflix.dyno.demo.DemoConfig.NumWriters;
 import static com.netflix.dyno.demo.DemoConfig.ReadEnabled;
 import static com.netflix.dyno.demo.DemoConfig.WriteEnabled;
 
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
@@ -34,6 +37,9 @@ public abstract class DynoDriver {
 	
 	private final AtomicBoolean readsStarted = new AtomicBoolean(false);
 	private final AtomicBoolean writesStarted = new AtomicBoolean(false);
+	private final AtomicBoolean clientInited = new AtomicBoolean(false);
+	
+	private final Timer timer = new Timer();
 	
 	protected DynoDriver() {
 		
@@ -52,6 +58,29 @@ public abstract class DynoDriver {
 		});
 		
 		DefaultMonitorRegistry.getInstance().register(Monitors.newObjectMonitor(new DynoDriverStats()));
+
+		
+		/** CODE TO PERIODICALLY LOG RPS */
+		final int secondsFreq = 10; 
+		
+		timer.scheduleAtFixedRate(new TimerTask() {
+
+			final AtomicLong prevCount = new AtomicLong(0L);
+			@Override
+			public void run() {
+				
+				DynoStats stats = DynoStats.getInstance();
+				long success = stats.getSucces(); long fail = stats.getFailure();
+				long total = success + fail;
+				long rps = (total-prevCount.get())/secondsFreq;
+				long sRatio = (total > 0) ? (success * 100L/ (total)) : 0;
+				
+				prevCount.set(total);
+				
+				System.out.println("RPS: " + rps + ", Success Ratio: " + sRatio + "%");
+			}
+			
+		}, 5000, secondsFreq*1000);
 	}
 		
 	public void checkAndInitReads() {
@@ -143,7 +172,7 @@ public abstract class DynoDriver {
 		
 		final DynoStats stats = DynoStats.getInstance();
 		
-		System.out.println("\n\nStarting with threads: " + numWorkersConfig.get() + "\n\n");
+		System.out.println("\n\nWorker threads: " + numWorkersConfig.get() + ", Num Keys: " + DemoConfig.NumKeys.get() + "\n\n");
 		
 		for (int i=0; i<numWorkersConfig.get(); i++) {
 			
@@ -269,7 +298,11 @@ public abstract class DynoDriver {
 	}
 
 	public void init() {
-		getDynoClient().init();
+		if (!clientInited.get()) {
+			if (clientInited.compareAndSet(false, true)) {
+				getDynoClient().init();
+			}
+		}
 	}
 	
 	public String readSingle(String key) throws Exception {

@@ -28,7 +28,7 @@ public class DynoMCacheDemoResource {
 
 		Logger.info("Starting dyno data fill"); 
 		try {
-			new DynoDataBackfill(DynoMCacheDriver.getInstance().getDynoClient()).backfill();
+			DynoDataBackfill.Instance.backfill();
 			return "data fill done!" + "\n";
 		} catch (Exception e) {
 			Logger.error("Error starting datafill", e);
@@ -36,6 +36,21 @@ public class DynoMCacheDemoResource {
 		}
 	}
 	
+	@Path("/dataFill/stop")
+	@GET
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.TEXT_PLAIN)
+	public String stopDataFill() throws Exception {
+
+		Logger.info("Starting dyno data fill"); 
+		try {
+			DynoDataBackfill.Instance.stopBackfill();
+			return "data fill done!" + "\n";
+		} catch (Exception e) {
+			Logger.error("Error starting datafill", e);
+			return "dataFill failed!";
+		}
+	}
 	
 	// ALL DYNO RESOURCES
 	
