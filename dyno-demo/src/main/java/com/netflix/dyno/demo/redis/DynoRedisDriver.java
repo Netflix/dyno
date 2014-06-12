@@ -33,6 +33,8 @@ public class DynoRedisDriver extends DynoDriver {
 				return;
 			}
 
+			System.out.println("Initing dyno redis client");
+			
 			client.set(DynoJedisClient.Builder.withName("Demo")
 						.withDynomiteClusterName("dynomite_redis_puneet")
 						.withCPConfig(new ConnectionPoolConfigurationImpl("dynomite_redis_puneet")
