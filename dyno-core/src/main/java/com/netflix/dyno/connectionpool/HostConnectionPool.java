@@ -1,5 +1,6 @@
 package com.netflix.dyno.connectionpool;
 
+import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 
 import com.netflix.dyno.connectionpool.exception.DynoException;
@@ -105,6 +106,8 @@ public interface HostConnectionPool<CL> {
      * @return Return true if the has been shut down and is no longer accepting traffic.
      */
     boolean isShutdown();
-    
+
     OperationMonitor getOperationMonitor();
+    
+    Collection<Connection<CL>> getAllConnections();
 }

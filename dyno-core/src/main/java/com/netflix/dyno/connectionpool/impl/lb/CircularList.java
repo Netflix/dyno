@@ -1,4 +1,4 @@
-package com.netflix.dyno.connectionpool.impl;
+package com.netflix.dyno.connectionpool.impl.lb;
 
 import java.util.ArrayList;
 import java.util.Collection;

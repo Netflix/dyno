@@ -1,6 +1,7 @@
 package com.netflix.dyno.connectionpool.impl;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.Callable;
@@ -183,6 +184,19 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 	@Override
 	public boolean isShutdown() {
 		return cpState.get() == cpDown;
+	}
+	
+	/**
+	 * DO NOT call this method on this pool. This pool needs to manage shared thread safe access to connections
+	 * and hence at any given time all connections are being used by some operation. 
+	 * In any case getAllConnections() is meant for ping based active monitoring of connections which is not needed for this 
+	 * pool since it is "sync" in nature. For sync pools we collect feedback from the operations directly and relay that to 
+	 * ConnectionPoolHealthChecker.
+	 * 
+	 */
+	@Override
+	public Collection<Connection<CL>> getAllConnections() {
+		throw new RuntimeException("Not Implemented");
 	}
 
 	private interface ConnectionPoolState<CL> { 
@@ -440,7 +454,11 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 			public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<TestClient, R> op) throws DynoException {
 				throw new RuntimeException("Not Implemented");
 			}
-			
+
+			@Override
+			public void execPing() {
+				// do nothing
+			}
 		}
 		
 		private static ConnectionFactory<TestClient> connFactory = new ConnectionFactory<TestClient>() {
@@ -762,7 +780,4 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 	public OperationMonitor getOperationMonitor() {
 		return null;
 	}
-	
-
-	
 }

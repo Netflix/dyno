@@ -68,8 +68,19 @@ public interface Connection<CL> {
     public DynoConnectException getLastException();
     
     /**
-     * 
+     * Return the parent HostConnectionPool that manages this connection.
+     * This is generally useful for meta operations on HostConnectionPool(s) when dealing with their Connection(s)
+     * e.g  
+     *    1. Return connections safely to the parent pool after executing operations on them
+     *    2. Reporting error stats to parent pools when performing ops on connections. The parent pools can then 
+     *       decide whether the connections should be recycled etc.
      * @return
      */
     public HostConnectionPool<CL> getParentConnectionPool();
+    
+    /**
+     * Operation to send ping heartbeats on Connection(s)
+     * This is primarily used for active monitoring so that stale/bad connections to Hosts can be recycled.
+     */
+    public void execPing();
 }

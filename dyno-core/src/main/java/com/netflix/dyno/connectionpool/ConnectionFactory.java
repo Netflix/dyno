@@ -14,5 +14,5 @@ import com.netflix.dyno.connectionpool.exception.ThrottledException;
  */
 public interface ConnectionFactory<CL> {
 	
-    public Connection<CL> createConnection(HostConnectionPool<CL> pool, ConnectionObservor connectionObservor) throws DynoConnectException, ThrottledException;
+    public Connection<CL> createConnection(HostConnectionPool<CL> pool, ConnectionObservor observor) throws DynoConnectException, ThrottledException;
 }

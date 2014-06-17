@@ -18,8 +18,7 @@ import org.junit.Test;
 
 import com.netflix.dyno.connectionpool.ErrorRateMonitorConfig;
 import com.netflix.dyno.connectionpool.ErrorRateMonitorConfig.ErrorThreshold;
-import com.netflix.dyno.connectionpool.impl.RateTracker;
-import com.netflix.dyno.connectionpool.impl.RateTracker.Bucket;
+import com.netflix.dyno.connectionpool.impl.health.RateTracker.Bucket;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.RateLimiterUtil;
 

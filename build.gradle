@@ -101,6 +101,18 @@ project(':dyno-jedis') {
     }
 }
 
+project(':dyno-redisson') {
+    apply plugin: 'osgi'
+    apply plugin: 'java'
+    apply plugin: 'project-report'
+
+    dependencies {
+        compile  project(':dyno-core')
+        compile  project(':dyno-contrib')
+        compile "org.redisson:redisson:1.1.0"
+    }
+}
+
 project(':dyno-demo') {
     apply plugin: 'osgi'
     apply plugin: 'java'

@@ -114,5 +114,13 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 		public HostConnectionPool<Jedis> getParentConnectionPool() {
 			return hostPool;
 		}
+
+		@Override
+		public void execPing() {
+			String result = jedisClient.ping();
+			if (result == null || result.isEmpty()) {
+				throw new DynoConnectException("Unsuccessful ping, got empty result");
+			}
+		}
 	}
 }

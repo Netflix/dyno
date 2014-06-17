@@ -1,11 +1,11 @@
 package com.netflix.dyno.connectionpool.impl;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -37,6 +37,7 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
 import com.netflix.dyno.connectionpool.impl.health.ConnectionRecycler;
+import com.netflix.dyno.connectionpool.impl.lb.CircularList;
 
 public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
@@ -52,7 +53,7 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 	private final ConcurrentHashMap<Connection<CL>, Connection<CL>> connMap = new ConcurrentHashMap<Connection<CL>, Connection<CL>>();
 
 	// Tracking state of host connection pool.
-	private final AtomicBoolean shutdown = new AtomicBoolean(true);
+	private final AtomicBoolean active = new AtomicBoolean(false);
 	private final AtomicBoolean reconnecting = new AtomicBoolean(false);
 	
 	public SimpleAsyncConnectionPoolImpl(Host host, ConnectionFactory<CL> cFactory, 
@@ -67,11 +68,8 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 	@Override
 	public Connection<CL> borrowConnection(int duration, TimeUnit unit) throws DynoException {
 		
-		if (shutdown.get()) {
+		if (!active.get()) {
 			throw new DynoConnectException("Cannot connect to pool when pool is shutdown for host: " + host);
-		}
-		if (reconnecting.get()) {
-			throw new DynoConnectException("Cannot connect to pool when pool is reconnecting for host: " + host);
 		}
 
 		long start = System.currentTimeMillis();
@@ -86,17 +84,9 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 	@Override
 	public boolean returnConnection(Connection<CL> connection) {
 		try {
-			DynoConnectException e = connection.getLastException();
-			
-			if (shutdown.get() || reconnecting.get()) {
+			if (!active.get()) {
 				// Just close the connection
 				return closeConnection(connection);
-				
-			} else if (e != null && e instanceof FatalConnectionException) {
-				
-				// create another connection and then close this one
-				recycleConnection(connection);
-				return true;
 				
 			} else {
 				// do nothing here
@@ -126,44 +116,47 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 	@Override
 	public void markAsDown(DynoException reason) {
 		
-		if (shutdown.get()) {
-			if (Logger.isDebugEnabled()) {
-				Logger.debug("CP is not active, hence ignoring mark as down request");
-			}
-			return;
+		if (!active.get()) {
+			return; // already marked as down
 		}
 		
-		if (!(shutdown.compareAndSet(false, true))) {
-			// someone already beat us to it
-			Logger.info("Someone already beat us to marking the host as down, ignoring request");
-			return;
-		}
-		
-		// Call the shutdown code to start closing all the connections
-		Logger.info("Marking host connection pool as DOWN for host: " + host + ", will recycle all connections");
-		cpMonitor.hostDown(host, reason);
-		
-		List<Connection<CL>> connsToRecycle = new ArrayList<Connection<CL>>(connMap.keySet());
-		
-		for (Connection<CL> connection : connsToRecycle) {
-			recycleConnection(connection);
-		}
-
-		if (!shutdown.compareAndSet(true, false)) {
-			throw new IllegalStateException();
+		boolean success = active.compareAndSet(true, false);
+		if (success) {
+			shutdown();
 		}
 	}
 
 	@Override
 	public void reconnect() {
-		throw new RuntimeException("Not implemented!");
+		
+		if (active.get()) {
+			Logger.info("Pool already active, ignoring reconnect connections request");
+			return;
+		}
+		
+		if (reconnecting.get()) {
+			Logger.info("Pool already reconnecting, ignoring reconnect connections request");
+			return;
+		}
+		
+		if (!(reconnecting.compareAndSet(false, true))) {
+			Logger.info("Pool already reconnecting, ignoring reconnect connections request");
+			return;
+		}
+		
+		try {
+			shutdown();
+			primeConnections();
+		} finally {
+			reconnecting.set(false);
+		}
 	}
 	
 	@Override
 	public void shutdown() {
 		
 		Logger.info("Shutting down connection pool for host:" + host);
-		shutdown.set(true);
+		active.set(false);
 		
 		for (Connection<CL> connection : connMap.keySet()) {
 			closeConnection(connection);
@@ -177,14 +170,29 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 
 		Logger.info("Priming connection pool for host:" + host);
 
-		if(!shutdown.get()) {
+		if(active.get()) {
 			throw new DynoException("Connection pool has already been inited, cannot prime connections for host:" + host);
 		}
 		
-		int n = reconnectPool();
-		shutdown.compareAndSet(true, false);
+		int created = 0;
+		for (int i=0; i<cpConfig.getMaxConnsPerHost(); i++) {
+			try { 
+				createConnection();
+				created++;
+			} catch (DynoConnectException e) {
+				Logger.error("Failed to create connection", e);
+				cpMonitor.incConnectionCreateFailed(host, e);
+				throw e;
+			}
+		}
+		active.compareAndSet(false, true);
 		
-		return n;
+		return created;
+	}
+
+	@Override
+	public Collection<Connection<CL>> getAllConnections() {
+		return connMap.keySet();
 	}
 
 	@Override
@@ -192,108 +200,15 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 		return null;
 	}
 
-	private int reconnectPool() throws DynoException {
-		
-		if (reconnecting.get()) {
-			Logger.info("Reconnect in progress, ignoring reconnect connections request");
-			return 0;
-		}
-		
-		if (!(reconnecting.compareAndSet(false, true))) {
-			Logger.info("Reconnect connections already called by someone else, ignoring reconnect connections request");
-			return 0;
-		}
-		
-		int successfullyCreated = 0; 
-		
-		for (int i=0; i<cpConfig.getMaxConnsPerHost(); i++) {
-			try { 
-				createConnection();
-				successfullyCreated++;
-				
-			} catch (DynoConnectException e) {
-				Logger.error("Failed to create connection", e);
-				cpMonitor.incConnectionCreateFailed(host, e);
-				throw e;
-			}
-		}
-		
-		if (!(reconnecting.compareAndSet(true, false))) {
-			throw new IllegalStateException("something went wrong with prime connections");
-		} else {
-			return successfullyCreated;
-		}
-	}
-
-
 	private Connection<CL> createConnection() throws DynoException {
 		
 		Connection<CL> connection = connFactory.createConnection((HostConnectionPool<CL>) this, null);
 		connMap.put(connection, connection);
+		connection.open();
 		rrSelector.addElement(connection);
 
 		cpMonitor.incConnectionCreated(host);
 		return connection;
-	}
-	
-	private final AtomicInteger reviveCount = new AtomicInteger(0);
-	private final AtomicInteger rrCount = new AtomicInteger(0);
-	
-	private void recycleConnection(final Connection<CL> connection) {
-		
-		reviveCount.incrementAndGet();
-		
-		Future<Connection<?>> conn = 
-				ConnectionRecycler.getInstance().submitForRecycle((Connection<?>)connection, 
-
-				new Callable<Void>() {
-
-				@Override
-				public Void call() throws Exception {
-					closeConnection(connection);
-					return null;
-				}
-		}, 
-			new Callable<Connection<?>>() {
-
-			@Override
-			public Connection<?> call() throws Exception {
-				rrCount.incrementAndGet();
-				return createConnection();
-			}
-
-		});
-
-		try {
-			conn.get();
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		} catch (ExecutionException e) {
-			e.printStackTrace();
-		}
-		
-//		recoveryThreadPool.submit(new Callable<Void>() {
-//
-//			@Override
-//			public Void call() throws Exception {
-//				
-//				if (shutdown.get()) {
-//					// Do not create the connection
-//					return null;
-//				}
-//				
-//				rrCount.incrementAndGet();
-//				Connection<CL> connection = createConnection();
-//
-//				// Check again if the pool has been shutdown
-//				if (shutdown.get()) {
-//					// Do not create the connection
-//					System.out.println("CLOSING");
-//					closeConnection(connection);
-//				}
-//				return null;
-//			}
-//		});
 	}
 	
 	@Override
@@ -303,17 +218,14 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 
 	@Override
 	public boolean isActive() {
-		return !shutdown.get();
+		return active.get();
 	}
 
 	@Override
 	public boolean isShutdown() {
-		return shutdown.get();
+		return !active.get();
 	}
 
-	
-	
-	
 	public static class UnitTest { 
 		
 		private static final Host TestHost = new Host("TestHost", 1234);
@@ -359,7 +271,11 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 			public HostConnectionPool<TestClient> getParentConnectionPool() {
 				return null;
 			}
-			
+
+			@Override
+			public void execPing() {
+			}
+
 			public void setException(DynoConnectException e) {
 				ex = e;
 			}
@@ -515,7 +431,7 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 			
 			pool.shutdown();
 			
-			System.out.println("Reviving single connection " + pool.reviveCount.get() + " " + pool.rrCount.get());
+			//System.out.println("Reviving single connection " + pool.reviveCount.get() + " " + pool.rrCount.get());
 
 			System.out.println("\n\nConns borrowed: " + cpMonitor.getConnectionBorrowedCount());
 			System.out.println("Conns returned: " + cpMonitor.getConnectionReturnedCount());
@@ -670,11 +586,6 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 				return "BasicResult [opCount=" + opCount + ", successCount=" + successCount + 
 						", failureCount=" + failureCount + ", lastSuccess=" + lastSuccess.get() + "]";
 			}
-			
-			
 		}
-		
-		
-		
 	}
 }

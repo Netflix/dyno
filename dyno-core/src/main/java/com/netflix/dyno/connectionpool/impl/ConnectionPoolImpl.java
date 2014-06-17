@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -44,6 +45,7 @@ import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl.ErrorRateMonitorConfigImpl;
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl.HostConnectionPoolFactory.Type;
 import com.netflix.dyno.connectionpool.impl.health.ConnectionPoolHealthTracker;
 import com.netflix.dyno.connectionpool.impl.health.ErrorRateMonitor;
 import com.netflix.dyno.connectionpool.impl.lb.RoundRobinSelector;
@@ -61,24 +63,43 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	private final ConcurrentHashMap<Host, HostConnectionPool<CL>> cpMap = new ConcurrentHashMap<Host, HostConnectionPool<CL>>();
 	private final ConnectionPoolHealthTracker<CL> cpHealthTracker;
 	
+	private final HostConnectionPoolFactory<CL> hostConnPoolFactory;
 	private final ConnectionFactory<CL> connFactory; 
 	private final ConnectionPoolConfiguration cpConfiguration; 
 	private final ConnectionPoolMonitor cpMonitor; 
 	
-	private final ExecutorService recoveryThreadPool = Executors.newFixedThreadPool(1);
+	private final ScheduledExecutorService recoveryThreadPool = Executors.newScheduledThreadPool(1);
 	
 	private final AtomicBoolean started = new AtomicBoolean(false);
 	
 	private HostSelectionStrategy<CL> selectionStrategy; 
 	
+	private Type poolType;
+
 	public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon) {
+		this(cFactory, cpConfig, cpMon, Type.Sync);
+	}
+	
+	public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon, Type type) {
 		this.connFactory = cFactory;
 		this.cpConfiguration = cpConfig;
 		this.cpMonitor = cpMon;
+		this.poolType = type; 
 		
 		this.cpHealthTracker = new ConnectionPoolHealthTracker<CL>(cpConfiguration, recoveryThreadPool);
-	}
 
+		switch (type) {
+			case Sync:
+				hostConnPoolFactory = new SyncHostConnectionPoolFactory();
+				break;
+			case Async:
+				hostConnPoolFactory = new AsyncHostConnectionPoolFactory();
+				break;
+			default:
+				throw new RuntimeException("unknown type");
+		};
+	}
+	
 	@Override
 	public boolean addHost(Host host) {
 		return addHost(host, true);
@@ -95,7 +116,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			return false;
 		}
 		
-		HostConnectionPoolImpl<CL> hostPool = new HostConnectionPoolImpl<CL>(host, connFactory, cpConfiguration, cpMonitor, recoveryThreadPool);
+		
+		final HostConnectionPool<CL> hostPool = hostConnPoolFactory.createHostConnectionPool(host, this);
 		
 		HostConnectionPool<CL> prevPool = cpMap.putIfAbsent(host, hostPool);
 		if (prevPool == null) {
@@ -107,6 +129,13 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				if (refreshLoadBalancer) {
 					selectionStrategy.addHost(host, hostPool);
 				}
+				
+				// Initiate ping based monitoring only for async pools.
+				// Note that sync pools get monitored based on feedback from operation executions on the pool itself
+				if (poolType == Type.Async) {
+					cpHealthTracker.initialPingHealthchecksForPool(hostPool);
+				}
+				
 				cpMonitor.hostAdded(host, hostPool);
 				
 				return true;
@@ -202,8 +231,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 					connection = 
 							selectionStrategy.getFallbackConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
 				} else {
-				connection = 
-						selectionStrategy.getConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
+					connection = 
+							selectionStrategy.getConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
 				}
 				OperationResult<R> result = connection.execute(op);
 				
@@ -339,6 +368,30 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		return future;
 	}
 
+	public interface HostConnectionPoolFactory<CL> {
+		
+		HostConnectionPool<CL> createHostConnectionPool(Host host, ConnectionPoolImpl<CL> parentPoolImpl);
+		
+		public enum Type {
+			Sync, Async;
+		}
+	}
+	
+	private class SyncHostConnectionPoolFactory implements HostConnectionPoolFactory<CL> {
+
+		@Override
+		public HostConnectionPool<CL> createHostConnectionPool(Host host, ConnectionPoolImpl<CL> parentPoolImpl) {
+			return new HostConnectionPoolImpl<CL>(host, connFactory, cpConfiguration, cpMonitor, recoveryThreadPool);
+		}
+	}
+	
+	private class AsyncHostConnectionPoolFactory implements HostConnectionPoolFactory<CL> {
+
+		@Override
+		public HostConnectionPool<CL> createHostConnectionPool(Host host, ConnectionPoolImpl<CL> parentPoolImpl) {
+			return new SimpleAsyncConnectionPoolImpl<CL>(host, connFactory, cpConfiguration, cpMonitor);
+		}
+	}
 	
 	public static class UnitTest {
 		
@@ -405,12 +458,16 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<TestClient, R> op) throws DynoException {
 				throw new RuntimeException("Not Implemented");
 			}
+
+			@Override
+			public void execPing() {
+			}
 		}
 		
 		private static ConnectionFactory<TestClient> connFactory = new ConnectionFactory<TestClient>() {
 
 			@Override
-			public Connection<TestClient> createConnection(HostConnectionPool<TestClient> pool, ConnectionObservor cObservor) throws DynoConnectException, ThrottledException {
+			public Connection<TestClient> createConnection(HostConnectionPool<TestClient> pool, ConnectionObservor observor) throws DynoConnectException, ThrottledException {
 				return new TestConnection(pool);
 			}
 		};
