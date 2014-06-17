@@ -611,6 +611,10 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 			public <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<TestClient, R> op) throws DynoException {
 				throw new RuntimeException("Not Implemented");
 			}
+
+			@Override
+			public void execPing() {
+			}
 		}
 		
 		private static ConnectionFactory<TestClient> connFactory = new ConnectionFactory<TestClient>() {

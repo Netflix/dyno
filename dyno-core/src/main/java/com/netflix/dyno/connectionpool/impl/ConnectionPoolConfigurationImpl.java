@@ -20,6 +20,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private static final int DEFAULT_CONNECT_TIMEOUT = 3000; 
 	private static final int DEFAULT_SOCKET_TIMEOUT = 12000; 
 	private static final int DEFAULT_POOL_SHUTDOWN_DELAY = 60000; 
+	private static final int DEFAULT_PING_FREQ_SECONDS = 1; 
 	private static final boolean DEFAULT_LOCAL_DC_AFFINITY = true; 
 	private static final LoadBalancingStrategy DEFAULT_LB_STRATEGY = LoadBalancingStrategy.RoundRobin; 
 
@@ -34,6 +35,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private int connectTimeout = DEFAULT_CONNECT_TIMEOUT; 
 	private int socketTimeout = DEFAULT_SOCKET_TIMEOUT; 
 	private int poolShutdownDelay = DEFAULT_POOL_SHUTDOWN_DELAY; 
+	private int pingFrequencySeconds = DEFAULT_PING_FREQ_SECONDS; 
 	private boolean localDcAffinity = DEFAULT_LOCAL_DC_AFFINITY; 
 	private LoadBalancingStrategy lbStrategy = DEFAULT_LB_STRATEGY; 
 	
@@ -110,6 +112,16 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	public ErrorRateMonitorConfig getErrorCheckConfig() {
 		return errorRateConfig;
 	}
+
+	@Override
+	public LoadBalancingStrategy getLoadBalancingStrategy() {
+		return lbStrategy;
+	}
+	
+	@Override
+	public int getPingFrequencySeconds() {
+		return pingFrequencySeconds;
+	}
 	
 	// ALL SETTERS
 	public ConnectionPoolConfigurationImpl setMaxConnsPerHost(int maxConnsPerHost) {
@@ -137,11 +149,6 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		return this;
 	}
 
-	@Override
-	public LoadBalancingStrategy getLoadBalancingStrategy() {
-		return lbStrategy;
-	}
-
 	public ConnectionPoolConfigurationImpl setLoadBalancingStrategy(LoadBalancingStrategy strategy) {
 		this.lbStrategy = strategy;
 		return this;
@@ -152,17 +159,21 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		return this;
 	}
 
-
 	public ConnectionPoolConfigurationImpl setPoolShutdownDelay(int shutdownDelaySeconds) {
 		poolShutdownDelay = shutdownDelaySeconds;
 		return this;
 	}
 	
+	public ConnectionPoolConfigurationImpl setPingFrequencySeconds(int seconds) {
+		pingFrequencySeconds = seconds;
+		return this;
+	}
+
 	public ConnectionPoolConfigurationImpl setLocalDcAffinity(boolean condition) {
 		localDcAffinity = condition;
 		return this;
 	}
-	
+
 	public HostSupplier getHostSupplier() {
 		return hostSupplier;
 	}

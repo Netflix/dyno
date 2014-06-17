@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -36,9 +37,9 @@ import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.OperationMonitor;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
-import com.netflix.dyno.connectionpool.impl.CircularList;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.CountingConnectionPoolMonitor;
+import com.netflix.dyno.connectionpool.impl.lb.CircularList;
 
 /**
  * Simpler implementation of {@link HostConnectionPool} for MemcachedConnecitons. 
@@ -463,5 +464,10 @@ public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 			assertTrue("" + cpMonitor.getConnectionClosedCount(), cpMonitor.getConnectionClosedCount() == config.getMaxConnsPerHost());
 			assertTrue("" + cpMonitor.getConnectionCreateFailedCount(), cpMonitor.getConnectionCreateFailedCount() == 0);
 		}
+	}
+
+	@Override
+	public Collection<Connection<CL>> getAllConnections() {
+		return mClients.getEntireList();
 	}
 }

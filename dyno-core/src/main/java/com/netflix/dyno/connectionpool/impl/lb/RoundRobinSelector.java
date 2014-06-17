@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.impl.CircularList;
 import com.netflix.dyno.connectionpool.impl.lb.SelectionWIthRemoteZoneFallback.SingleDCSelector;
 
 public class RoundRobinSelector implements SingleDCSelector {

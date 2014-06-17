@@ -1,4 +1,4 @@
-package com.netflix.dyno.connectionpool.impl;
+package com.netflix.dyno.connectionpool.impl.lb;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;

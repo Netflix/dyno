@@ -1,13 +1,14 @@
 package com.netflix.dyno.connectionpool.impl.health;
 
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
@@ -21,67 +22,67 @@ public class ConnectionPoolHealthTracker<CL> {
 	private static final Logger Logger = LoggerFactory.getLogger(ConnectionPoolHealthTracker.class);
 	
 	private final ConnectionPoolConfiguration cpConfiguration;
-	private final ExecutorService threadPool;
+	private final ScheduledExecutorService threadPool;
 	private final AtomicBoolean stop = new AtomicBoolean(false);
 	private final ConcurrentHashMap<Host, ErrorRateMonitor> errorRates = new ConcurrentHashMap<Host, ErrorRateMonitor>();
-	private final ConcurrentHashMap<Host, HostConnectionPool<CL>> pendingPools = new ConcurrentHashMap<Host, HostConnectionPool<CL>>();
+	private final ConcurrentHashMap<Host, HostConnectionPool<CL>> reconnectingPools = new ConcurrentHashMap<Host, HostConnectionPool<CL>>();
+	private final ConcurrentHashMap<Host, HostConnectionPool<CL>> pingingPools = new ConcurrentHashMap<Host, HostConnectionPool<CL>>();
+
+	private final AtomicBoolean startedPing = new AtomicBoolean(false);
 	
-	private final Integer SleepMillis = 10*1000; // 30 seconds
+	private final Integer SleepMillis = 10*1000; 
 	
-	public ConnectionPoolHealthTracker(ConnectionPoolConfiguration config, ExecutorService thPool) {
+	public ConnectionPoolHealthTracker(ConnectionPoolConfiguration config, ScheduledExecutorService thPool) {
 		cpConfiguration = config;	
 		threadPool = thPool;
 	}
 		
 	public void start() {
 		
-		threadPool.submit(new Callable<Void>() {
+		threadPool.scheduleWithFixedDelay(new Runnable() {
 
 			@Override
-			public Void call() throws Exception {
+			public void run() {
 				
-				while (!stop.get() && !Thread.currentThread().isInterrupted()) {
+				if(stop.get() || Thread.currentThread().isInterrupted()) {
+					return;
+				}
 					
-					//if (pendingPools.size() > 0) {
-						Logger.info("Running, pending pools size: " + pendingPools.size());
-					//}
+				Logger.info("Running, pending pools size: " + reconnectingPools.size());
 					
-					for (Host host : pendingPools.keySet()) {
+				for (Host host : reconnectingPools.keySet()) {
 						
-						if (!host.isUp()) {
-							Logger.info("Host: " + host + " is marked as down, will not reconnect connection pool");
-							pendingPools.remove(host);
-							continue;
-						}
+					if (!host.isUp()) {
+						Logger.info("Host: " + host + " is marked as down, will not reconnect connection pool");
+						reconnectingPools.remove(host);
+						continue;
+					}
 						
-						HostConnectionPool<CL> pool = pendingPools.get(host);
-						System.out.println("Host whose pool will be reconnected:  " + host.getHostName());
-						System.out.println("Pool is ACTIVE?  " + pool.isActive());
-						if (pool.isActive()) {
-							// Pool is already active. Move on
-							pendingPools.remove(host);
-						} else {
-							try {
-								pool.markAsDown(null);
-								pool.reconnect();
-								if (pool.isActive()) {
-									Logger.info("Host pool reactivated: " + host);
-									pendingPools.remove(host);
-								} else {
-									Logger.info("Could not re-activate pool, will try again later");
-								}
-							} catch (Exception e) {
-								// do nothing, will retry again once thread wakes up
-								Logger.warn("Failed to reconnect pool", e);
+					HostConnectionPool<CL> pool = reconnectingPools.get(host);
+					System.out.println("Host whose pool will be reconnected:  " + host.getHostName());
+					System.out.println("Pool is ACTIVE?  " + pool.isActive());
+					if (pool.isActive()) {
+						// Pool is already active. Move on
+						reconnectingPools.remove(host);
+					} else {
+						try {
+							pool.markAsDown(null);
+							pool.reconnect();
+							if (pool.isActive()) {
+								Logger.info("Host pool reactivated: " + host);
+								reconnectingPools.remove(host);
+							} else {
+								Logger.info("Could not re-activate pool, will try again later");
 							}
+						} catch (Exception e) {
+							// do nothing, will retry again once thread wakes up
+							Logger.warn("Failed to reconnect pool", e);
 						}
 					}
-					
-					Thread.sleep(SleepMillis);
 				}
-				return null;
 			}
-		});
+			
+		}, 1000, SleepMillis, TimeUnit.MILLISECONDS);
 	}
 	
 	public void stop() {
@@ -111,10 +112,54 @@ public class ConnectionPoolHealthTracker<CL> {
 			boolean errorRateOk = errorMonitor.trackErrorRate(1);
 
 			if (!errorRateOk) {
-				Logger.error("Dyno recycling host connection pool for host: " + host + " due to too many errors");
-				hostPool.markAsDown(null);
-				pendingPools.put(host, hostPool);
+				reconnectPool(hostPool);
 			}
 		}
 	}
+	
+	public void reconnectPool(HostConnectionPool<CL> hostPool) {
+		Host host = hostPool.getHost();
+		Logger.error("Dyno recycling host connection pool for host: " + host + " due to too many errors");
+		hostPool.markAsDown(null);
+		reconnectingPools.put(host, hostPool);
+	}
+	
+	public void initialPingHealthchecksForPool(HostConnectionPool<CL> hostPool) {
+		
+		pingingPools.putIfAbsent(hostPool.getHost(), hostPool);
+		if (startedPing.get()) {
+			return;
+		}
+		
+		if (pingingPools.size() > 0) {
+			if (startedPing.compareAndSet(false, true)) {
+				
+				threadPool.scheduleWithFixedDelay(new Runnable() {
+
+					@Override
+					public void run() {
+						for (HostConnectionPool<CL> hostPool : pingingPools.values()) {
+							pingHostPool(hostPool);
+						}
+					}
+				}, 1, cpConfiguration.getPingFrequencySeconds(), TimeUnit.SECONDS);
+				
+			} else {
+				return;
+			}
+		} else {
+			return;  // no pools to ping
+		}
+	}
+
+	private void pingHostPool(HostConnectionPool<CL> hostPool) {
+		for (Connection<CL> connection : hostPool.getAllConnections()) {
+			try { 
+				connection.execPing();
+			} catch (DynoException e) {
+				trackConnectionError(hostPool, e);
+			}
+		}
+	}
+
 }

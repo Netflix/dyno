@@ -2,9 +2,12 @@ package com.netflix.dyno.memcache;
 
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
+
 import net.spy.memcached.MemcachedNode;
+
 import org.apache.commons.lang.NotImplementedException;
-import com.netflix.dyno.connectionpool.impl.CircularList;
+
+import com.netflix.dyno.connectionpool.impl.lb.CircularList;
 import com.netflix.dyno.memcache.SpyMemcachedConnectionFactory.InstrumentedLocator;
 
 public class RoundRobinLocator extends InstrumentedLocator {

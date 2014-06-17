@@ -3,6 +3,7 @@ package com.netflix.dyno.memcache;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
@@ -167,6 +168,13 @@ public class MemcachedConnectionFactory implements ConnectionFactory<MemcachedCl
 		@Override
 		public HostConnectionPool<MemcachedClient> getParentConnectionPool() {
 			return mConnPool;
+		}
+
+
+		private final String PingKey = UUID.randomUUID().toString();
+		@Override
+		public void execPing() {
+			mClient.get(PingKey);
 		}
 	}
 	

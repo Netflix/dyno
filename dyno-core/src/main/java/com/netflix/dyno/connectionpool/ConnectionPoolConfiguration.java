@@ -80,5 +80,6 @@ public interface ConnectionPoolConfiguration {
     
     public TokenMapSupplier getTokenSupplier();
     
+    public int getPingFrequencySeconds();
     
 }

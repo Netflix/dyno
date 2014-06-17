@@ -1,4 +1,4 @@
-package com.netflix.dyno.connectionpool.impl;
+package com.netflix.dyno.connectionpool.impl.health;
 
 import java.util.ArrayList;
 import java.util.Iterator;
