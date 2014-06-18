@@ -68,54 +68,54 @@ public class DynoStats {
 	}
 
 	@Monitor(name="readLatAvg", type=DataSourceType.GAUGE)
-	public double getReadLatAvg() {
-		return readTimer.getAvgMillis();
+	public long getReadLatAvg() {
+		return (long)(readTimer.getAvgMillis()*1000);
 	}
 
 	@Monitor(name="readLatP50", type=DataSourceType.GAUGE)
-	public double getReadLatP50() {
-		return readTimer.getP50Millis();
+	public long getReadLatP50() {
+		return (long)(readTimer.getP50Millis()*1000);
 	}
 
 	@Monitor(name="readLatP99", type=DataSourceType.GAUGE)
-	public double getReadLatP99() {
-		return readTimer.getP99Millis();
+	public long getReadLatP99() {
+		return (long)(readTimer.getP99Millis()*1000);
 	}
 
 	@Monitor(name="readLatP995", type=DataSourceType.GAUGE)
-	public double getReadLatP995() {
-		return readTimer.getP995Millis();
+	public long getReadLatP995() {
+		return (long)(readTimer.getP995Millis()*1000);
 	}
 
 	@Monitor(name="readLatP999", type=DataSourceType.GAUGE)
-	public double getReadLatP999() {
-		return readTimer.getP999Millis();
+	public long getReadLatP999() {
+		return (long)(readTimer.getP999Millis()*1000);
 	}
 
 	
 	@Monitor(name="writeLatAvg", type=DataSourceType.GAUGE)
-	public double getWriteLatAvg() {
-		return writeTimer.getAvgMillis();
+	public long getWriteLatAvg() {
+		return (long)(writeTimer.getAvgMillis()*1000);
 	}
 
 	@Monitor(name="writeLatP50", type=DataSourceType.GAUGE)
-	public double getWriteLatP50() {
-		return writeTimer.getP50Millis();
+	public long getWriteLatP50() {
+		return (long)(writeTimer.getP50Millis()*1000);
 	}
 
 	@Monitor(name="writeLatP99", type=DataSourceType.GAUGE)
-	public double getWriteLatP99() {
-		return writeTimer.getP99Millis();
+	public long getWriteLatP99() {
+		return (long)(writeTimer.getP99Millis()*1000);
 	}
 
 	@Monitor(name="writeLatP995", type=DataSourceType.GAUGE)
-	public double getWriteLatP995() {
-		return writeTimer.getP995Millis();
+	public long getWriteLatP995() {
+		return (long)(writeTimer.getP995Millis()*1000);
 	}
 
 	@Monitor(name="writeLatP999", type=DataSourceType.GAUGE)
-	public double getWriteLatP999() {
-		return writeTimer.getP999Millis();
+	public long getWriteLatP999() {
+		return (long)(writeTimer.getP999Millis()*1000);
 	}
 
 	private float getCacheHitRatio() {
