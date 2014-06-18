@@ -52,7 +52,7 @@ public class DynoRedisDriver extends DynoDriver {
 
 		@Override
 		public String get(String key) throws Exception {
-			return client.get().get(key);
+			return client.get().get(key).getResult();
 		}
 
 		@Override
