@@ -70,7 +70,7 @@ public abstract class DynoDriver {
 			public void run() {
 				
 				DynoStats stats = DynoStats.getInstance();
-				long success = stats.getSucces(); long fail = stats.getFailure();
+				long success = stats.getReadSuccess(); long fail = stats.getReadFailure();
 				long total = success + fail;
 				long rps = (total-prevCount.get())/secondsFreq;
 				long sRatio = (total > 0) ? (success * 100L/ (total)) : 0;
@@ -254,10 +254,10 @@ public abstract class DynoDriver {
 					System.out.println("Miss for key: " + key);
 					stats.cacheMiss();
 				}
-				stats.success();
+				stats.readSuccess();
 				return true;
 			} catch (Exception e) {
-				stats.failure();
+				stats.readFailure();
 				Logger.error("Failed to process dyno read operation", e);
 				return false;
 			} finally {
@@ -276,10 +276,10 @@ public abstract class DynoDriver {
 				String value = SampleData.getInstance().getRandomValue();
 				
 				getDynoClient().set(key, value);
-				stats.success();
+				stats.writeSuccess();
 				return true;
 			} catch (Exception e) {
-				stats.failure();
+				stats.writeFailure();
 				Logger.error("Failed to process dyno write operation", e);
 				return false;
 			} finally {
