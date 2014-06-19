@@ -12,8 +12,10 @@ public class DynoStats {
 
 	private static final DynoStats Instance = new DynoStats();
 	
-	private final AtomicLong success = new AtomicLong(0L);
-	private final AtomicLong failure = new AtomicLong(0L);
+	private final AtomicLong readSuccess = new AtomicLong(0L);
+	private final AtomicLong readFailure = new AtomicLong(0L);
+	private final AtomicLong writeSuccess = new AtomicLong(0L);
+	private final AtomicLong writeFailure = new AtomicLong(0L);
 	private final AtomicLong cacheHits = new AtomicLong(0L);
 	private final AtomicLong cacheMiss = new AtomicLong(0L);
 
@@ -31,22 +33,37 @@ public class DynoStats {
 		DefaultMonitorRegistry.getInstance().register(Monitors.newObjectMonitor(this));
 	}
 	
-	public void success() {
-		success.incrementAndGet();
+	public void readSuccess() {
+		readSuccess.incrementAndGet();
+	}
+	public void readFailure() {
+		readFailure.incrementAndGet();
+	}
+	public void writeSuccess() {
+		writeSuccess.incrementAndGet();
+	}
+	public void writeFailure() {
+		writeFailure.incrementAndGet();
+	}
+	
+	@Monitor(name="readSuccess", type=DataSourceType.COUNTER)
+	public long getReadSuccess() {
+		return readSuccess.get();
 	}
 
-	@Monitor(name="success", type=DataSourceType.COUNTER)
-	public long getSucces() {
-		return success.get();
+	@Monitor(name="readFailure", type=DataSourceType.COUNTER)
+	public long getReadFailure() {
+		return readFailure.get();
 	}
 
-	public void failure() {
-		failure.incrementAndGet();
+	@Monitor(name="writeSuccess", type=DataSourceType.COUNTER)
+	public long getWriteSuccess() {
+		return writeSuccess.get();
 	}
 
-	@Monitor(name="failure", type=DataSourceType.COUNTER)
-	public long getFailure() {
-		return failure.get();
+	@Monitor(name="writeFailure", type=DataSourceType.COUNTER)
+	public long getWriteFailure() {
+		return writeFailure.get();
 	}
 
 	public void cacheHit() {
@@ -143,7 +160,7 @@ public class DynoStats {
 	}
 	
 	public String getStatus() {
-		return "CacheStats: success: " + success.get() + " failure: " + failure.get() + 
+		return "CacheStats: success: " + readSuccess.get() + " failure: " + readFailure.get() + 
 				" hits: " + cacheHits.get() + " miss: " + cacheMiss.get() + " ratio: " + getCacheHitRatio() + "\n";
 	}
 	
