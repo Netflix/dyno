@@ -55,24 +55,24 @@ public class DynoTimer {
 		}
 		
 		/** CHECK IF LATENCIES NEED TO BE RE RESET */
-		if ((currentTime - lastResetTime.get()) > resetMillis) {
-			
-			if (resetLock.get()) {
-				return; // lock already acquired
-			}
-			
-			// acquire lock
-			if (!resetLock.compareAndSet(false, true)) {
-				return;
-			}
-			
-			try { 
-				state.set(new InnerState(numBuckets));
-				lastResetTime.set(currentTime);
-			} finally {
-				resetLock.set(false); //release lock
-			}
-		}
+//		if ((currentTime - lastResetTime.get()) > resetMillis) {
+//			
+//			if (resetLock.get()) {
+//				return; // lock already acquired
+//			}
+//			
+//			// acquire lock
+//			if (!resetLock.compareAndSet(false, true)) {
+//				return;
+//			}
+//			
+//			try { 
+//				state.set(new InnerState(numBuckets));
+//				lastResetTime.set(currentTime);
+//			} finally {
+//				resetLock.set(false); //release lock
+//			}
+//		}
 	}
 
 	public Double getP50Millis() {
