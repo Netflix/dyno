@@ -14,10 +14,6 @@ import com.netflix.dyno.jedis.DynoJedisClient;
 public class DynoRedisDriver extends DynoDriver {
 
 
-	private static final DynamicIntProperty Port = DynamicPropertyFactory.getInstance().getIntProperty("dyno.driver.port", 8102);
-	private static final DynamicIntProperty MaxConns = DynamicPropertyFactory.getInstance().getIntProperty("dyno.driver.conns", 60);
-	private static final DynamicStringProperty ClusterName = DynamicPropertyFactory.getInstance().getStringProperty("dyno.driver.cluster", "dynomite_redis_puneet");
-	
 	private static final DynoDriver Instance = new DynoRedisDriver();
 
 	private final AtomicReference<DynoJedisClient> client = new AtomicReference<DynoJedisClient>(null);
@@ -33,6 +29,7 @@ public class DynoRedisDriver extends DynoDriver {
 	public DynoClient dynoClientWrapper = new DynoClient () {
 
 		
+		
 		@Override
 		public void init() {
 
@@ -42,10 +39,16 @@ public class DynoRedisDriver extends DynoDriver {
 
 			System.out.println("Initing dyno redis client");
 			
+			DynamicIntProperty Port = DynamicPropertyFactory.getInstance().getIntProperty("dyno.driver.port", 22122);
+			DynamicIntProperty MaxConns = DynamicPropertyFactory.getInstance().getIntProperty("dyno.driver.conns", 60);
+			DynamicStringProperty ClusterName = DynamicPropertyFactory.getInstance().getStringProperty("dyno.driver.cluster", "dynomite_redis_puneet");
+			
 			String cluster = ClusterName.get();
 			int port = Port.get();
 			int conns = MaxConns.get();
 			
+			System.out.println("Cluster: " + cluster + ", port: " + port + ", conns: " + conns);
+
 			client.set(DynoJedisClient.Builder.withName("Demo")
 						.withDynomiteClusterName(cluster)
 						.withCPConfig(new ConnectionPoolConfigurationImpl(cluster)

@@ -22,7 +22,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private static final int DEFAULT_POOL_SHUTDOWN_DELAY = 60000; 
 	private static final int DEFAULT_PING_FREQ_SECONDS = 1; 
 	private static final boolean DEFAULT_LOCAL_DC_AFFINITY = true; 
-	private static final LoadBalancingStrategy DEFAULT_LB_STRATEGY = LoadBalancingStrategy.RoundRobin; 
+	private static final LoadBalancingStrategy DEFAULT_LB_STRATEGY = LoadBalancingStrategy.TokenAware; 
 
 	private HostSupplier hostSupplier;
 	private TokenMapSupplier tokenSupplier;

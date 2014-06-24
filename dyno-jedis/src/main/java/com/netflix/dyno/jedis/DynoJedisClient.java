@@ -29,13 +29,13 @@ public class DynoJedisClient {
 	public DynoJedisClient(String name, ConnectionPool<Jedis> pool) {
 		this.connPool = pool;
 	}
-
+	
 	private enum OpName {
 		 APPEND, DECR, DECRBY, DEL, DUMP, EXISTS, EXPIRE, EXPIREAT, GET, GETBIT, GETRANGE, GETSET, 
-		 HDEL, HEXISTS,  HGET, HGETALL, HINCRBY, HINCRBYFLOAT, HKEYS, HLEN, HSET, HSETNX, HVALS, 
+		 HDEL, HEXISTS,  HGET, HGETALL, HINCRBY, HINCRBYFLOAT, HKEYS, HLEN, HMGET, HMSET, HSET, HSETNX, HVALS, 
 		 INCR, INCRBY, INCRBYFLOAT, LINDEX, LINSERT, LLEN, LPOP, LPUSH, LPUSHX, LRANGE, LREM, LSET, LTRIM, 
 		 PERSIST, PEXPIRE, PEXPIREAT, PSETEX, PTTL, RESTORE, RPOP, RPOPLPUSH, RPUSH, RPUSHX, 
-		 SADD, SCARD, SET, SETBIT, SETEX, SETNX, SETRANGE, SISMEMBER, SMEMBERS, SMOVE, SPOP, SRANDMEMBER, SREM, STRLEN, 
+		 SADD, SCARD, SDIFF, SDIFFSTORE, SET, SETBIT, SETEX, SETNX, SETRANGE, SINTER, SINTERSTORE, SISMEMBER, SMEMBERS, SMOVE, SPOP, SRANDMEMBER, SREM, STRLEN, SUNION, SUNIONSTORE,
 		 TTL, TYPE, ZCARD, ZCOUNT, ZINCRBY, ZRANK, ZREMRANGEBYRANK, ZREMRANGEBYSCORE, ZREVRANK, ZSCORE
 		 ;
 	}
@@ -310,6 +310,31 @@ public class DynoJedisClient {
 
 		});
 	}
+
+	public OperationResult<List<String>> hmget(final String key, final String ... fields) throws DynoException {
+		
+		return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.HMGET) {
+
+			@Override
+			public List<String> execute(Jedis client, ConnectionContext state) throws DynoException {
+				return client.hmget(key, fields);
+			}
+
+		});
+	}
+
+	public OperationResult<String> hmset(final String key, final Map<String, String> hash) throws DynoException {
+		
+		return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.HMSET) {
+
+			@Override
+			public String execute(Jedis client, ConnectionContext state) throws DynoException {
+				return client.hmset(key, hash);
+			}
+
+		});
+	}
+
 	public OperationResult<Long> hset(final String key, final String field, final String value) throws DynoException {
 		
 		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HSET) {
@@ -635,6 +660,30 @@ public class DynoJedisClient {
 		});
 	}
 
+	public OperationResult<Set<String>> sdiff(final String ... keys) throws DynoException {
+		
+		return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(keys[0], OpName.SDIFF) {
+
+			@Override
+			public Set<String> execute(Jedis client, ConnectionContext state) throws DynoException {
+				return client.sdiff(keys);
+			}
+
+		});
+	}
+
+	public OperationResult<Long> sdiffstore(final String dstkey, final String ... keys) throws DynoException {
+		
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(dstkey, OpName.SDIFFSTORE) {
+
+			@Override
+			public Long execute(Jedis client, ConnectionContext state) throws DynoException {
+				return client.sdiffstore(dstkey, keys);
+			}
+
+		});
+	}
+
 	public OperationResult<String> set(final String key, final String value) throws DynoException {
 		
 		return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
@@ -695,6 +744,30 @@ public class DynoJedisClient {
 		});
 	}
 	
+	public OperationResult<Set<String>> sinter(final String ... keys) throws DynoException {
+
+		return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(keys[0], OpName.SINTER) {
+
+			@Override
+			public Set<String> execute(Jedis client, ConnectionContext state) throws DynoException {
+				return client.sinter(keys);
+			}
+
+		});
+	}
+
+	public OperationResult<Long> sinterstore(final String dstkey, final String ... keys) throws DynoException {
+
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(dstkey, OpName.SINTERSTORE) {
+
+			@Override
+			public Long execute(Jedis client, ConnectionContext state) throws DynoException {
+				return client.sinterstore(dstkey, keys);
+			}
+
+		});
+	}
+
 	public OperationResult<Boolean> sismember(final String key, final String member) throws DynoException {
 		
 		return connPool.executeWithFailover(new BaseKeyOperation<Boolean>(key, OpName.SISMEMBER) {
@@ -777,6 +850,30 @@ public class DynoJedisClient {
 		});
 	}
 
+	public OperationResult<Set<String>> sunion(final String ... keys) throws DynoException {
+		
+		return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(keys[0], OpName.SUNION) {
+
+			@Override
+			public Set<String> execute(Jedis client, ConnectionContext state) throws DynoException {
+				return client.sunion(keys);
+			}
+
+		});
+	}
+
+	public OperationResult<Long> sunionstore(final String dstkey, final String ... keys) throws DynoException {
+		
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(dstkey, OpName.SUNIONSTORE) {
+
+			@Override
+			public Long execute(Jedis client, ConnectionContext state) throws DynoException {
+				return client.sunionstore(dstkey, keys);
+			}
+
+		});
+	}
+	
 	public OperationResult<Long> ttl(final String key) throws DynoException {
 		
 		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.TTL) {
