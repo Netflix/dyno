@@ -137,7 +137,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 	@Override
 	public int primeConnections() throws DynoException {
 
-		Logger.info("Priming connection pool for host:" + host);
+		Logger.info("Priming connection pool for host:" + host + ", conns:" + cpConfig.getMaxConnsPerHost());
 
 		if(cpState.get() != cpNotInited) {
 			throw new DynoException("Connection pool has already been inited, cannot prime connections for host:" + host);

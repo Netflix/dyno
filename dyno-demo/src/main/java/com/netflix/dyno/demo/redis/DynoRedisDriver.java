@@ -49,15 +49,21 @@ public class DynoRedisDriver extends DynoDriver {
 			
 			System.out.println("Cluster: " + cluster + ", port: " + port + ", conns: " + conns);
 
-			client.set(DynoJedisClient.Builder.withName("Demo")
-						.withDynomiteClusterName(cluster)
-						.withCPConfig(new ConnectionPoolConfigurationImpl(cluster)
-									.setPort(port)
-									.setMaxTimeoutWhenExhausted(1000)
-									.setMaxConnsPerHost(conns)
-									.withHostSupplier(new EurekaHostsSupplier(cluster, port))
-									.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware))
-						.build());
+//			client.set(DynoJedisClient.Builder.withName("Demo")
+//						.withDynomiteClusterName(cluster)
+//						.withCPConfig(new ConnectionPoolConfigurationImpl(cluster)
+//									.setPort(port)
+//									.setMaxTimeoutWhenExhausted(1000)
+//									.setMaxConnsPerHost(conns)
+//									.withHostSupplier(new EurekaHostsSupplier(cluster, port))
+//									.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware))
+//						.build());
+			
+			DynoJedisClient jClient = new DynoJedisClient.Builder()
+					.withApplicationName("Demo")
+					.withDynomiteClusterName(cluster)
+					.build();
+			client.set(jClient);	
 		}
 
 		@Override
