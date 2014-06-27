@@ -2069,7 +2069,6 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 		private int port = -1;
 		private ConnectionPoolConfigurationImpl cpConfig;
 		private HostSupplier hostSupplier;
-		private int port = -1;
 		
 		public Builder() {
 		}
@@ -2081,11 +2080,6 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
 		public Builder withDynomiteClusterName(String cluster) {
 			clusterName = cluster;
-			return this;
-		}
-
-		public Builder withPort(int portNum) {
-			port = portNum;
 			return this;
 		}
 
@@ -2118,10 +2112,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 			}
 			
 			if (hostSupplier == null) {
-				if (port == -1){
-					port = cpConfig.getPort();
-				}
-				hostSupplier = new EurekaHostsSupplier(clusterName, port);
+				hostSupplier = new EurekaHostsSupplier(clusterName, cpConfig.getPort());
 			}
 			
 			cpConfig.withHostSupplier(hostSupplier);
