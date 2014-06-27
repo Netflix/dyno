@@ -4,24 +4,31 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.lang.NotImplementedException;
+
 import redis.clients.jedis.BinaryClient.LIST_POSITION;
+import redis.clients.jedis.BitOP;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisCommands;
+import redis.clients.jedis.JedisPubSub;
+import redis.clients.jedis.MultiKeyCommands;
 import redis.clients.jedis.SortingParams;
 import redis.clients.jedis.Tuple;
+import redis.clients.jedis.ZParams;
 
 import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionPool;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.OperationResult;
+import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
 import com.netflix.dyno.contrib.DynoCPMonitor;
 import com.netflix.dyno.contrib.DynoOPMonitor;
 import com.netflix.dyno.contrib.EurekaHostsSupplier;
 
-public class DynoJedisClient implements JedisCommands {
+public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 	
 	private final ConnectionPool<Jedis> connPool;
 	
@@ -348,22 +355,6 @@ public class DynoJedisClient implements JedisCommands {
 		});
 	}
 
-	public Double hincrByFloat(final String key, final String field, final Double increment)  {
-		return d_hincrByFloat(key, field, increment).getResult();
-	}
-	
-	public OperationResult<Double> d_hincrByFloat(final String key, final String field, final Double increment)  {
-		
-		return connPool.executeWithFailover(new BaseKeyOperation<Double>(key, OpName.HINCRBYFLOAT) {
-
-			@Override
-			public Double execute(Jedis client, ConnectionContext state)  {
-				return client.hincrByFloat(key, field, increment);
-			}
-
-		});
-	}
-
 	@Override
 	public Long hsetnx(final String key, final String field, final String value)  {
 		return d_hsetnx(key, field, value).getResult();
@@ -652,7 +643,7 @@ public class DynoJedisClient implements JedisCommands {
 		});
 	}
 
-        @Override
+	@Override
 	public Long lrem(final String key, final long count, final String value)  {
 	    return d_lrem(key, count, value).getResult();
 	}
@@ -669,7 +660,7 @@ public class DynoJedisClient implements JedisCommands {
 		});
 	}
 
-        @Override
+	@Override
 	public String lset(final String key, final long index, final String value)  {
 	    return d_lset(key, index, value).getResult();
 	}
@@ -686,7 +677,7 @@ public class DynoJedisClient implements JedisCommands {
 		});
 	}
 
-        @Override
+	@Override
 	public String ltrim(final String key, final long start, final long end)  {
 	    return d_ltrim(key, start, end).getResult();
 	}
@@ -1034,38 +1025,6 @@ public class DynoJedisClient implements JedisCommands {
 		});
 	}
 
-	public Set<String>_sinter(final String ... keys)  {
-	    return d_sinter(keys).getResult();
-	}
-
-	public OperationResult<Set<String>> d_sinter(final String ... keys)  {
-
-		return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(keys[0], OpName.SINTER) {
-
-			@Override
-			public Set<String> execute(Jedis client, ConnectionContext state)  {
-				return client.sinter(keys);
-			}
-
-		});
-	}
-
-	public Long sinterstore(final String dstkey, final String ... keys)  {
-	    return d_sinterstore(dstkey, keys).getResult();
-	}
-
-	public OperationResult<Long> d_sinterstore(final String dstkey, final String ... keys)  {
-
-		return connPool.executeWithFailover(new BaseKeyOperation<Long>(dstkey, OpName.SINTERSTORE) {
-
-			@Override
-			public Long execute(Jedis client, ConnectionContext state)  {
-				return client.sinterstore(dstkey, keys);
-			}
-
-		});
-	}
-
 	@Override
 	public Boolean sismember(final String key, final String member)  {
 	    return d_sismember(key, member).getResult();
@@ -1237,42 +1196,6 @@ public class DynoJedisClient implements JedisCommands {
 
 		});
 	}
-
-	/**
-	public Set<String> sunion(final String ... keys)  {
-	    return d_sunion(keys).getResult();
-	}
-
-	public OperationResult<Set<String>> d_sunion(final String ... keys)  {
-		
-		return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(keys[0], OpName.SUNION) {
-
-			@Override
-			public Set<String> execute(Jedis client, ConnectionContext state)  {
-				return client.sunion(keys);
-			}
-
-		});
-	}
-	 */
-	
-	/**
-	public Long sunionstore(final String dstkey, final String ... keys)  {
-	    return d_sunionstore(dstkey, keys).getResult();
-	}
-
-	public OperationResult<Long> d_sunionstore(final String dstkey, final String ... keys)  {
-		
-		return connPool.executeWithFailover(new BaseKeyOperation<Long>(dstkey, OpName.SUNIONSTORE) {
-
-			@Override
-			public Long execute(Jedis client, ConnectionContext state)  {
-				return client.sunionstore(dstkey, keys);
-			}
-
-		});
-	}
-	 */
 	
 	@Override
 	public Long ttl(final String key)  {
@@ -1981,6 +1904,164 @@ public class DynoJedisClient implements JedisCommands {
 	}
 	
 
+	/** MULTI-KEY COMMANDS */
+
+	@Override
+	public Long del(String... keys) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public List<String> blpop(int timeout, String... keys) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public List<String> brpop(int timeout, String... keys) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public List<String> blpop(String... args) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public List<String> brpop(String... args) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Set<String> keys(String pattern) {
+		return d_keys(pattern).getResult();
+	}
+
+	public OperationResult<Set<String>> d_keys(final String pattern) {
+	
+		return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(pattern, OpName.BITCOUNT) {
+
+			@Override
+			public Set<String> execute(Jedis client, ConnectionContext state) throws DynoException {
+				return client.keys(pattern);
+			}
+		});
+	}
+	
+	@Override
+	public List<String> mget(String... keys) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public String mset(String... keysvalues) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Long msetnx(String... keysvalues) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public String rename(String oldkey, String newkey) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Long renamenx(String oldkey, String newkey) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Set<String> sinter(String... keys) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	public Long sinterstore(final String dstkey, final String ... keys)  {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Long sort(String key, SortingParams sortingParameters, String dstkey) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Long sort(String key, String dstkey) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Set<String> sunion(String... keys) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Long sunionstore(String dstkey, String... keys) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public String watch(String... keys) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public String unwatch() {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Long zinterstore(String dstkey, String... sets) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Long zinterstore(String dstkey, ZParams params, String... sets) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Long zunionstore(String dstkey, String... sets) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Long zunionstore(String dstkey, ZParams params, String... sets) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public String brpoplpush(String source, String destination, int timeout) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Long publish(String channel, String message) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public void subscribe(JedisPubSub jedisPubSub, String... channels) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public void psubscribe(JedisPubSub jedisPubSub, String... patterns) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public String randomKey() {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+	@Override
+	public Long bitop(BitOP op, String destKey, String... srcKeys) {
+		throw new NotImplementedException("not yet implemented");
+	}
+
+
 	public static class Builder {
 		
 		private String appName;
@@ -1988,8 +2069,12 @@ public class DynoJedisClient implements JedisCommands {
 		private ConnectionPoolConfigurationImpl cpConfig;
 		private HostSupplier hostSupplier;
 		
-		public Builder(String name) {
-			appName = name;
+		public Builder() {
+		}
+
+		public Builder withApplicationName(String applicationName) {
+			appName = applicationName;
+			return this;
 		}
 
 		public Builder withDynomiteClusterName(String cluster) {
@@ -2017,7 +2102,7 @@ public class DynoJedisClient implements JedisCommands {
 			}
 			
 			if (hostSupplier == null) {
-				hostSupplier = new EurekaHostsSupplier(appName, cpConfig.getPort());
+				hostSupplier = new EurekaHostsSupplier(clusterName, cpConfig.getPort());
 			}
 			
 			cpConfig.withHostSupplier(hostSupplier);
@@ -2038,11 +2123,5 @@ public class DynoJedisClient implements JedisCommands {
 			final DynoJedisClient client = new DynoJedisClient(appName, pool);
 			return client;
 		}
-		
-		public static Builder withName(String name) {
-			return new Builder(name);
-		}
 	}
-
-
 }
