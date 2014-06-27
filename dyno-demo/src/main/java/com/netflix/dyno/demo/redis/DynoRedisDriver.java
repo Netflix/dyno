@@ -2,6 +2,9 @@ package com.netflix.dyno.demo.redis;
 
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.netflix.config.DynamicIntProperty;
+import com.netflix.config.DynamicPropertyFactory;
+import com.netflix.config.DynamicStringProperty;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancingStrategy;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.contrib.EurekaHostsSupplier;
@@ -26,6 +29,7 @@ public class DynoRedisDriver extends DynoDriver {
 	public DynoClient dynoClientWrapper = new DynoClient () {
 
 		
+		
 		@Override
 		public void init() {
 
@@ -35,24 +39,30 @@ public class DynoRedisDriver extends DynoDriver {
 
 			System.out.println("Initing dyno redis client");
 			
+			DynamicIntProperty Port = DynamicPropertyFactory.getInstance().getIntProperty("dyno.driver.port", 22122);
+			DynamicIntProperty MaxConns = DynamicPropertyFactory.getInstance().getIntProperty("dyno.driver.conns", 60);
+			DynamicStringProperty ClusterName = DynamicPropertyFactory.getInstance().getStringProperty("dyno.driver.cluster", "dynomite_redis_puneet");
+			
+			String cluster = ClusterName.get();
+			int port = Port.get();
+			int conns = MaxConns.get();
+			
+			System.out.println("Cluster: " + cluster + ", port: " + port + ", conns: " + conns);
+
 			client.set(DynoJedisClient.Builder.withName("Demo")
-						.withDynomiteClusterName("dynomite_redis_puneet")
-						.withCPConfig(new ConnectionPoolConfigurationImpl("dynomite_redis_puneet")
-									//.setPort(22122)
-									.setPort(8102)
+						.withDynomiteClusterName(cluster)
+						.withCPConfig(new ConnectionPoolConfigurationImpl(cluster)
+									.setPort(port)
 									.setMaxTimeoutWhenExhausted(1000)
-									.setMaxConnsPerHost(60)
-									//.setRetryPolicyFactory(new RetryNTimes.RetryFactory(1, true))
-									//.setMaxConnsPerHost(3)
-									//.withHostSupplier(new EurekaHostsSupplier("dynomite_redis_puneet", 22122))
-									.withHostSupplier(new EurekaHostsSupplier("dynomite_redis_puneet", 8102))
+									.setMaxConnsPerHost(conns)
+									.withHostSupplier(new EurekaHostsSupplier(cluster, port))
 									.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware))
 						.build());
 		}
 
 		@Override
 		public String get(String key) throws Exception {
-			return client.get().get(key).getResult();
+			return client.get().get(key);
 		}
 
 		@Override

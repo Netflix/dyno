@@ -98,6 +98,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			default:
 				throw new RuntimeException("unknown type");
 		};
+		
+		MonitorConsole.getInstance().addMonitorConsole(cpConfig.getName(), cpMon);
 	}
 	
 	@Override
