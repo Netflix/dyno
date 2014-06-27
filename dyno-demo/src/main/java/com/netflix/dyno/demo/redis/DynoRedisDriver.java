@@ -52,13 +52,9 @@ public class DynoRedisDriver extends DynoDriver {
 			client.set(DynoJedisClient.Builder.withName("Demo")
 						.withDynomiteClusterName(cluster)
 						.withCPConfig(new ConnectionPoolConfigurationImpl(cluster)
-									//.setPort(22122)
 									.setPort(port)
 									.setMaxTimeoutWhenExhausted(1000)
 									.setMaxConnsPerHost(conns)
-									//.setRetryPolicyFactory(new RetryNTimes.RetryFactory(1, true))
-									//.setMaxConnsPerHost(3)
-									//.withHostSupplier(new EurekaHostsSupplier("dynomite_redis_puneet", 22122))
 									.withHostSupplier(new EurekaHostsSupplier(cluster, port))
 									.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware))
 						.build());
@@ -66,7 +62,7 @@ public class DynoRedisDriver extends DynoDriver {
 
 		@Override
 		public String get(String key) throws Exception {
-			return client.get().get(key).getResult();
+			return client.get().get(key);
 		}
 
 		@Override
