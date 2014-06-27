@@ -2066,6 +2066,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 		
 		private String appName;
 		private String clusterName;
+		private int port = -1;
 		private ConnectionPoolConfigurationImpl cpConfig;
 		private HostSupplier hostSupplier;
 		
@@ -2079,6 +2080,11 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
 		public Builder withDynomiteClusterName(String cluster) {
 			clusterName = cluster;
+			return this;
+		}
+
+		public Builder withPort(int portNum) {
+			port = portNum;
 			return this;
 		}
 
@@ -2099,6 +2105,10 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 			
 			if (cpConfig == null) {
 				cpConfig = new ConnectionPoolConfigurationImpl(appName);
+			}
+			
+			if (port != -1) {
+				cpConfig.setPort(port);
 			}
 			
 			if (hostSupplier == null) {
