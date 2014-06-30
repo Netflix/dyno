@@ -24,6 +24,7 @@ import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
+import com.netflix.dyno.contrib.ArchaiusConnectionPoolConfiguration;
 import com.netflix.dyno.contrib.DynoCPMonitor;
 import com.netflix.dyno.contrib.DynoOPMonitor;
 import com.netflix.dyno.contrib.EurekaHostsSupplier;
@@ -2104,7 +2105,8 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 			assert(clusterName != null);
 			
 			if (cpConfig == null) {
-				cpConfig = new ConnectionPoolConfigurationImpl(appName);
+				//cpConfig = new ConnectionPoolConfigurationImpl(appName);
+				cpConfig = new ArchaiusConnectionPoolConfiguration(appName);
 			}
 			
 			if (port != -1) {
