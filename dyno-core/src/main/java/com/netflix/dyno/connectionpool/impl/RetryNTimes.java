@@ -48,6 +48,11 @@ public class RetryNTimes implements RetryPolicy {
 		
 		int n; 
 		boolean allowDCFallback;
+		
+		public RetryFactory(int n) {
+			this(n, true);
+		}
+		
 		public RetryFactory(int n, boolean allowFallback) {
 			this.n = n;
 			this.allowDCFallback = allowFallback;

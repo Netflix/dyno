@@ -47,7 +47,6 @@ import com.netflix.dyno.connectionpool.exception.ThrottledException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl.ErrorRateMonitorConfigImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl.HostConnectionPoolFactory.Type;
 import com.netflix.dyno.connectionpool.impl.health.ConnectionPoolHealthTracker;
-import com.netflix.dyno.connectionpool.impl.health.ErrorRateMonitor;
 import com.netflix.dyno.connectionpool.impl.lb.RoundRobinSelector;
 import com.netflix.dyno.connectionpool.impl.lb.SelectionWIthRemoteZoneFallback;
 import com.netflix.dyno.connectionpool.impl.lb.SelectionWIthRemoteZoneFallback.SingleDCSelector;
@@ -349,14 +348,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	}
 	
 
-
-	public static class ErrorRateMonitorFactory {
-
-		public static ErrorRateMonitor createErrorMonitor(ConnectionPoolConfiguration cpConfig) {
-			return new ErrorRateMonitor(cpConfig.getErrorCheckConfig());
-		}
-	}
-	
 	private Future<Boolean> getEmptyFutureTask(final Boolean condition) {
 		
 		FutureTask<Boolean> future = new FutureTask<Boolean>(new Callable<Boolean>() {
@@ -664,7 +655,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		public void testHostEvictionDueToErrorRates() throws Exception {
 			
 			// First configure the error rate monitor
-			ErrorRateMonitorConfigImpl errConfig = (ErrorRateMonitorConfigImpl) cpConfig.getErrorCheckConfig();
+			ErrorRateMonitorConfigImpl errConfig =  new ErrorRateMonitorConfigImpl();  // TODO: fix this
 			errConfig.checkFrequency = 1;
 			errConfig.window = 1;
 			errConfig.suppressWindow = 60;

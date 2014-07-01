@@ -88,11 +88,6 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	}
 
 	@Override
-	public ErrorRateMonitorConfig getErrorCheckConfig() {
-		return errorRateConfig;
-	}
-
-	@Override
 	public RetryPolicyFactory getRetryPolicyFactory() {
 		return retryPolicyFactory;
 	}

@@ -16,6 +16,7 @@
 package com.netflix.dyno.connectionpool;
 
 import com.netflix.dyno.connectionpool.RetryPolicy.RetryPolicyFactory;
+import com.netflix.dyno.connectionpool.impl.health.ErrorMonitor.ErrorMonitorFactory;
 
 
 public interface ConnectionPoolConfiguration {
@@ -72,7 +73,7 @@ public interface ConnectionPoolConfiguration {
     
     public boolean localDcAffinity(); 
     
-    public ErrorRateMonitorConfig getErrorCheckConfig();
+    public ErrorMonitorFactory getErrorMonitorFactory();
     
     public RetryPolicyFactory getRetryPolicyFactory();
     

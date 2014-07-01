@@ -9,6 +9,8 @@ import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.RetryPolicy;
 import com.netflix.dyno.connectionpool.RetryPolicy.RetryPolicyFactory;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
+import com.netflix.dyno.connectionpool.impl.health.ErrorMonitor.ErrorMonitorFactory;
+import com.netflix.dyno.connectionpool.impl.health.SimpleErrorMonitorImpl.SimpleErrorMonitorFactory;
 
 public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfiguration {
 	
@@ -47,7 +49,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		}
 	};
 	
-	private ErrorRateMonitorConfigImpl errorRateConfig = new ErrorRateMonitorConfigImpl();
+	private ErrorMonitorFactory errorMonitorFactory = new SimpleErrorMonitorFactory();
 	
 	public ConnectionPoolConfigurationImpl(String name) {
 		this.name = name;
@@ -109,8 +111,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	}
 
 	@Override
-	public ErrorRateMonitorConfig getErrorCheckConfig() {
-		return errorRateConfig;
+	public ErrorMonitorFactory getErrorMonitorFactory() {
+		return errorMonitorFactory;
 	}
 
 	@Override
@@ -192,6 +194,11 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		return this;
 	}
 
+	public ConnectionPoolConfigurationImpl withErrorMonitorFactory(ErrorMonitorFactory factory) {
+		errorMonitorFactory = factory;
+		return this;
+	}
+	
 	public static class ErrorRateMonitorConfigImpl implements ErrorRateMonitorConfig {
 
 		int window = 20; 
@@ -251,5 +258,4 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 			});
 		}
 	}
-
 }
