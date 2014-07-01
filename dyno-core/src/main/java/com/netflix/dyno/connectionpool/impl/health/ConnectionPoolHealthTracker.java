@@ -15,7 +15,6 @@ import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import com.netflix.dyno.connectionpool.exception.TimeoutException;
-import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl.ErrorRateMonitorFactory;
 
 public class ConnectionPoolHealthTracker<CL> {
 	
@@ -24,7 +23,7 @@ public class ConnectionPoolHealthTracker<CL> {
 	private final ConnectionPoolConfiguration cpConfiguration;
 	private final ScheduledExecutorService threadPool;
 	private final AtomicBoolean stop = new AtomicBoolean(false);
-	private final ConcurrentHashMap<Host, ErrorRateMonitor> errorRates = new ConcurrentHashMap<Host, ErrorRateMonitor>();
+	private final ConcurrentHashMap<Host, ErrorMonitor> errorRates = new ConcurrentHashMap<Host, ErrorMonitor>();
 	private final ConcurrentHashMap<Host, HostConnectionPool<CL>> reconnectingPools = new ConcurrentHashMap<Host, HostConnectionPool<CL>>();
 	private final ConcurrentHashMap<Host, HostConnectionPool<CL>> pingingPools = new ConcurrentHashMap<Host, HostConnectionPool<CL>>();
 
@@ -101,15 +100,16 @@ public class ConnectionPoolHealthTracker<CL> {
 
 			Host host = hostPool.getHost();
 			
-			ErrorRateMonitor errorMonitor = errorRates.get(host);
+			ErrorMonitor errorMonitor = errorRates.get(host);
 
 			if (errorMonitor == null) {
-				errorMonitor = ErrorRateMonitorFactory.createErrorMonitor(cpConfiguration);
+				
+				errorMonitor = cpConfiguration.getErrorMonitorFactory().createErrorMonitor();
 				errorRates.putIfAbsent(host, errorMonitor);
 				errorMonitor = errorRates.get(host);
 			}
 
-			boolean errorRateOk = errorMonitor.trackErrorRate(1);
+			boolean errorRateOk = errorMonitor.trackError(1);
 
 			if (!errorRateOk) {
 				reconnectPool(hostPool);
