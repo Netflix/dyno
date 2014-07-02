@@ -15,6 +15,7 @@ public class DemoConfig {
 	// NUM WORKERS
 	public static final DynamicIntProperty NumWriters = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numWriters", 1);
 	public static final DynamicIntProperty NumReaders = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numReaders", 1);
+	public static final DynamicIntProperty NumBackfill = DynamicPropertyFactory.getInstance().getIntProperty("dyno.demo.numBackfill", 10);
 
 	// TEST CASE CONFIG
 	public static final DynamicBooleanProperty WriteEnabled = DynamicPropertyFactory.getInstance().getBooleanProperty("dyno.demo.writeEnabled", true);

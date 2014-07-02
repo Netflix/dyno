@@ -1,6 +1,7 @@
 package com.netflix.dyno.connectionpool.impl.lb;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -207,5 +208,18 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 		}
 
 		return host;
+	}
+
+	@Override
+	public Map<BaseOperation<CL, ?>, Connection<CL>> getConnection(Collection<BaseOperation<CL, ?>> ops, int duration, TimeUnit unit)
+			throws NoAvailableHostsException, PoolExhaustedException {
+
+		Map<BaseOperation<CL, ?>, Connection<CL>> map = new HashMap<BaseOperation<CL, ?>, Connection<CL>>();
+
+		for (BaseOperation<CL, ?> op : ops) {
+			Connection<CL> connectionForOp = getConnection(op, duration, unit);
+			map.put(op, connectionForOp);
+		}
+		return map;
 	}
 }

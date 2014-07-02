@@ -125,9 +125,10 @@ public class DynoDataBackfill {
 		
 		final long start = System.currentTimeMillis();
 	
-		final int numThreads = 1; 
+		final int numThreads = DemoConfig.NumBackfill.get(); 
 		final int numKeysPerThread = DemoConfig.NumKeys.get()/numThreads;
 		
+		System.out.println("NUM THREADS: " + numThreads);
 		System.out.println("NUM KEYS: " + DemoConfig.NumKeys.get());
 		System.out.println("NUM KEYS PER TH: " + numKeysPerThread);
 		
@@ -152,9 +153,8 @@ public class DynoDataBackfill {
 					while(k<endKey && !stop.get()) {
 						try {
 							String key = "T" + k;
-							System.out.println("key: " + key);
+							//System.out.println("key: " + key);
 							client.set(key, SampleData.getInstance().getRandomValue());
-							//client.set(""+k, 0, SampleData.getInstance().getRandomValue()).get();
 							k++;
 							count.incrementAndGet();
 						} catch (Exception e) {
