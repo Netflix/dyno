@@ -29,6 +29,7 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	private final DynamicIntProperty poolShutdownDelay;
 	private final DynamicBooleanProperty localDcAffinity;
 	
+	private final LoadBalancingStrategy loadBalanceStrategy;
 	private final ErrorRateMonitorConfig errorRateConfig;
 	private final RetryPolicyFactory retryPolicyFactory;
 	
@@ -46,6 +47,8 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		poolShutdownDelay = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.poolShutdownDelay", super.getPoolShutdownDelay());
 		localDcAffinity = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + ".connection.localDcAffinity", super.localDcAffinity());
 
+		
+		loadBalanceStrategy = parseLBStrategy(propertyPrefix);
 		errorRateConfig = parseErrorRateMonitorConfig(propertyPrefix);
 		retryPolicyFactory = parseRetryPolicyFactory(propertyPrefix);
 	}
@@ -101,7 +104,31 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	public boolean localDcAffinity() {
 		return localDcAffinity.get();
 	}
+	
+	@Override
+	public LoadBalancingStrategy getLoadBalancingStrategy() {
+		return loadBalanceStrategy;
+	}
 
+	
+	private LoadBalancingStrategy parseLBStrategy(String propertyPrefix) {
+		
+		LoadBalancingStrategy defaultConfig = super.getLoadBalancingStrategy();
+		
+		String cfg = 
+				DynamicPropertyFactory.getInstance().getStringProperty(propertyPrefix + ".lbStrategy", defaultConfig.name()).get();
+		
+		LoadBalancingStrategy lb = null;
+		try { 
+			lb = LoadBalancingStrategy.valueOf(cfg);
+		} catch (Exception e) {
+			Logger.warn("Unable to parse LoadBalancingStrategy: " + cfg + ", switching to default: " + defaultConfig.name());
+			lb = defaultConfig;
+		}
+
+		return lb;
+	}
+	
 	private ErrorRateMonitorConfig parseErrorRateMonitorConfig(String propertyPrefix) {
 		String errorRateConfig = DynamicPropertyFactory.getInstance().getStringProperty(propertyPrefix + ".errorRateConfig", null).get();
 		try { 

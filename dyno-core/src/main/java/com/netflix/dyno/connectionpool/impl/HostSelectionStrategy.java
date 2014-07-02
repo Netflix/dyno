@@ -1,5 +1,7 @@
 package com.netflix.dyno.connectionpool.impl;
 
+import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import com.netflix.dyno.connectionpool.BaseOperation;
@@ -12,6 +14,8 @@ import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 public interface HostSelectionStrategy<CL> {
 
 	public Connection<CL> getConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException;
+
+	public Map<BaseOperation<CL,?>,Connection<CL>> getConnection(Collection<BaseOperation<CL, ?>> ops, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException;
 	
 	public Connection<CL> getFallbackConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException;
 
