@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
@@ -34,6 +35,8 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 	private final ConcurrentHashMap<String, SingleDCSelector> remoteDCSelectors = new ConcurrentHashMap<String, SingleDCSelector>();
 	// The map of all Host -> HostConnectionPool 
 	private final ConcurrentHashMap<Host, HostConnectionPool<CL>> hostPools = new ConcurrentHashMap<Host, HostConnectionPool<CL>>();
+	
+	private final ConnectionPoolMonitor cpMonitor; 
 
 	// list of names of remote zones. Used for RoundRobin over remote zones when local zone host is down
 	private final CircularList<String> remoteDCNames = new CircularList<String>(new ArrayList<String>());
@@ -59,12 +62,13 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 	}
 
 
-	public SelectionWIthRemoteZoneFallback(ConcurrentHashMap<Host, HostConnectionPool<CL>> hPools, SingleDCSelectorFactory sFactory) {
+	public SelectionWIthRemoteZoneFallback(ConcurrentHashMap<Host, HostConnectionPool<CL>> hPools, SingleDCSelectorFactory sFactory, ConnectionPoolMonitor monitor) {
 
 		localZone = System.getenv("EC2_AVAILABILITY_ZONE");
 		hostPools.putAll(hPools);
 		selectorFactory = sFactory;
-
+		cpMonitor = monitor;
+		
 		Set<Host> allHosts = hPools.keySet();
 
 		List<Host> localHosts = new ArrayList<Host>();
@@ -114,9 +118,10 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 
 		String key = op.getKey();
 		Host host = localSelector.getHostForKey(key);
-		//System.out.println("KEY: " + key + ", Pprimary HOST: " + host.getHostName());
 
 		if (!isHostAndHostPoolActive(host)) {
+			
+			cpMonitor.incFailover(host, null);
 			return getFallbackConnection(op, duration, unit);
 		}
 
@@ -124,6 +129,11 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 		return hPool.borrowConnection(duration, unit);
 	}
 
+	public Long getKeyHash(String key) {
+		TokenAwareSelector tSelector = (TokenAwareSelector) localSelector;
+		return tSelector.getKeyHash(key);
+	}
+	
 	@Override
 	public Connection<CL> getFallbackConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
 
@@ -171,6 +181,9 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 
 	private boolean isHostAndHostPoolActive(Host host) {
 		if (!host.isUp()) {
+			if (Logger.isDebugEnabled()) {
+				Logger.debug("Host: " + host.getHostName() + " " + host.getStatus());
+			}
 			return false;
 		} else {
 			HostConnectionPool<CL> hPool = hostPools.get(host);

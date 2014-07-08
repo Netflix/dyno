@@ -7,6 +7,8 @@ import com.netflix.config.DynamicPropertyFactory;
 import com.netflix.config.DynamicStringProperty;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancingStrategy;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
+import com.netflix.dyno.connectionpool.impl.RetryNTimes;
+import com.netflix.dyno.connectionpool.impl.health.SimpleErrorMonitorImpl;
 import com.netflix.dyno.contrib.EurekaHostsSupplier;
 import com.netflix.dyno.demo.DynoDriver;
 import com.netflix.dyno.jedis.DynoJedisClient;
@@ -25,10 +27,10 @@ public class DynoRedisDriver extends DynoDriver {
 	private DynoRedisDriver() {
 		super();
 	}
+	
+	public static volatile DynoJedisClient dClientInstance = null;
 
 	public DynoClient dynoClientWrapper = new DynoClient () {
-
-		
 		
 		@Override
 		public void init() {
@@ -39,30 +41,17 @@ public class DynoRedisDriver extends DynoDriver {
 
 			System.out.println("Initing dyno redis client");
 			
-			DynamicIntProperty Port = DynamicPropertyFactory.getInstance().getIntProperty("dyno.driver.port", 22122);
-			DynamicIntProperty MaxConns = DynamicPropertyFactory.getInstance().getIntProperty("dyno.driver.conns", 60);
 			DynamicStringProperty ClusterName = DynamicPropertyFactory.getInstance().getStringProperty("dyno.driver.cluster", "dynomite_redis_puneet");
-			
 			String cluster = ClusterName.get();
-			int port = Port.get();
-			int conns = MaxConns.get();
-			
-			System.out.println("Cluster: " + cluster + ", port: " + port + ", conns: " + conns);
-
-//			client.set(DynoJedisClient.Builder.withName("Demo")
-//						.withDynomiteClusterName(cluster)
-//						.withCPConfig(new ConnectionPoolConfigurationImpl(cluster)
-//									.setPort(port)
-//									.setMaxTimeoutWhenExhausted(1000)
-//									.setMaxConnsPerHost(conns)
-//									.withHostSupplier(new EurekaHostsSupplier(cluster, port))
-//									.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware))
-//						.build());
+			System.out.println("Cluster: " + cluster);
 			
 			DynoJedisClient jClient = new DynoJedisClient.Builder()
 					.withApplicationName("Demo")
 					.withDynomiteClusterName(cluster)
 					.build();
+			
+			dClientInstance = jClient;
+			
 			client.set(jClient);	
 		}
 

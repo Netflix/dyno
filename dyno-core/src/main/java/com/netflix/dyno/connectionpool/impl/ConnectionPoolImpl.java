@@ -101,6 +101,10 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		MonitorConsole.getInstance().addMonitorConsole(cpConfig.getName(), cpMon);
 	}
 	
+	public HostSelectionStrategy<CL> getTokenSelection() {
+		return selectionStrategy;
+	}
+	
 	@Override
 	public boolean addHost(Host host) {
 		return addHost(host, true);
@@ -344,7 +348,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			throw new RuntimeException("LoadBalancing strategy not supported! " + cpConfiguration.getLoadBalancingStrategy().name());
 		}
 		
-		return new SelectionWIthRemoteZoneFallback<CL>(cpMap, sFactory);
+		return new SelectionWIthRemoteZoneFallback<CL>(cpMap, sFactory, cpMonitor);
 	}
 	
 

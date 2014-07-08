@@ -46,6 +46,11 @@ public class TokenAwareSelector implements SingleDCSelector {
 		HostToken hToken = tokenMapper.getToken(keyHash);
 		return hToken != null ? hToken.getHost() : null;
 	}
+	
+	public Long getKeyHash(String key) {
+		Long keyHash = tokenMapper.hash(key);
+		return keyHash;
+	}
 
 	@Override
 	public boolean isEmpty() {
