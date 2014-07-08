@@ -5,11 +5,18 @@ import static com.netflix.dyno.demo.DemoConfig.NumWriters;
 import static com.netflix.dyno.demo.DemoConfig.ReadEnabled;
 import static com.netflix.dyno.demo.DemoConfig.WriteEnabled;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -18,8 +25,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import redis.clients.jedis.Jedis;
+
 import com.netflix.config.DynamicBooleanProperty;
 import com.netflix.config.DynamicIntProperty;
+import com.netflix.dyno.connectionpool.BaseOperation;
+import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy;
+import com.netflix.dyno.connectionpool.impl.lb.SelectionWIthRemoteZoneFallback;
+import com.netflix.dyno.demo.redis.DynoRedisDriver;
 import com.netflix.servo.DefaultMonitorRegistry;
 import com.netflix.servo.annotations.DataSourceType;
 import com.netflix.servo.annotations.Monitor;
@@ -327,5 +341,83 @@ public abstract class DynoDriver {
 		public int getNumWriters() {
 			return writeWorkers.get();
 		}
+	}
+
+	public String keyDistribution() {
+		
+		Map<String, AtomicInteger> map = new HashMap<String, AtomicInteger>();
+		
+		for (int i=0; i<DemoConfig.NumKeys.get(); i++) {
+			
+			String key = "T" + i;
+			String host = getHostForKey(key);
+			
+			AtomicInteger count = map.get(host);
+			if (count == null) {
+				map.put(host, new AtomicInteger(0));
+				count = map.get(host);
+			}
+			
+			count.incrementAndGet();
+		}
+		
+		String s = "";
+		
+		for (String key : map.keySet()) {
+			s += key + ": " + map.get(key).get() + "\n"; 
+		}
+		return s;
+	}
+	
+	public String keyHash() throws IOException {
+
+		String fileName = "/home/poberai_pappytest/keyHash.txt";
+		File file = new File(fileName);
+		BufferedWriter writer = new BufferedWriter(new FileWriter(file));
+
+		try {
+			for (int i=0; i<DemoConfig.NumKeys.get(); i++) {
+
+				String key = "T" + i;
+
+				HostSelectionStrategy<Jedis> selection = DynoRedisDriver.dClientInstance.getConnPool().getTokenSelection();
+				SelectionWIthRemoteZoneFallback<Jedis> rSelection = (SelectionWIthRemoteZoneFallback<Jedis>) selection;
+
+				Long hash = rSelection.getKeyHash(key);
+
+				writer.write(key + ": " + hash + "\n");
+			}
+		} finally {
+			writer.close();
+		}
+		return fileName;
+	}
+
+	private String getHostForKey(final String key) {
+		
+		HostSelectionStrategy<Jedis> selection = DynoRedisDriver.dClientInstance.getConnPool().getTokenSelection();
+		
+		final String name = "Test";
+		
+		BaseOperation<Jedis, String> op = new BaseOperation<Jedis, String>() {
+
+			@Override
+			public String getName() {
+				return name;
+			}
+
+			@Override
+			public String getKey() {
+				return key;
+			}
+			
+		};
+		
+		Connection<Jedis> conn = selection.getConnection(op, 1, TimeUnit.MILLISECONDS);
+		
+		String host = conn.getParentConnectionPool().getHost().getHostName();
+		
+		conn.getParentConnectionPool().returnConnection(conn);
+		return host;
 	}
 }

@@ -37,6 +37,10 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 		this.connPool = pool;
 	}
 	
+	public ConnectionPoolImpl<Jedis> getConnPool() {
+		return (ConnectionPoolImpl<Jedis>) connPool;
+	}
+	
 	private enum OpName {
 		 APPEND, BITCOUNT, BLPOP, BRPOP, DECR, DECRBY, DEL, DUMP, ECHO, EXISTS, EXPIRE, EXPIREAT, GET, GETBIT, GETRANGE, GETSET, 
 		 HDEL, HEXISTS,  HGET, HGETALL, HINCRBY, HINCRBYFLOAT, HKEYS, HLEN, HMGET, HMSET, HSET, HSETNX, HVALS, 

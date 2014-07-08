@@ -199,4 +199,81 @@ public class DynoDataBackfill {
 		}
 	}
 	
+	public void conditionalBackfill() throws Exception {
+		
+		stop.set(false);
+		
+		final long start = System.currentTimeMillis();
+	
+		final int numThreads = DemoConfig.NumBackfill.get(); 
+		final int numKeysPerThread = DemoConfig.NumKeys.get()/numThreads;
+		
+		System.out.println("NUM THREADS: " + numThreads);
+		System.out.println("NUM KEYS: " + DemoConfig.NumKeys.get());
+		System.out.println("NUM KEYS PER TH: " + numKeysPerThread);
+		
+		threadPool = Executors.newFixedThreadPool(numThreads + 1);
+		final CountDownLatch latch = new CountDownLatch(numThreads);
+		final AtomicInteger count = new AtomicInteger(0);
+		final AtomicInteger missCount = new AtomicInteger(0);
+		
+		
+		for (int i=0; i<numThreads; i++) {
+			
+			final int threadId = i; 
+			final int startKey = threadId*numKeysPerThread; 
+			final int endKey = startKey + numKeysPerThread; 
+			
+			threadPool.submit(new Callable<Void>() {
+				
+				@Override
+				public Void call() throws Exception {
+					
+					int k=startKey;
+					
+					while(k<endKey && !stop.get()) {
+						try {
+							String key = "T" + k;
+							
+							String value = client.get(key);
+							if (value == null || value.isEmpty()) {
+								missCount.incrementAndGet();
+								System.out.println("Miss for key: " + key + ", missCount: " + missCount.get());
+								client.set(key, SampleData.getInstance().getRandomValue());
+							}
+							k++;
+							count.incrementAndGet();
+						} catch (Exception e) {
+							Logger.error("Retrying after failure", e);
+						}
+					}
+					
+					latch.countDown();
+					
+					System.out.println("\n\nStopping datafill writer\n\n");
+					return null;
+				}
+			});
+		}
+			
+		threadPool.submit(new Callable<Void>() {
+
+			@Override
+			public Void call() throws Exception {
+
+				while(!Thread.currentThread().isInterrupted() && !stop.get()) {
+					System.out.println("Count so far: " + count.get());
+					Thread.sleep(5000);
+				}
+				System.out.println("\n\nStopping datafill status poller\n\n");
+				return null;
+			}
+		});
+
+		Logger.info("Backfiller waiting on latch");
+		latch.await();
+		Logger.info("Backfiller latch done! in " + (System.currentTimeMillis()-start) + " ms");
+	}
+	
+	
 }

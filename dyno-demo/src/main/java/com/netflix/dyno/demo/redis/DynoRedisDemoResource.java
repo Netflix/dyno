@@ -37,6 +37,22 @@ public class DynoRedisDemoResource {
 		}
 	}
 
+	@Path("/cDataFill/start")
+	@GET
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.TEXT_PLAIN)
+	public String conditionalBackfill() throws Exception {
+
+		Logger.info("Starting dyno data fill"); 
+		try {
+			DynoDataBackfill.Instance.conditionalBackfill();
+			return "data fill done!" + "\n";
+		} catch (Exception e) {
+			Logger.error("Error starting datafill", e);
+			return "dataFill failed!";
+		}
+	}
+	
 	@Path("/dataFill/stop")
 	@GET
 	@Consumes(MediaType.TEXT_PLAIN)
@@ -53,6 +69,37 @@ public class DynoRedisDemoResource {
 		}
 	}
 	
+	@Path("/keyDistribution")
+	@GET
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.TEXT_PLAIN)
+	public String keyDistribution() throws Exception {
+
+		Logger.info("key distribution"); 
+		try {
+			String s = DynoRedisDriver.getInstance().keyDistribution();
+			return "key distribution" + "\n" + s;
+		} catch (Exception e) {
+			Logger.error("Error ", e);
+			return " failed!";
+		}
+	}
+	
+	@Path("/keyHash")
+	@GET
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.TEXT_PLAIN)
+	public String keyHash() throws Exception {
+
+		Logger.info("key distribution"); 
+		try {
+			String s = DynoRedisDriver.getInstance().keyHash();
+			return "key distribution" + "\n" + s;
+		} catch (Exception e) {
+			Logger.error("Error ", e);
+			return " failed!";
+		}
+	}
 
 	@Path("/dataFill/randomWrites")
 	@GET
@@ -177,7 +224,7 @@ public class DynoRedisDemoResource {
 			if (!(e instanceof DynoException)) {
 				e.printStackTrace();
 			}
-			return "\ndyno readSingle failed! " + e.getMessage();
+			return "\ndyno readSingle failed! " + e.getMessage() + "\n";
 		}
 	}
 

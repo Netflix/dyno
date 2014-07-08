@@ -47,7 +47,7 @@ public class ConnectionPoolHealthTracker<CL> {
 					return;
 				}
 					
-				Logger.info("Running, pending pools size: " + reconnectingPools.size());
+				Logger.debug("Running, pending pools size: " + reconnectingPools.size());
 					
 				for (Host host : reconnectingPools.keySet()) {
 						
