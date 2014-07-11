@@ -84,7 +84,8 @@ public abstract class DynoDriver {
 			public void run() {
 				
 				DynoStats stats = DynoStats.getInstance();
-				long success = stats.getReadSuccess(); long fail = stats.getReadFailure();
+				long success = stats.getReadSuccess() + stats.getWriteSuccess(); 
+				long fail = stats.getReadFailure() + stats.getWriteFailure();
 				long total = success + fail;
 				long rps = (total-prevCount.get())/secondsFreq;
 				long sRatio = (total > 0) ? (success * 100L/ (total)) : 0;
