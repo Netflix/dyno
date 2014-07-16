@@ -615,6 +615,11 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 			@Override
 			public void execPing() {
 			}
+
+			@Override
+			public ConnectionContext getContext() {
+				return null;
+			}
 		}
 		
 		private static ConnectionFactory<TestClient> connFactory = new ConnectionFactory<TestClient>() {

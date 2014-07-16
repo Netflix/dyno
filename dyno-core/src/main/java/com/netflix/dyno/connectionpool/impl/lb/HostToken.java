@@ -1,4 +1,6 @@
-package com.netflix.dyno.connectionpool;
+package com.netflix.dyno.connectionpool.impl.lb;
+
+import com.netflix.dyno.connectionpool.Host;
 
 public class HostToken implements Comparable<Long> {
 

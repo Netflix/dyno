@@ -20,6 +20,7 @@ import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy;
+import com.netflix.dyno.connectionpool.impl.lb.SingleDCSelector.SingleDCSelectorFactory;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.MapEntryTransform;
 
@@ -42,25 +43,6 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 	private final CircularList<String> remoteDCNames = new CircularList<String>(new ArrayList<String>());
 
 	private final SingleDCSelectorFactory selectorFactory;
-
-	public interface SingleDCSelector { 
-
-		public void init(String zone, List<Host> hosts);
-
-		public Host getHostForKey(String key);
-
-		public boolean isEmpty();
-
-		public void addHost(Host host);
-
-		public void removeHost(Host host);
-	}
-
-	public interface SingleDCSelectorFactory {
-
-		public SingleDCSelector vendSelector(); 
-	}
-
 
 	public SelectionWIthRemoteZoneFallback(ConcurrentHashMap<Host, HostConnectionPool<CL>> hPools, SingleDCSelectorFactory sFactory, ConnectionPoolMonitor monitor) {
 
@@ -234,5 +216,11 @@ public class SelectionWIthRemoteZoneFallback<CL> implements HostSelectionStrateg
 			map.put(op, connectionForOp);
 		}
 		return map;
+	}
+
+	@Override
+	public void initWithHosts(Map<Host, HostConnectionPool<CL>> hostPools) {
+		// TODO Auto-generated method stub
+		
 	}
 }

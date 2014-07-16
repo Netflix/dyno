@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionFactory;
 import com.netflix.dyno.connectionpool.ConnectionObservor;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
@@ -33,6 +34,7 @@ import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.OperationMonitor;
 import com.netflix.dyno.connectionpool.OperationResult;
+import com.netflix.dyno.connectionpool.RetryPolicy;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
@@ -137,7 +139,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 	@Override
 	public int primeConnections() throws DynoException {
 
-		Logger.info("Priming connection pool for host:" + host + ", conns:" + cpConfig.getMaxConnsPerHost());
+		Logger.info("Priming connection pool for host:" + host + ", with conns:" + cpConfig.getMaxConnsPerHost());
 
 		if(cpState.get() != cpNotInited) {
 			throw new DynoException("Connection pool has already been inited, cannot prime connections for host:" + host);
@@ -156,11 +158,9 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		int successfullyCreated = 0; 
 		
 		for (int i=0; i<cpConfig.getMaxConnsPerHost(); i++) {
-			try { 
-				cpActive.createConnection();
+			boolean success = createConnectionWithReries(); 
+			if (success) {
 				successfullyCreated++;
-			} catch (DynoException e) {
-				Logger.error("Failed to prime connection", e);
 			}
 		}
 		
@@ -169,6 +169,29 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				throw new IllegalStateException("something went wrong with prime connections");
 			}
 		return successfullyCreated;
+	}
+	
+	private boolean createConnectionWithReries() {
+		
+		boolean success = false;
+		RetryPolicy retry = new RetryNTimes.RetryFactory(3).getRetryPolicy();
+		
+		retry.begin();
+		
+		while (retry.allowRetry()) {
+			
+			try {
+				cpActive.createConnection();
+				retry.success();
+				success = true;
+				break;
+			} catch (DynoException e) {
+				Logger.error("Failed to prime connection, will retry", e);
+				retry.failure(e);
+			}
+		}
+		
+		return success;
 	}
 
 	@Override
@@ -458,6 +481,11 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 			@Override
 			public void execPing() {
 				// do nothing
+			}
+
+			@Override
+			public ConnectionContext getContext() {
+				return null;
 			}
 		}
 		

@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionFactory;
 import com.netflix.dyno.connectionpool.ConnectionObservor;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
@@ -28,6 +29,7 @@ import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
+import com.netflix.dyno.connectionpool.impl.ConnectionContextImpl;
 import com.netflix.dyno.connectionpool.impl.FutureOperationalResultImpl;
 import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
 
@@ -101,6 +103,8 @@ public class MemcachedConnectionFactory implements ConnectionFactory<MemcachedCl
 		private final HostConnectionPool<MemcachedClient> mConnPool; 
 		private final MemcachedClient mClient; 
 		
+		private final ConnectionContextImpl context = new ConnectionContextImpl();
+		
 		private SpyMemcachedConnection(HostConnectionPool<MemcachedClient> pool, MemcachedClient client) {
 			this.mConnPool = pool;
 			this.mClient = client;
@@ -136,7 +140,7 @@ public class MemcachedConnectionFactory implements ConnectionFactory<MemcachedCl
 				R result = op.execute(mClient, null); // Note that connection context is not implemented yet
 				return new OperationResultImpl<R>(op.getName(), result, mConnPool.getOperationMonitor())
 												 .attempts(1)
-												 .node(getHost());
+												 .setNode(getHost());
 				
 			} catch (DynoConnectException e) {
 				lastEx.set(e);
@@ -175,6 +179,12 @@ public class MemcachedConnectionFactory implements ConnectionFactory<MemcachedCl
 		@Override
 		public void execPing() {
 			mClient.get(PingKey);
+		}
+
+
+		@Override
+		public ConnectionContext getContext() {
+			return context;
 		}
 	}
 	

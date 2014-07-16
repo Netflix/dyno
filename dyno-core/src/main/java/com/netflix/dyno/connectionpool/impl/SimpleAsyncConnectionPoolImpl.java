@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionFactory;
 import com.netflix.dyno.connectionpool.ConnectionObservor;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
@@ -300,6 +301,11 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 				if (getClass() != obj.getClass()) return false;
 				TestConnection other = (TestConnection) obj;
 				return id != null ? id.equals(other.id) : other.id == null;
+			}
+
+			@Override
+			public ConnectionContext getContext() {
+				return null;
 			}
 		}
 		

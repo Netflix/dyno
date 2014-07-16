@@ -46,12 +46,11 @@ import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl.ErrorRateMonitorConfigImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl.HostConnectionPoolFactory.Type;
+import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy.HostSelectionStrategyFactory;
 import com.netflix.dyno.connectionpool.impl.health.ConnectionPoolHealthTracker;
-import com.netflix.dyno.connectionpool.impl.lb.RoundRobinSelector;
-import com.netflix.dyno.connectionpool.impl.lb.SelectionWIthRemoteZoneFallback;
-import com.netflix.dyno.connectionpool.impl.lb.SelectionWIthRemoteZoneFallback.SingleDCSelector;
-import com.netflix.dyno.connectionpool.impl.lb.SelectionWIthRemoteZoneFallback.SingleDCSelectorFactory;
-import com.netflix.dyno.connectionpool.impl.lb.TokenAwareSelector;
+import com.netflix.dyno.connectionpool.impl.lb.HostSelectionWithFallback;
+import com.netflix.dyno.connectionpool.impl.lb.RoundRobinSelection;
+import com.netflix.dyno.connectionpool.impl.lb.TokenAwareSelection;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 
@@ -241,6 +240,10 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				}
 				OperationResult<R> result = connection.execute(op);
 				
+				// Add context to the result from the successful execution
+				result.setNode(connection.getHost())
+					  .addMetadata(connection.getContext().getAll());
+				
 				retry.success();
 				cpMonitor.incOperationSuccess(connection.getHost(), System.currentTimeMillis()-startTime);
 				
@@ -268,6 +271,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				throw new RuntimeException(t);
 			} finally {
 				if (connection != null) {
+					connection.getContext().reset();
 					connection.getParentConnectionPool().returnConnection(connection);
 				}
 			}
@@ -313,42 +317,46 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 		boolean success = started.compareAndSet(false, true);
 		if (success) {
-			for (Host host : hostsUp) {
+				for (Host host : hostsUp) {
 				addHost(host, false);  // don't init the load balancer yet
 			}
+				
 			selectionStrategy = initSelectionStrategy();
+			
 			cpHealthTracker.start();
 		}
 		
 		return getEmptyFutureTask(true);
 	}
 	
-	private SelectionWIthRemoteZoneFallback<CL> initSelectionStrategy() {
+	private HostSelectionStrategy<CL> initSelectionStrategy() {
 		
-		SingleDCSelectorFactory sFactory = null; 
+		HostSelectionStrategyFactory<CL> sFactory = null; 
 		
 		switch (cpConfiguration.getLoadBalancingStrategy()) {
 		case RoundRobin:
-			sFactory = new SingleDCSelectorFactory() {
+			sFactory = new HostSelectionStrategyFactory<CL>() {
 				@Override
-				public SingleDCSelector vendSelector() {
-					return new RoundRobinSelector();
+				public HostSelectionStrategy<CL> vendSelectionStrategy() {
+					return new RoundRobinSelection<CL>();
 				}
 			};
 			break;
 		case TokenAware:
-			sFactory = new SingleDCSelectorFactory() {
+			sFactory = new HostSelectionStrategyFactory<CL>() {
 				@Override
-				public SingleDCSelector vendSelector() {
-					return new TokenAwareSelector();
+				public HostSelectionStrategy<CL> vendSelectionStrategy() {
+					return new TokenAwareSelection<CL>();
 				}
 			};
 			break;
 		default :
 			throw new RuntimeException("LoadBalancing strategy not supported! " + cpConfiguration.getLoadBalancingStrategy().name());
 		}
-		
-		return new SelectionWIthRemoteZoneFallback<CL>(cpMap, sFactory, cpMonitor);
+
+		HostSelectionWithFallback<CL> selection = new HostSelectionWithFallback<CL>(sFactory, cpMonitor);
+		selection.initWithHosts(cpMap);
+		return selection;
 	}
 	
 
@@ -458,6 +466,11 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 			@Override
 			public void execPing() {
+			}
+
+			@Override
+			public ConnectionContext getContext() {
+				return null;
 			}
 		}
 		

@@ -83,4 +83,10 @@ public interface Connection<CL> {
      * This is primarily used for active monitoring so that stale/bad connections to Hosts can be recycled.
      */
     public void execPing();
+    
+    /**
+     * Can be used by different layers within dyno to add valuable information to the Connection.
+     * @return ConnectionContext
+     */
+    public ConnectionContext getContext();
 }

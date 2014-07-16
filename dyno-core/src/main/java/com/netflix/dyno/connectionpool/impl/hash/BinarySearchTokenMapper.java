@@ -8,7 +8,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.netflix.dyno.connectionpool.HashPartitioner;
-import com.netflix.dyno.connectionpool.HostToken;
+import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 
 public class BinarySearchTokenMapper implements HashPartitioner {
 
@@ -61,10 +62,36 @@ public class BinarySearchTokenMapper implements HashPartitioner {
 	
 	public void addHostToken(HostToken hostToken) {
 
-		tokenMap.put(hostToken.getToken(), hostToken);
-		initBinarySearch();
+		HostToken prevToken = tokenMap.put(hostToken.getToken(), hostToken);
+		if (prevToken == null) {
+			initBinarySearch();
+		}
 	}
 	
+	public void remoteHostToken(HostToken hostToken) {
+
+		HostToken prevToken = tokenMap.remove(hostToken.getToken());
+		if (prevToken != null) {
+			initBinarySearch();
+		}
+	}
+	
+	public void removeHost(Host host) {
+		
+		HostToken theToken = null;
+		
+		for (HostToken token : tokenMap.values()) {
+			if (token.getHost().getHostName().equals(host.getHostName())) {
+				theToken = token;
+				break;
+			}
+		}
+		
+		if (theToken != null) {
+			remoteHostToken(theToken);
+		}
+	}
+
 	private void initBinarySearch() {
 		List<Long> tokens = new ArrayList<Long>(tokenMap.keySet());
 		Collections.sort(tokens);

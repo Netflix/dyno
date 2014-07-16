@@ -68,7 +68,7 @@ public class FutureOperationalResultImpl<R> implements Future<OperationResult<R>
 	}
 	
 	public FutureOperationalResultImpl<R> node(Host node) {
-		opResult.node(node);
+		opResult.setNode(node);
 		return this;
 	}
 	

@@ -10,6 +10,7 @@ import redis.clients.jedis.exceptions.JedisConnectionException;
 
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionFactory;
 import com.netflix.dyno.connectionpool.ConnectionObservor;
 import com.netflix.dyno.connectionpool.Host;
@@ -21,6 +22,7 @@ import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
+import com.netflix.dyno.connectionpool.impl.ConnectionContextImpl;
 import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
 
 public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
@@ -43,6 +45,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 
 		private final HostConnectionPool<Jedis> hostPool;
 		private final Jedis jedisClient; 
+		private final ConnectionContextImpl context = new ConnectionContextImpl();
 		
 		private DynoConnectException lastDynoException;
 		
@@ -121,6 +124,11 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 			if (result == null || result.isEmpty()) {
 				throw new DynoConnectException("Unsuccessful ping, got empty result");
 			}
+		}
+
+		@Override
+		public ConnectionContext getContext() {
+			return context;
 		}
 	}
 }

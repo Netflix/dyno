@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -14,10 +15,13 @@ public class DynoBinarySearch<T extends Comparable<T>> {
 	
 	private final List<DynoTokenRange<T>> rangeList = new ArrayList<DynoTokenRange<T>>();
 	
+	private final AtomicBoolean listEmpty = new AtomicBoolean(false);
+	
 	public DynoBinarySearch(List<T> list) {
 
 		if (list.isEmpty()) {
-			throw new RuntimeException("List must not be empty");
+			listEmpty.set(true);
+			return;
 		}
 
 		if (list.size() == 1) {
@@ -39,6 +43,9 @@ public class DynoBinarySearch<T extends Comparable<T>> {
 	public T getTokenOwner(T token) {
 		
 		// Some quick boundary checks
+		if (listEmpty.get()) {
+			return null;
+		}
 		
 		if (rangeList.size() == 1) {
 			return rangeList.get(0).getTokenOwner();
