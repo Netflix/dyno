@@ -11,10 +11,10 @@ import net.spy.memcached.MemcachedNode;
 import org.apache.commons.lang.NotImplementedException;
 
 import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.HostToken;
 import com.netflix.dyno.connectionpool.impl.hash.BinarySearchTokenMapper;
 import com.netflix.dyno.connectionpool.impl.hash.Murmur1HashPartitioner;
 import com.netflix.dyno.connectionpool.impl.lb.CircularList;
+import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.connectionpool.impl.lb.TokenMapSupplierImpl;
 import com.netflix.dyno.memcache.SpyMemcachedConnectionFactory.InstrumentedLocator;
 

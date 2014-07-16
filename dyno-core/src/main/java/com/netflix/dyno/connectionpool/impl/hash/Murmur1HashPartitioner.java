@@ -10,7 +10,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.netflix.dyno.connectionpool.HashPartitioner;
-import com.netflix.dyno.connectionpool.HostToken;
+import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.connectionpool.impl.utils.IOUtilities;
 
 public class Murmur1HashPartitioner implements HashPartitioner {

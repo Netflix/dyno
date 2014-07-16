@@ -4,10 +4,8 @@ import java.util.Collection;
 import java.util.List;
 
 import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.HostToken;
 import com.netflix.dyno.connectionpool.impl.hash.BinarySearchTokenMapper;
 import com.netflix.dyno.connectionpool.impl.hash.Murmur1HashPartitioner;
-import com.netflix.dyno.connectionpool.impl.lb.SelectionWIthRemoteZoneFallback.SingleDCSelector;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 

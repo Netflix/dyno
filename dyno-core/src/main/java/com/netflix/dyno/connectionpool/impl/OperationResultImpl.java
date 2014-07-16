@@ -1,5 +1,7 @@
 package com.netflix.dyno.connectionpool.impl;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -17,6 +19,7 @@ public class OperationResultImpl<R> implements OperationResult<R> {
 	private long duration = 0;
 	private int attempts = 0;
 	private final OperationMonitor opMonitor; 
+	private final ConcurrentHashMap<String, String> metadata = new ConcurrentHashMap<String, String>();
 	
 	public OperationResultImpl(String name, R r, OperationMonitor monitor) {
 		opName = name;
@@ -62,11 +65,12 @@ public class OperationResultImpl<R> implements OperationResult<R> {
 	}
 
 	@Override
-	public void setAttemptsCount(int count) {
+	public OperationResultImpl<R> setAttemptsCount(int count) {
 		attempts = count;
+		return this;
 	}
 
-	public OperationResultImpl<R> node(Host h) {
+	public OperationResultImpl<R> setNode(Host h) {
 		host = h;
 		return this;
 	}
@@ -85,10 +89,30 @@ public class OperationResultImpl<R> implements OperationResult<R> {
 	}
 	
 	@Override
-	public void setLatency(long time, TimeUnit unit) {
+	public OperationResultImpl<R> setLatency(long time, TimeUnit unit) {
 		this.duration = TimeUnit.MILLISECONDS.convert(time, unit);
 		if (opMonitor != null) {
 			opMonitor.recordLatency(opName, time, unit);
 		}
+		return this;
+	}
+
+	@Override
+	public Map<String, String> getMetadata() {
+		return metadata;
+	}
+
+	@Override
+	public OperationResultImpl<R> addMetadata(String key, String value) {
+		metadata.put(key, value);
+		return this;
+	}
+
+	@Override
+	public OperationResultImpl<R> addMetadata(Map<String, Object> map) {
+		for (String key : map.keySet()) {
+			metadata.put(key, map.get(key).toString());
+		}
+		return this;
 	}
 }

@@ -2066,6 +2066,9 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 		throw new NotImplementedException("not yet implemented");
 	}
 
+	public void stopClient() {
+		this.connPool.shutdown();
+	}
 
 	public static class Builder {
 		
@@ -2109,7 +2112,6 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 			assert(clusterName != null);
 			
 			if (cpConfig == null) {
-				//cpConfig = new ConnectionPoolConfigurationImpl(appName);
 				cpConfig = new ArchaiusConnectionPoolConfiguration(appName);
 			}
 			

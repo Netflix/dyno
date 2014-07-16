@@ -5,7 +5,7 @@ import java.nio.charset.Charset;
 import java.util.List;
 
 import com.netflix.dyno.connectionpool.HashPartitioner;
-import com.netflix.dyno.connectionpool.HostToken;
+import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 
 public class Murmur2HashPartitioner implements HashPartitioner {
 	

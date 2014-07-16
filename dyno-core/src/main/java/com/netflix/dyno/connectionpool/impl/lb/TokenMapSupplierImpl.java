@@ -6,11 +6,11 @@ import static org.mockito.Mockito.when;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostSupplier;
-import com.netflix.dyno.connectionpool.HostToken;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
@@ -89,23 +88,20 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 	@Override
 	public List<HostToken> getTokens() {
 
-//		String jsonPayload = getHttpResponseWithRetries();
-//		return parseTokenListFromJson(jsonPayload);
-		
-		// Doing this since not all tokens are receied from an individual call to a dynomite server
+		// Doing this since not all tokens are received from an individual call to a dynomite server
 		// hence trying them all
-		Map<Long, HostToken> allTokens = new HashMap<Long, HostToken>();
+		Set<HostToken> allTokens = new HashSet<HostToken>();
 		
 		for (Host host : hosts) {
 			try {
 				List<HostToken> hostTokens = parseTokenListFromJson(getResponseViaHttp(host.getHostName()));
 				for (HostToken hToken : hostTokens) {
-					allTokens.put(hToken.getToken(), hToken);
+					allTokens.add(hToken);
 				}
 			} catch (Exception e) {
 			}
 		}
-		return new ArrayList<HostToken>(allTokens.values());
+		return new ArrayList<HostToken>(allTokens);
 	}
 	
 	public HostToken getTokenForHost(final Host host) {

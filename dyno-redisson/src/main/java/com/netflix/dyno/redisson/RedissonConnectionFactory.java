@@ -10,6 +10,7 @@ import com.lambdaworks.redis.RedisAsyncConnection;
 import com.lambdaworks.redis.RedisClient;
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionFactory;
 import com.netflix.dyno.connectionpool.ConnectionObservor;
 import com.netflix.dyno.connectionpool.Host;
@@ -19,6 +20,7 @@ import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
+import com.netflix.dyno.connectionpool.impl.ConnectionContextImpl;
 import com.netflix.dyno.connectionpool.impl.FutureOperationalResultImpl;
 import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
 
@@ -43,6 +45,8 @@ public class RedissonConnectionFactory implements ConnectionFactory<RedisAsyncCo
 		private RedisAsyncConnection<String, String> rConn = null;
 		private final AtomicReference<DynoConnectException> lastEx = new AtomicReference<DynoConnectException>(null);
 
+		private final ConnectionContextImpl context = new ConnectionContextImpl();
+		
 		public RedissonConnection(HostConnectionPool<RedisAsyncConnection<String, String>> hPool, EventLoopGroup eventGroupLoop) {
 			this.hostPool = hPool;
 			Host host = hostPool.getHost();
@@ -55,7 +59,7 @@ public class RedissonConnectionFactory implements ConnectionFactory<RedisAsyncCo
 				R result = op.execute(rConn, null); // Note that connection context is not implemented yet
 				return new OperationResultImpl<R>(op.getName(), result, hostPool.getOperationMonitor())
 												 .attempts(1)
-												 .node(getHost());
+												 .setNode(getHost());
 				
 			} catch (DynoConnectException e) {
 				lastEx.set(e);
@@ -111,6 +115,10 @@ public class RedissonConnectionFactory implements ConnectionFactory<RedisAsyncCo
 				throw new DynoConnectException(e);
 			}
 		}
-		
+
+		@Override
+		public ConnectionContext getContext() {
+			return context;
+		}
 	}
 }
