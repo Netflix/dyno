@@ -314,6 +314,11 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		if (hostsUp == null || hostsUp.isEmpty()) {
 			throw new NoAvailableHostsException("Host Supplier found no available hosts");
 		}
+		
+		// Set the Port on every host
+		for (Host host : hostsUp) {
+			host.setPort(cpConfiguration.getPort());
+		}
 
 		boolean success = started.compareAndSet(false, true);
 		if (success) {
