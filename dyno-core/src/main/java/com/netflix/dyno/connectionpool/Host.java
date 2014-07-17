@@ -5,7 +5,7 @@ import java.net.InetSocketAddress;
 public class Host {
 
 	private final String name;
-	private final int port;
+	private int port;
 	private Status status = Status.Down;
 	private InetSocketAddress socketAddress = null;
 	
@@ -19,11 +19,19 @@ public class Host {
 		this(name, port, Status.Down);
 	}
 	
+	public Host(String name, Status status) {
+		this.name = name;
+		this.port = -1;
+		this.status = status;
+	}
+
 	public Host(String name, int port, Status status) {
 		this.name = name;
 		this.port = port;
 		this.status = status;
-		this.socketAddress = new InetSocketAddress(name, port);
+		if (port != -1) {
+			this.socketAddress = new InetSocketAddress(name, port);
+		}
 	}
 
 	public String getHostName() {
@@ -34,6 +42,12 @@ public class Host {
 		return port;
 	}
 	
+	public Host setPort(int p) {
+		this.port = p;
+		this.socketAddress = new InetSocketAddress(name, port);
+		return this;
+	}
+
 	public Status getStatus() {
 		return status;
 	}
