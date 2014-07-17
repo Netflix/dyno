@@ -36,12 +36,19 @@ public class EurekaHostsSupplier implements HostSupplier {
 	// The C* cluster name for discovering nodes
 	private final String applicationName;
 	private final int port;
+	private DiscoveryClient discoveryClient = null;
 	
 	private final AtomicReference<List<Host>> cachedRef = new AtomicReference<List<Host>>(null);
 	
 	public EurekaHostsSupplier(String applicationName, int cpPort) {
 		this.applicationName = applicationName.toUpperCase();
 		this.port = cpPort;
+	}
+
+	public EurekaHostsSupplier(String applicationName, int cpPort, DiscoveryClient dClient) {
+		this.applicationName = applicationName.toUpperCase();
+		this.port = cpPort;
+		this.discoveryClient = dClient;
 	}
 
 	@Override
@@ -59,8 +66,10 @@ public class EurekaHostsSupplier implements HostSupplier {
 	
 	private List<Host> getUpdateFromEureka() {
 		
-		DiscoveryClient discoveryClient = null;
-		discoveryClient = LibInstanceHolder.getDiscoveryClient();
+		if (discoveryClient == null) {
+			discoveryClient = LibInstanceHolder.getDiscoveryClient();
+		}
+		
 		if (discoveryClient == null) {
 			Logger.error("Error getting discovery client");
 			throw new RuntimeException("Failed to create discovery client");
