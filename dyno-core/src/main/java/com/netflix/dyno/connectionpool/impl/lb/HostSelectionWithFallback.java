@@ -90,7 +90,7 @@ public class HostSelectionWithFallback<CL> implements HostSelectionStrategy<CL> 
 		Connection<CL> connection = null; 
 
 		try {
-			localSelector.getConnection(op, duration, unit);
+			connection = localSelector.getConnection(op, duration, unit);
 		} catch (NoAvailableHostsException e) {
 			cpMonitor.incOperationFailure(null, e);
 		} catch (PoolExhaustedException e) {
