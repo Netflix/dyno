@@ -39,7 +39,7 @@ public class EurekaHostsSupplier implements HostSupplier {
 	
 	private final AtomicReference<List<Host>> cachedRef = new AtomicReference<List<Host>>(null);
 	
-	public EurekaHostsSupplier(String applicationName, int cpPort) {
+	public EurekaHostsSupplier(String applicationName) {
 		this.applicationName = applicationName.toUpperCase();
 	}
 
