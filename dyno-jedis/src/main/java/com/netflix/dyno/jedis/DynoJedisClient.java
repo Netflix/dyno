@@ -16,6 +16,7 @@ import redis.clients.jedis.SortingParams;
 import redis.clients.jedis.Tuple;
 import redis.clients.jedis.ZParams;
 
+import com.netflix.discovery.DiscoveryClient;
 import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionPool;
 import com.netflix.dyno.connectionpool.HostSupplier;
@@ -2077,6 +2078,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 		private int port = -1;
 		private ConnectionPoolConfigurationImpl cpConfig;
 		private HostSupplier hostSupplier;
+		private DiscoveryClient discoveryClient;
 		
 		public Builder() {
 		}
@@ -2106,6 +2108,11 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 			return this;
 		}
 
+		public Builder withDiscoveryClient(DiscoveryClient client) {
+			discoveryClient = client;
+			return this;
+		}
+
 		public DynoJedisClient build() {
 
 			assert(appName != null);
@@ -2120,7 +2127,11 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 			}
 			
 			if (hostSupplier == null) {
-				hostSupplier = new EurekaHostsSupplier(clusterName, cpConfig.getPort());
+				if(discoveryClient == null){
+					hostSupplier = new EurekaHostsSupplier(clusterName);
+				} else {
+					hostSupplier = new EurekaHostsSupplier(clusterName, discoveryClient);
+				}
 			}
 			
 			cpConfig.withHostSupplier(hostSupplier);
