@@ -28,6 +28,18 @@ public class RoundRobinSelection<CL> implements HostSelectionStrategy<CL> {
 	@Override
 	public Connection<CL> getConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
 
+		int n = circularList.getSize();
+		Connection<CL> connection = null;
+		
+		while ((n > 0)  && (connection == null)) {
+			connection = getNextConnection(duration, unit);
+			n--;
+		}
+		return connection;
+	}
+	
+	private Connection<CL> getNextConnection(int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
+
 		Host host = circularList.getNextElement();
 
 		HostConnectionPool<CL> hostPool = hostPools.get(host);

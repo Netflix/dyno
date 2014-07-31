@@ -17,9 +17,11 @@ import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
+import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
+import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
 import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
@@ -88,21 +90,37 @@ public class HostSelectionWithFallback<CL> implements HostSelectionStrategy<CL> 
 	public Connection<CL> getConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
 
 		Connection<CL> connection = null; 
-
+		DynoConnectException lastEx = null;
+		
 		try {
-			localSelector.getConnection(op, duration, unit);
+			connection = localSelector.getConnection(op, duration, unit);
 		} catch (NoAvailableHostsException e) {
+			lastEx = e;
+			cpMonitor.incOperationFailure(null, e);
+		} catch (PoolTimeoutException e) {
+			lastEx = e;
 			cpMonitor.incOperationFailure(null, e);
 		} catch (PoolExhaustedException e) {
+			lastEx = e;
 			cpMonitor.incOperationFailure(null, e);
 		}
 
 		if (!isConnectionPoolActive(connection)) {
+			
 			Host host = connection != null ? connection.getHost() : null;
 			cpMonitor.incFailover(host, null);
-			return getFallbackConnection(op, duration, unit);
-		} else {
+			
+			connection = getFallbackConnection(op, duration, unit);
+		}
+		
+		if (connection != null) {
 			return connection;
+		}
+		
+		if (lastEx != null) {
+			throw lastEx;
+		} else {
+			throw new PoolExhaustedException("No available connections in connection pool");
 		}
 	}
 
@@ -141,7 +159,7 @@ public class HostSelectionWithFallback<CL> implements HostSelectionStrategy<CL> 
 			if (lastEx != null) {
 				throw lastEx;
 			} else {
-				throw new NoAvailableHostsException("Local zone host is down and no remote zone hosts for fallback");
+				throw new PoolExhaustedException("Local zone host is down and no remote zone hosts for fallback");
 			}
 		}
 

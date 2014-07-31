@@ -78,6 +78,11 @@ public class CircularList<T> {
 		return iList != null ? iList.getList() : null;
 	}
 	
+	public int getSize() {
+		InnerList iList = ref.get();
+		return iList != null ? iList.getList().size() : 0;
+	}
+
 	private class InnerList { 
 		
 		private List<T> list = new ArrayList<T>();
