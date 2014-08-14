@@ -1,3 +1,18 @@
+/*******************************************************************************
+ * Copyright 2011 Netflix
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl.health;
 
 import java.util.ArrayList;
@@ -22,8 +37,15 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.netflix.dyno.connectionpool.exception.DynoException;
-import com.netflix.dyno.connectionpool.impl.utils.RateLimiterUtil;
+import com.netflix.dyno.connectionpool.impl.utils.RateLimitUtil;
 
+/**
+ * Class that tracks the rate at which events occur over a specified rolling time window (in seconds)
+ * This is useful for tracking error rates from {@link ErrorRateMonitor}
+ * 
+ * @author poberai
+ *
+ */
 public class RateTracker {
 	
 	private final AtomicReference<BucketCreator> bucketCreateLock = new AtomicReference<BucketCreator>(null);
@@ -40,7 +62,6 @@ public class RateTracker {
 	public void trackRate() {
 		trackRate(1);
 	}
-	
 	
 	public void trackRate(int count) {
 	
@@ -73,6 +94,7 @@ public class RateTracker {
 					bucketCreateLock.get().futureBucket.get(20, TimeUnit.MILLISECONDS);
 				} catch (TimeoutException e) {
 					//return true;
+					e.printStackTrace();
 				} catch (Exception e) {
 					throw new DynoException(e);
 				}
@@ -280,7 +302,7 @@ public class RateTracker {
 			int numThreads = 5; 
 			ExecutorService threadPool = Executors.newFixedThreadPool(numThreads);
 			
-			final AtomicReference<RateLimiterUtil> limiter = new AtomicReference<RateLimiterUtil>(RateLimiterUtil.create(100));
+			final AtomicReference<RateLimitUtil> limiter = new AtomicReference<RateLimitUtil>(RateLimitUtil.create(100));
 			
 			final AtomicBoolean stop = new AtomicBoolean(false);
 			
@@ -299,10 +321,10 @@ public class RateTracker {
 						
 						barrier.await();
 						while (!stop.get() && !Thread.currentThread().isInterrupted()) {
-							limiter.get().acquire();
-							tracker.trackRate(1);
-							
-							totalOps.incrementAndGet();
+							if (limiter.get().acquire()){
+								tracker.trackRate(1);
+								totalOps.incrementAndGet();
+							}
 						}
 						latch.countDown();
 						return null;
@@ -314,19 +336,19 @@ public class RateTracker {
 
 			Thread.sleep(4000);
 			System.out.println("Changing rate to 120");
-			limiter.set(RateLimiterUtil.create(120));
+			limiter.set(RateLimitUtil.create(120));
 			
 			Thread.sleep(4000);
 			System.out.println("Changing rate to 80");
-			limiter.set(RateLimiterUtil.create(80));
+			limiter.set(RateLimitUtil.create(80));
 
 			Thread.sleep(4000);
 			System.out.println("Changing rate to 200");
-			limiter.set(RateLimiterUtil.create(200));
+			limiter.set(RateLimitUtil.create(200));
 
 			Thread.sleep(4000);
 			System.out.println("Changing rate to 100");
-			limiter.set(RateLimiterUtil.create(100));
+			limiter.set(RateLimitUtil.create(100));
 
 			stop.set(true);
 			
@@ -345,6 +367,10 @@ public class RateTracker {
 			// Remove the first bucket since it's essentially unreliable since that is when the test had stopped.
 			allBuckets.remove(0);
 			
+			for (Bucket b : allBuckets) {
+				System.out.print(" " + b.count());
+			}
+			System.out.println("");
 			Assert.assertTrue("P diff failed",  10 >= percentageDiff(200, allBuckets.get(0).count()));
 			Assert.assertTrue("P diff failed",  10 >= percentageDiff(200, allBuckets.get(1).count()));
 			Assert.assertTrue("P diff failed",  10 >= percentageDiff(200, allBuckets.get(2).count()));
@@ -363,7 +389,9 @@ public class RateTracker {
 		}
 		
 		private int percentageDiff(int expected, int result) {
-			return  expected == 0 ? 0 : Math.abs(expected-result)*100/expected;
+			int pDiff =   expected == 0 ? 0 : Math.abs(expected-result)*100/expected;
+			System.out.println("Expected: " + expected  + " pDiff: " + pDiff);  
+			return pDiff;
 		}
 	}
 }

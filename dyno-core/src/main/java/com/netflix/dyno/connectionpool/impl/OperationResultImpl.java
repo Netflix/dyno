@@ -1,3 +1,18 @@
+/*******************************************************************************
+ * Copyright 2011 Netflix
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
 import java.util.Map;
@@ -5,11 +20,23 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.junit.Assert;
+
+import org.junit.Test;
+
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.OperationMonitor;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 
+/**
+ * Impl for {@link OperationResult}
+ * It tracks operaiton result, op attempts, latency, execution host etc
+ * 
+ * @author poberai
+ *
+ * @param <R>
+ */
 public class OperationResultImpl<R> implements OperationResult<R> {
 
 	private final String opName;
@@ -114,5 +141,28 @@ public class OperationResultImpl<R> implements OperationResult<R> {
 			metadata.put(key, map.get(key).toString());
 		}
 		return this;
+	}
+	
+	public static class UnitTest {
+		
+		@Test
+		public void testProcess() throws Exception {
+			
+			OperationMonitor monitor = new LastOperationMonitor();
+			OperationResultImpl<Integer> opResult = new OperationResultImpl<Integer>("test", 11, monitor);
+			Host host = new Host("testHost", 1234);
+			
+			opResult.attempts(2)
+			        .addMetadata("foo", "f1").addMetadata("bar", "b1")
+			        .setLatency(10, TimeUnit.MILLISECONDS)
+			        .setNode(host);
+			
+			Assert.assertEquals(2, opResult.getAttemptsCount());
+			Assert.assertEquals(10, opResult.getLatency());
+			Assert.assertEquals(10, opResult.getLatency(TimeUnit.MILLISECONDS));
+			Assert.assertEquals(host, opResult.getNode());
+			Assert.assertEquals("f1", opResult.getMetadata().get("foo"));
+			Assert.assertEquals("b1", opResult.getMetadata().get("bar"));
+		}
 	}
 }

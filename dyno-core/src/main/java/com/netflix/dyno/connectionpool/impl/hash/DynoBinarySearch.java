@@ -1,3 +1,18 @@
+/*******************************************************************************
+ * Copyright 2011 Netflix
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl.hash;
 
 import java.util.ArrayList;
@@ -11,6 +26,38 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Assert;
 import org.junit.Test;
 
+import com.netflix.dyno.connectionpool.HashPartitioner;
+
+/**
+ * Utility class that maps a given token hashed from a key using a {@link HashPartitioner}
+ * to a dynomite server on the dynomite topology ring.
+ * 
+ * Note that as long as the Token T implements the comparable interface this class can be used 
+ * to perform the bin search on other homogeneous lists as well. 
+ * 
+ * Here are the imp details of the mapping algorithm
+ *    1.  If a hashed token directly maps to a point on that ring, then that point is chosen.
+ *    2.  If a hashed token maps between 2 points A and B where A > B then B is chosen as the owner of the token
+ *    3.  All hashed tokens that go past the last point on the ring are mapped to the first point on the ring. 
+ *    
+ *    e.g 
+ *    
+ *    Consider the following points on the ring. 
+ *    
+ *    10, 20, 30, 40, 50, 60, 70, 80, 90, 100
+ *    
+ *    Elements 0 .. 9 --> 10
+ *    10 --> 10
+ *    15 --> 20
+ *    30 --> 30
+ *    58 --> 60
+ *    100 --> 100
+ *    100 +  --> 10
+ *    
+ * @author poberai
+ *
+ * @param <T>
+ */
 public class DynoBinarySearch<T extends Comparable<T>> {
 	
 	private final List<DynoTokenRange<T>> rangeList = new ArrayList<DynoTokenRange<T>>();
@@ -122,8 +169,6 @@ public class DynoBinarySearch<T extends Comparable<T>> {
 		@Override
 		public int compareTo(T key) {
 
-			//System.out.println("Key: " + key + ", start: " + start + ", end: " + end);
-			
 			// Boundary checks, to be safe!
 			
 			if (isFirstRange) {

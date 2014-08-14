@@ -34,7 +34,9 @@ public class TokenAwareLocator extends InstrumentedLocator {
 		
 		this.connFactory = cFactory;
 		
-		List<HostToken> allHostTokens = new TokenMapSupplierImpl(cFactory.getCPConfig().getHostSupplier()).getTokens();
+		TokenMapSupplierImpl tokenSupplier = new TokenMapSupplierImpl();
+		tokenSupplier.initWithHosts(cFactory.getCPConfig().getHostSupplier().getHosts());
+		List<HostToken> allHostTokens = tokenSupplier.getTokens();
 		
 		String localZone = System.getenv("EC2_AVAILABILITY_ZONE");
 
@@ -100,7 +102,7 @@ public class TokenAwareLocator extends InstrumentedLocator {
 		
 		Long keyHash = tokenMapper.hash(key);
 		System.out.println("\nHashKey: " + keyHash);
-		HostToken hostToken = tokenMapper.getToken(hostTokens, keyHash);
+		HostToken hostToken = null; //tokenMapper.getToken(hostTokens, keyHash);
 		System.out.println("HostToken: " + hostToken +"\n");
 		return connFactory.getMemcachedNodeForHost(hostToken.getHost());
 	}

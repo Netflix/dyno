@@ -1,3 +1,18 @@
+/*******************************************************************************
+ * Copyright 2011 Netflix
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
 import java.util.ArrayList;
@@ -56,6 +71,33 @@ import com.netflix.dyno.connectionpool.impl.lb.TokenAwareSelection;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 
+/**
+ * Main implementation class for {@link ConnectionPool}
+ * The pool deals with a bunch of other components and brings together all the functionality for Dyno. Hence this is where all the action happens. 
+ * 
+ * Here are the top salient features of this class. 
+ * 
+ *     1. Manages a collection of {@link HostConnectionPool}s for all the {@link Host}s that it receives from the {@link HostSupplier}
+ * 
+ *     2. Manages adding and removing hosts as dictated by the HostSupplier.
+ *  
+ *     3. Enables execution of {@link Operation} using a {@link Connection} borrowed from the {@link HostConnectionPool}s
+ * 
+ *     4. Employs a {@link HostSelectionStrategy} (basically Round Robin or Token Aware) when executing operations
+ * 
+ *     5. Uses a health check monitor for tracking error rates from the execution of operations. The health check monitor can then decide 
+ *        to recycle a given HostConnectionPool, and execute requests using fallback HostConnectionPools for remote DCs.
+ *        
+ *     6. Uses {@link RetryPolicy} when executing operations for better resilience against transient failures.    
+ * 
+ * @see {@link HostSupplier} {@link Host} {@link HostSelectionStrategy}
+ * @see {@link Connection} {@link ConnectionFactory} {@link ConnectionPoolConfiguration} {@link ConnectionPoolMonitor}
+ * @see {@link ConnectionPoolHealthTracker} 
+ * 
+ * @author poberai
+ *
+ * @param <CL>
+ */
 public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 	private static final Logger Logger = LoggerFactory.getLogger(ConnectionPoolImpl.class);
@@ -361,7 +403,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			sFactory = new HostSelectionStrategyFactory<CL>() {
 				@Override
 				public HostSelectionStrategy<CL> vendSelectionStrategy() {
-					return new TokenAwareSelection<CL>();
+					return new TokenAwareSelection<CL>(cpConfiguration.getTokenSupplier());
 				}
 			};
 			break;
@@ -413,6 +455,46 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		}
 	}
 	
+	@Override
+	public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException {
+		
+		DynoException lastException = null;
+		Connection<CL> connection = null;
+		long startTime = System.currentTimeMillis();
+		
+		try { 
+			connection = 
+					selectionStrategy.getConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
+			
+			Future<OperationResult<R>> futureResult = connection.executeAsync(op);
+			
+			cpMonitor.incOperationSuccess(connection.getHost(), System.currentTimeMillis()-startTime);
+			
+			return futureResult; 
+			
+		} catch(NoAvailableHostsException e) {
+			cpMonitor.incOperationFailure(null, e);
+			throw e;
+		} catch(DynoException e) {
+			
+			lastException = e;
+			cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, e);
+			
+			// Track the connection health so that the pool can be purged at a later point
+			if (connection != null) {
+				cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
+			}
+			
+		} catch(Throwable t) {
+			t.printStackTrace();
+		} finally {
+			if (connection != null) {
+				connection.getParentConnectionPool().returnConnection(connection);
+			}
+		}
+		return null;
+	}
+
 	public static class UnitTest {
 		
 		private static class TestClient {
@@ -722,7 +804,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		public void testHostEvictionDueToErrorRates() throws Exception {
 			
 			// First configure the error rate monitor
-			ErrorRateMonitorConfigImpl errConfig =  new ErrorRateMonitorConfigImpl();  // TODO: fix this
+			ErrorRateMonitorConfigImpl errConfig =  new ErrorRateMonitorConfigImpl();  
 			errConfig.checkFrequency = 1;
 			errConfig.window = 1;
 			errConfig.suppressWindow = 60;
@@ -913,46 +995,5 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			threadPool.shutdownNow();
 			pool.shutdown();
 		}
-	}
-
-
-	@Override
-	public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException {
-		
-		DynoException lastException = null;
-		Connection<CL> connection = null;
-		long startTime = System.currentTimeMillis();
-		
-		try { 
-			connection = 
-					selectionStrategy.getConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
-			
-			Future<OperationResult<R>> futureResult = connection.executeAsync(op);
-			
-			cpMonitor.incOperationSuccess(connection.getHost(), System.currentTimeMillis()-startTime);
-			
-			return futureResult; 
-			
-		} catch(NoAvailableHostsException e) {
-			cpMonitor.incOperationFailure(null, e);
-			throw e;
-		} catch(DynoException e) {
-			
-			lastException = e;
-			cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, e);
-			
-			// Track the connection health so that the pool can be purged at a later point
-			if (connection != null) {
-				cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
-			}
-			
-		} catch(Throwable t) {
-			t.printStackTrace();
-		} finally {
-			if (connection != null) {
-				connection.getParentConnectionPool().returnConnection(connection);
-			}
-		}
-		return null;
 	}
 }

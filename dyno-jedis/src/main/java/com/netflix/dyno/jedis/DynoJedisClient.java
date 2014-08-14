@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.lang.NotImplementedException;
+import org.slf4j.Logger;
 
 import redis.clients.jedis.BinaryClient.LIST_POSITION;
 import redis.clients.jedis.BitOP;
@@ -24,12 +25,15 @@ import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
+import com.netflix.dyno.connectionpool.impl.lb.TokenMapSupplierImpl;
 import com.netflix.dyno.contrib.ArchaiusConnectionPoolConfiguration;
 import com.netflix.dyno.contrib.DynoCPMonitor;
 import com.netflix.dyno.contrib.DynoOPMonitor;
 import com.netflix.dyno.contrib.EurekaHostsSupplier;
 
 public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
+	
+	private static final Logger Logger = org.slf4j.LoggerFactory.getLogger(DynoJedisClient.class);
 	
 	private final ConnectionPool<Jedis> connPool;
 	
@@ -2124,6 +2128,11 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 			}
 			
 			cpConfig.withHostSupplier(hostSupplier);
+			
+			if (cpConfig.getTokenSupplier() == null) {
+				Logger.info("TOKEN AWARE selected and no token supplier found, using default TokenMapSupplierImpl()");
+				cpConfig.withTokenSupplier(new TokenMapSupplierImpl());
+			}
 			
 			DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);
 			DynoOPMonitor opMonitor = new DynoOPMonitor(appName);

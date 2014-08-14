@@ -37,7 +37,6 @@ import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
-import com.netflix.dyno.connectionpool.impl.health.ConnectionRecycler;
 import com.netflix.dyno.connectionpool.impl.lb.CircularList;
 
 public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
@@ -323,7 +322,8 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 		@BeforeClass
 		public static void beforeClass() {
 			threadPool = Executors.newFixedThreadPool(10);
-			ConnectionRecycler.getInstance().start();
+			// TODO: fix this - use ConnectionPoolHealkthTracker instead
+			//ConnectionRecycler.getInstance().start();
 		}
 		
 		@Before
@@ -344,7 +344,8 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 		public static void afterClass() {
 			stop.set(true);
 			threadPool.shutdownNow();
-			ConnectionRecycler.getInstance().stop();
+			// TODO: fix this - use ConnectionPoolHealkthTracker instead
+			//ConnectionRecycler.getInstance().stop();
 		}
 		
 		//@Test

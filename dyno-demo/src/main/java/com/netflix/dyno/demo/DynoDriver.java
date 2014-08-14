@@ -32,7 +32,6 @@ import com.netflix.config.DynamicIntProperty;
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy;
-import com.netflix.dyno.connectionpool.impl.lb.SelectionWIthRemoteZoneFallback;
 import com.netflix.dyno.demo.redis.DynoRedisDriver;
 import com.netflix.servo.DefaultMonitorRegistry;
 import com.netflix.servo.annotations.DataSourceType;
@@ -380,13 +379,15 @@ public abstract class DynoDriver {
 			for (int i=0; i<DemoConfig.NumKeys.get(); i++) {
 
 				String key = "T" + i;
-
+				
+				/**
 				HostSelectionStrategy<Jedis> selection = DynoRedisDriver.dClientInstance.getConnPool().getTokenSelection();
 				SelectionWIthRemoteZoneFallback<Jedis> rSelection = (SelectionWIthRemoteZoneFallback<Jedis>) selection;
 
 				Long hash = rSelection.getKeyHash(key);
 
 				writer.write(key + ": " + hash + "\n");
+				*/
 			}
 		} finally {
 			writer.close();

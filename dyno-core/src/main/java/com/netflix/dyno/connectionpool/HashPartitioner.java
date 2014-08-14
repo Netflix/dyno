@@ -15,8 +15,6 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool;
 
-import java.util.List;
-
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 
 /**
@@ -48,9 +46,9 @@ public interface HashPartitioner {
 	public Long hash(String key);
 	
 	/**
-	 * @param hostTokens
+	 * 
 	 * @param keyHash
 	 * @return
 	 */
-	public HostToken getToken(List<HostToken> hostTokens, Long keyHash);
+	public HostToken getToken(Long keyHash);
 }
