@@ -23,6 +23,7 @@ import com.netflix.dyno.connectionpool.ConnectionPool;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.OperationResult;
+import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
@@ -988,7 +989,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 	public String setex(final String key, final int seconds, final String value)  {
 	    return d_setex(key, seconds, value).getResult();
 	}
-
+ 
 	public OperationResult<String> d_setex(final String key, final Integer seconds, final String value)  {
 		
 		return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SETEX) {
@@ -2132,7 +2133,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 			
 			if (hostSupplier == null) {
 				if(discoveryClient == null){
-					hostSupplier = new EurekaHostsSupplier(clusterName);
+					throw new DynoConnectException("HostSupplier not provided. Cannot init EurekaHostsSupplier which needs a non null DiscoveryClient");
 				} else {
 					hostSupplier = new EurekaHostsSupplier(clusterName, discoveryClient);
 				}
