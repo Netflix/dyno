@@ -1,3 +1,18 @@
+/*******************************************************************************
+ * Copyright 2011 Netflix
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
 import java.util.ArrayList;
@@ -29,8 +44,10 @@ import com.netflix.dyno.connectionpool.ConnectionFactory;
 import com.netflix.dyno.connectionpool.ConnectionObservor;
 import com.netflix.dyno.connectionpool.ConnectionPool;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
+import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancingStrategy;
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostConnectionStats;
 import com.netflix.dyno.connectionpool.HostSupplier;
@@ -54,6 +71,33 @@ import com.netflix.dyno.connectionpool.impl.lb.TokenAwareSelection;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 
+/**
+ * Main implementation class for {@link ConnectionPool}
+ * The pool deals with a bunch of other components and brings together all the functionality for Dyno. Hence this is where all the action happens. 
+ * 
+ * Here are the top salient features of this class. 
+ * 
+ *     1. Manages a collection of {@link HostConnectionPool}s for all the {@link Host}s that it receives from the {@link HostSupplier}
+ * 
+ *     2. Manages adding and removing hosts as dictated by the HostSupplier.
+ *  
+ *     3. Enables execution of {@link Operation} using a {@link Connection} borrowed from the {@link HostConnectionPool}s
+ * 
+ *     4. Employs a {@link HostSelectionStrategy} (basically Round Robin or Token Aware) when executing operations
+ * 
+ *     5. Uses a health check monitor for tracking error rates from the execution of operations. The health check monitor can then decide 
+ *        to recycle a given HostConnectionPool, and execute requests using fallback HostConnectionPools for remote DCs.
+ *        
+ *     6. Uses {@link RetryPolicy} when executing operations for better resilience against transient failures.    
+ * 
+ * @see {@link HostSupplier} {@link Host} {@link HostSelectionStrategy}
+ * @see {@link Connection} {@link ConnectionFactory} {@link ConnectionPoolConfiguration} {@link ConnectionPoolMonitor}
+ * @see {@link ConnectionPoolHealthTracker} 
+ * 
+ * @author poberai
+ *
+ * @param <CL>
+ */
 public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 	private static final Logger Logger = LoggerFactory.getLogger(ConnectionPoolImpl.class);
@@ -251,6 +295,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				
 			} catch(NoAvailableHostsException e) {
 				cpMonitor.incOperationFailure(null, e);
+
 				throw e;
 			} catch(DynoException e) {
 				
@@ -311,23 +356,30 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			}
 		}));
 
-		if (hostsUp == null || hostsUp.isEmpty()) {
-			throw new NoAvailableHostsException("Host Supplier found no available hosts");
+		
+		for (Host host : hostsUp) {
+			// Set the Port on every host
+			host.setPort(cpConfiguration.getPort());
+			// Add host connection pool, but don't init the load balancer yet
+			addHost(host, false);  
 		}
 		
-		// Set the Port on every host
-		for (Host host : hostsUp) {
-			host.setPort(cpConfiguration.getPort());
+		// Check for any available hosts before starting pool. 
+		List<Host> availableHosts = new ArrayList<Host>(CollectionUtils.filter(cpMap.keySet(), new Predicate<Host>() {
+			@Override
+			public boolean apply(Host input) {
+				return input.isUp();
+			}
+		}));
+		
+
+		if (availableHosts == null || availableHosts.isEmpty()) {
+			throw new NoAvailableHostsException("No available hosts when starting connection pool");
 		}
 
 		boolean success = started.compareAndSet(false, true);
 		if (success) {
-				for (Host host : hostsUp) {
-				addHost(host, false);  // don't init the load balancer yet
-			}
-				
 			selectionStrategy = initSelectionStrategy();
-			
 			cpHealthTracker.start();
 		}
 		
@@ -351,7 +403,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			sFactory = new HostSelectionStrategyFactory<CL>() {
 				@Override
 				public HostSelectionStrategy<CL> vendSelectionStrategy() {
-					return new TokenAwareSelection<CL>();
+					return new TokenAwareSelection<CL>(cpConfiguration.getTokenSupplier());
 				}
 			};
 			break;
@@ -403,6 +455,46 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		}
 	}
 	
+	@Override
+	public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException {
+		
+		DynoException lastException = null;
+		Connection<CL> connection = null;
+		long startTime = System.currentTimeMillis();
+		
+		try { 
+			connection = 
+					selectionStrategy.getConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
+			
+			Future<OperationResult<R>> futureResult = connection.executeAsync(op);
+			
+			cpMonitor.incOperationSuccess(connection.getHost(), System.currentTimeMillis()-startTime);
+			
+			return futureResult; 
+			
+		} catch(NoAvailableHostsException e) {
+			cpMonitor.incOperationFailure(null, e);
+			throw e;
+		} catch(DynoException e) {
+			
+			lastException = e;
+			cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, e);
+			
+			// Track the connection health so that the pool can be purged at a later point
+			if (connection != null) {
+				cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
+			}
+			
+		} catch(Throwable t) {
+			t.printStackTrace();
+		} finally {
+			if (connection != null) {
+				connection.getParentConnectionPool().returnConnection(connection);
+			}
+		}
+		return null;
+	}
+
 	public static class UnitTest {
 		
 		private static class TestClient {
@@ -431,13 +523,15 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 				try {
 					if (op != null) {
-						op.execute(client, null);
+						R r = op.execute(client, null);
+						return new OperationResultImpl<R>("Test", r, null);
 					}
 				} catch (DynoConnectException e) {
 					ex = e;
 					throw e;
+				} finally {
+					ops.incrementAndGet();
 				}
-				ops.incrementAndGet();
 				return null;
 			}
 
@@ -475,7 +569,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 			@Override
 			public ConnectionContext getContext() {
-				return null;
+				return new ConnectionContextImpl();
 			}
 		}
 		
@@ -487,15 +581,27 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			}
 		};
 		
-		private static Host host1 = new Host("host1", 8080);
-		private static Host host2 = new Host("host2", 8080);
-		private static Host host3 = new Host("host3", 8080);
+		private Host host1 = new Host("host1", 8080, Status.Up);
+		private Host host2 = new Host("host2", 8080, Status.Up);
+		private Host host3 = new Host("host3", 8080, Status.Up);
 		
 		@Before
 		public void beforeTest() {
-			
+
+			host1 = new Host("host1", 8080, Status.Up);
+			host2 = new Host("host2", 8080, Status.Up);
+			host3 = new Host("host3", 8080, Status.Up);
+
 			client = new TestClient();
-			cpConfig = new ConnectionPoolConfigurationImpl("TestClient");
+			cpConfig = new ConnectionPoolConfigurationImpl("TestClient").setLoadBalancingStrategy(LoadBalancingStrategy.RoundRobin);
+			cpConfig.withHostSupplier(new HostSupplier() {
+				
+				@Override
+				public Collection<Host> getHosts() {
+					return new ArrayList<Host>();
+				}
+			});
+			
 			cpMonitor = new CountingConnectionPoolMonitor();
 		}
 		
@@ -503,8 +609,10 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		public void testConnectionPoolNormal() throws Exception {
 
 			final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
-			pool.addHost(host1);
-			pool.addHost(host2);
+			pool.addHost(host1, false);
+			pool.addHost(host2, false);
+			
+			pool.start();
 			
 			final Callable<Void> testLogic = new Callable<Void>() {
 
@@ -515,24 +623,29 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				}
 			};
 			
-			runTest(pool, testLogic);
+			try {
+				runTest(pool, testLogic);
+				checkConnectionPoolMonitorStats(2);
 			
-			checkConnectionPoolMonitorStats(2);
-			
-			checkHostStats(host1);
-			checkHostStats(host2);
+				checkHostStats(host1);
+				checkHostStats(host2);
+			} finally {
+				pool.shutdown();
+			}
 		}
 		
 		private void checkConnectionPoolMonitorStats(int numHosts)  {
+			
+			System.out.println("Total ops: " + client.ops.get());
 			Assert.assertTrue("Total ops: " + client.ops.get(), client.ops.get() > 0);
 
 			Assert.assertEquals(client.ops.get(), cpMonitor.getOperationSuccessCount());
 			Assert.assertEquals(0, cpMonitor.getOperationFailureCount());
 			Assert.assertEquals(0, cpMonitor.getOperationTimeoutCount());
 			
-			Assert.assertEquals(numHosts*3, cpMonitor.getConnectionCreatedCount());
+			Assert.assertEquals(numHosts*cpConfig.getMaxConnsPerHost(), cpMonitor.getConnectionCreatedCount());
 			Assert.assertEquals(0, cpMonitor.getConnectionCreateFailedCount());
-			Assert.assertEquals(numHosts*3, cpMonitor.getConnectionClosedCount());
+			Assert.assertEquals(numHosts*cpConfig.getMaxConnsPerHost(), cpMonitor.getConnectionClosedCount());
 			
 			Assert.assertEquals(client.ops.get(), cpMonitor.getConnectionBorrowedCount());
 			Assert.assertEquals(client.ops.get(), cpMonitor.getConnectionReturnedCount());
@@ -542,8 +655,10 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		public void testAddingNewHosts() throws Exception {
 			
 			final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
-			pool.addHost(host1);
-			pool.addHost(host2);
+			pool.addHost(host1, false);
+			pool.addHost(host2, false);
+			
+			pool.start();
 			
 			final Callable<Void> testLogic = new Callable<Void>() {
 
@@ -577,9 +692,9 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			HostConnectionStats hStats = cpMonitor.getHostStats().get(host);
 			Assert.assertTrue("host ops: " + hStats.getOperationSuccessCount(), hStats.getOperationSuccessCount() > 0);
 			Assert.assertEquals(0, hStats.getOperationErrorCount());
-			Assert.assertEquals(3, hStats.getConnectionsCreated());
+			Assert.assertEquals(cpConfig.getMaxConnsPerHost(), hStats.getConnectionsCreated());
 			Assert.assertEquals(0, hStats.getConnectionsCreateFailed());
-			Assert.assertEquals(3, hStats.getConnectionsClosed());
+			Assert.assertEquals(cpConfig.getMaxConnsPerHost(), hStats.getConnectionsClosed());
 			Assert.assertEquals(hStats.getOperationSuccessCount(), hStats.getConnectionsBorrowed());
 			Assert.assertEquals(hStats.getOperationSuccessCount(), hStats.getConnectionsReturned());
 		}
@@ -588,9 +703,11 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		public void testRemovingHosts() throws Exception {
 			
 			final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
-			pool.addHost(host1);
-			pool.addHost(host2);
-			pool.addHost(host3);
+			pool.addHost(host1, false);
+			pool.addHost(host2, false);
+			pool.addHost(host3, false);
+			
+			pool.start();
 			
 			final Callable<Void> testLogic = new Callable<Void>() {
 
@@ -623,14 +740,24 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		public void testNoAvailableHosts() throws Exception {
 
 			final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
-			executeTestClientOperation(pool);
+			pool.start();
+			
+			try { 
+				executeTestClientOperation(pool);
+			} finally {
+				pool.shutdown();
+			}
 		}
 		
 		@Test
 		public void testPoolExhausted() throws Exception {
 
 			final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
-			pool.addHost(host1); pool.addHost(host2); pool.addHost(host3);   // total of 9 connections
+			pool.addHost(host1, false); 
+			pool.addHost(host2, false); 
+			pool.addHost(host3, false); 
+			
+			pool.start();
 			
 			// Now exhaust all 9 connections, so that the 10th one can fail with PoolExhaustedException
 			final ExecutorService threadPool = Executors.newFixedThreadPool(9);
@@ -677,7 +804,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		public void testHostEvictionDueToErrorRates() throws Exception {
 			
 			// First configure the error rate monitor
-			ErrorRateMonitorConfigImpl errConfig =  new ErrorRateMonitorConfigImpl();  // TODO: fix this
+			ErrorRateMonitorConfigImpl errConfig =  new ErrorRateMonitorConfigImpl();  
 			errConfig.checkFrequency = 1;
 			errConfig.window = 1;
 			errConfig.suppressWindow = 60;
@@ -705,9 +832,11 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			};
 			
 			final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(badConnectionFactory, cpConfig, cpMonitor);
-			pool.addHost(host1);
-			pool.addHost(host2);
-			pool.addHost(host3);
+			pool.addHost(host1, false);
+			pool.addHost(host2, false);
+			pool.addHost(host3, false);
+			
+			pool.start();
 
 			final Callable<Void> testLogic = new Callable<Void>() {
 
@@ -725,9 +854,9 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			Assert.assertTrue("Total ops: " + client.ops.get(), client.ops.get() > 0);
 			Assert.assertTrue("Total errors: " + cpMonitor.getOperationFailureCount(), cpMonitor.getOperationFailureCount() > 0);
 			
-			Assert.assertEquals(9, cpMonitor.getConnectionCreatedCount());
+			Assert.assertEquals(3*cpConfig.getMaxConnsPerHost(), cpMonitor.getConnectionCreatedCount());
 			Assert.assertEquals(0, cpMonitor.getConnectionCreateFailedCount());
-			Assert.assertEquals(9, cpMonitor.getConnectionClosedCount());
+			Assert.assertEquals(3*cpConfig.getMaxConnsPerHost(), cpMonitor.getConnectionClosedCount());
 			
 			Assert.assertEquals(client.ops.get() + cpMonitor.getOperationFailureCount(), cpMonitor.getConnectionBorrowedCount());
 			Assert.assertEquals(client.ops.get() + cpMonitor.getOperationFailureCount(), cpMonitor.getConnectionReturnedCount());
@@ -756,7 +885,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			};
 			
 			final RetryNTimes retry = new RetryNTimes(3, false);
-			final RetryPolicyFactory rFactory = new RetryPolicyFactory() {
+			final RetryPolicyFactory rFactory = new RetryNTimes.RetryPolicyFactory() {
 				@Override
 				public RetryPolicy getRetryPolicy() {
 					return retry;
@@ -764,14 +893,17 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			};
 			
 			final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(badConnectionFactory, cpConfig.setRetryPolicyFactory(rFactory), cpMonitor);
-			pool.addHost(host1);
+			pool.addHost(host1, false);
+			pool.start();
 			
 			
 			try { 
 				executeTestClientOperation(pool, null);
 				Assert.fail("Test failed: expected PoolExhaustedException");
 			} catch (DynoException e) {
-				Assert.assertEquals("Retry: " + retry.getAttemptCount(), 3, retry.getAttemptCount());
+				Assert.assertEquals("Retry: " + retry.getAttemptCount(), 4, retry.getAttemptCount());
+			} finally {
+				pool.shutdown();
 			}
 		}
 
@@ -811,94 +943,57 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 		private void runTest(final ConnectionPoolImpl<TestClient> pool, final Callable<Void> customTestLogic) throws Exception {
 			
-			int nThreads = 4;
+			int nThreads = 1;
 			final ExecutorService threadPool = Executors.newFixedThreadPool(nThreads);
 			final AtomicBoolean stop = new AtomicBoolean(false);
 
+			final CountDownLatch latch = new CountDownLatch(nThreads);
+			
 			for (int i=0; i<nThreads; i++) {
 				threadPool.submit(new Callable<Void>() {
 
 					@Override
 					public Void call() throws Exception {
 						try {
-						while (!stop.get() && !Thread.currentThread().isInterrupted()) {
-							try {
-							pool.executeWithFailover(new Operation<TestClient, Integer>() {
+							while (!stop.get() && !Thread.currentThread().isInterrupted()) {
+								try {
+									pool.executeWithFailover(new Operation<TestClient, Integer>() {
 
-								@Override
-								public Integer execute(TestClient client, ConnectionContext state) throws DynoException {
-									client.ops.incrementAndGet();
-									return 1;
-								}
+										@Override
+										public Integer execute(TestClient client, ConnectionContext state) throws DynoException {
+											client.ops.incrementAndGet();
+											return 1;
+										}
 
-								@Override
-								public String getName() {
-									return "TestOperation";
-								}
+										@Override
+										public String getName() {
+											return "TestOperation";
+										}
 
-								@Override
-								public String getKey() {
-									return "TestOperation";
+										@Override
+										public String getKey() {
+											return "TestOperation";
+										}
+									});
+								} catch (DynoException e) {
+									//System.out.println("FAILED Test Worker operation: " + e.getMessage());
 								}
-							});
-							} catch (DynoException e) {
-								
 							}
+
+						} finally {
+							latch.countDown();
 						}
-					
-					} finally {
-					}
 						return null;
 					}
-					});
+				});
 			}
-			
+
 			customTestLogic.call();
 			
 			stop.set(true);
+			latch.await();
 			threadPool.shutdownNow();
 			pool.shutdown();
 		}
-	}
-
-
-	@Override
-	public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException {
-		
-		DynoException lastException = null;
-		Connection<CL> connection = null;
-		long startTime = System.currentTimeMillis();
-		
-		try { 
-			connection = 
-					selectionStrategy.getConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
-			
-			Future<OperationResult<R>> futureResult = connection.executeAsync(op);
-			
-			cpMonitor.incOperationSuccess(connection.getHost(), System.currentTimeMillis()-startTime);
-			
-			return futureResult; 
-			
-		} catch(NoAvailableHostsException e) {
-			cpMonitor.incOperationFailure(null, e);
-			throw e;
-		} catch(DynoException e) {
-			
-			lastException = e;
-			cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, e);
-			
-			// Track the connection health so that the pool can be purged at a later point
-			if (connection != null) {
-				cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
-			}
-			
-		} catch(Throwable t) {
-			t.printStackTrace();
-		} finally {
-			if (connection != null) {
-				connection.getParentConnectionPool().returnConnection(connection);
-			}
-		}
-		return null;
 	}
 }

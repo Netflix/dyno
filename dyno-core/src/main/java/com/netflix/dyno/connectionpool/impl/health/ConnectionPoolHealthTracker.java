@@ -1,21 +1,68 @@
+/*******************************************************************************
+ * Copyright 2011 Netflix
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl.health;
 
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.log4j.BasicConfigurator;
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.BeforeClass;
+import org.junit.Test;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
 import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import com.netflix.dyno.connectionpool.exception.TimeoutException;
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 
+/**
+ * This class tracks the error rates for any {@link HostConnectionPool} via the {@link ErrorRateMonitor}
+ * The error rates are recorded directly by the class but the error rates are checked asynchronously in another thread. 
+ * Once the thread decides that the error rates have crossed a configured threshold, then the {@link HostConnectionPool} is recycled.
+ * i.e  it is first marked as DOWN to prevent any new connections from being borrowed from it. Then the pool is reconnect()'d
+ * 
+ * Hence callers to {@link HostConnectionPool} should take it's isActive() state into account when using this class. 
+ * i.e before borrowing a connection check for isActive(). If not active, then use a fallback pool else throw an ex to the caller. 
+ * Resume executing operations against the pool only once the pool becomes active. 
+ * 
+ * @author poberai
+ *
+ * @param <CL>
+ */
 public class ConnectionPoolHealthTracker<CL> {
 	
 	private static final Logger Logger = LoggerFactory.getLogger(ConnectionPoolHealthTracker.class);
@@ -29,13 +76,19 @@ public class ConnectionPoolHealthTracker<CL> {
 
 	private final AtomicBoolean startedPing = new AtomicBoolean(false);
 	
-	private final Integer SleepMillis = 10*1000; 
+	private static final Integer DEFAULT_SLEEP_MILLIS = 10*1000; 
+	private final Integer SleepMillis; 
 	
 	public ConnectionPoolHealthTracker(ConnectionPoolConfiguration config, ScheduledExecutorService thPool) {
-		cpConfiguration = config;	
-		threadPool = thPool;
+		this(config, thPool, DEFAULT_SLEEP_MILLIS);
 	}
 		
+	public ConnectionPoolHealthTracker(ConnectionPoolConfiguration config, ScheduledExecutorService thPool, int sleepMillis) {
+		cpConfiguration = config;	
+		threadPool = thPool;
+		SleepMillis = sleepMillis;
+	}
+
 	public void start() {
 		
 		threadPool.scheduleWithFixedDelay(new Runnable() {
@@ -58,13 +111,13 @@ public class ConnectionPoolHealthTracker<CL> {
 					}
 						
 					HostConnectionPool<CL> pool = reconnectingPools.get(host);
-					System.out.println("Host whose pool will be reconnected:  " + host.getHostName());
-					System.out.println("Pool is ACTIVE?  " + pool.isActive());
+					Logger.info("Checking for reconnecting pool for host: " + host + ", pool active? " + pool.isActive());
 					if (pool.isActive()) {
 						// Pool is already active. Move on
 						reconnectingPools.remove(host);
 					} else {
 						try {
+							Logger.info("Reconnecting pool for host: " + host);
 							pool.markAsDown(null);
 							pool.reconnect();
 							if (pool.isActive()) {
@@ -75,7 +128,7 @@ public class ConnectionPoolHealthTracker<CL> {
 							}
 						} catch (Exception e) {
 							// do nothing, will retry again once thread wakes up
-							Logger.warn("Failed to reconnect pool", e);
+							Logger.warn("Failed to reconnect pool for host: " + host, e);
 						}
 					}
 				}
@@ -162,4 +215,120 @@ public class ConnectionPoolHealthTracker<CL> {
 		}
 	}
 
+	
+	public static class UnitTest {
+	
+		private static ScheduledExecutorService threadPool;
+
+		@BeforeClass
+		public static void beforeClass() {
+			BasicConfigurator.configure();
+			threadPool = Executors.newScheduledThreadPool(1);
+		}
+		
+		@AfterClass
+		public static void afterClass() {
+			BasicConfigurator.resetConfiguration();
+			threadPool.shutdownNow();
+		}
+		
+		@Test
+		public void testConnectionPoolRecycle() throws Exception {
+			
+			ConnectionPoolConfiguration config = new ConnectionPoolConfigurationImpl("test");
+			ConnectionPoolHealthTracker<Integer> tracker = new ConnectionPoolHealthTracker<Integer>(config, threadPool, 1000);
+			tracker.start();
+			
+			Host h1 = new Host("h1", Status.Up);
+			AtomicBoolean poolStatus = new AtomicBoolean(false); 
+			HostConnectionPool<Integer> hostPool = getMockConnectionPool(h1, poolStatus);
+			
+			FatalConnectionException e = new FatalConnectionException("fatal");
+			
+			for (int i=0; i<10; i++)  {
+				tracker.trackConnectionError(hostPool, e);
+			}
+			Thread.sleep(2000);
+			
+			tracker.stop();
+			
+			verify(hostPool, atLeastOnce()).markAsDown(any(DynoException.class));
+			verify(hostPool, times(1)).reconnect();
+			
+			Assert.assertTrue("Pool active? : " + hostPool.isActive(), hostPool.isActive());
+			// Check that the reconnecting pool is no longer being tracked by the tracker
+			Assert.assertNull(tracker.reconnectingPools.get(h1));
+		}
+		
+		@Test
+		public void testBadConnectionPoolKeepsReconnecting() throws Exception {
+			
+			ConnectionPoolConfiguration config = new ConnectionPoolConfigurationImpl("test");
+			ConnectionPoolHealthTracker<Integer> tracker = new ConnectionPoolHealthTracker<Integer>(config, threadPool, 1000);
+			tracker.start();
+			
+			Host h1 = new Host("h1", Status.Up);
+			AtomicBoolean poolStatus = new AtomicBoolean(false); 
+			HostConnectionPool<Integer> hostPool = getMockConnectionPool(h1, poolStatus, true);
+			
+			FatalConnectionException e = new FatalConnectionException("fatal");
+			
+			for (int i=0; i<10; i++)  {
+				tracker.trackConnectionError(hostPool, e);
+			}
+			Thread.sleep(2000);
+			
+			tracker.stop();
+			
+			verify(hostPool, atLeastOnce()).markAsDown(any(DynoException.class));
+			verify(hostPool, atLeastOnce()).reconnect();
+			
+			Assert.assertFalse("Pool active? : " + hostPool.isActive(), hostPool.isActive());
+			// Check that the reconnecting pool is no still being tracked by the tracker
+			Assert.assertNotNull(tracker.reconnectingPools.get(h1));
+		}
+
+		private HostConnectionPool<Integer> getMockConnectionPool(final Host host, final AtomicBoolean active) {
+			return getMockConnectionPool(host, active, false);
+		}
+		
+		private HostConnectionPool<Integer> getMockConnectionPool(final Host host, final AtomicBoolean active, final Boolean badConnectionPool) {
+			
+			@SuppressWarnings("unchecked")
+			HostConnectionPool<Integer> hostPool = mock(HostConnectionPool.class);
+			when(hostPool.getHost()).thenReturn(host);
+			
+			doAnswer(new Answer<Boolean>() {
+
+				@Override
+				public Boolean answer(InvocationOnMock invocation) throws Throwable {
+					return active.get();
+				}
+			}).when(hostPool).isActive();
+			
+			doAnswer(new Answer<Void>() {
+
+				@Override
+				public Void answer(InvocationOnMock invocation) throws Throwable {
+					active.set(false);
+					return null;
+				}
+			}).when(hostPool).markAsDown(any(DynoException.class));
+			
+			doAnswer(new Answer<Void>() {
+
+				@Override
+				public Void answer(InvocationOnMock invocation) throws Throwable {
+					if (badConnectionPool) {
+						throw new RuntimeException();
+					} else {
+						active.set(true);
+						return null;
+					}
+				}
+			}).when(hostPool).reconnect();
+			
+			return hostPool;
+		}
+	}
 }

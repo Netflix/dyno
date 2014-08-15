@@ -1,7 +1,19 @@
+/*******************************************************************************
+ * Copyright 2011 Netflix
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl.lb;
-
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -27,7 +39,6 @@ import org.slf4j.LoggerFactory;
 
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
-import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
@@ -49,7 +60,6 @@ import com.netflix.dyno.connectionpool.impl.utils.IOUtilities;
  * @author poberai
  *
  */
-
 public class TokenMapSupplierImpl implements TokenMapSupplier {
 
 	private static final Logger Logger = LoggerFactory.getLogger(TokenMapSupplierImpl.class);
@@ -59,13 +69,16 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 
 	private final String localZone;
 	private final List<Host> hosts = new ArrayList<Host>();
-	private int port = -1; 
+	private int port; 
 	
-	public TokenMapSupplierImpl(HostSupplier hSupplier) {
-		
+	public TokenMapSupplierImpl() {
 		localZone = System.getenv("EC2_AVAILABILITY_ZONE");
+		port = -1;
+	}
+
+	@Override
+	public void initWithHosts(Collection<Host> hostList) {
 		
-		Collection<Host> hostList = hSupplier.getHosts();
 		port = hostList.iterator().next().getPort();
 		
 		hosts.addAll(CollectionUtils.filter(hostList, new Predicate<Host>() {
@@ -76,14 +89,6 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 			}
 		}));
 	}
-	
-	public TokenMapSupplierImpl(List<Host> hostList) {
-		
-		localZone = System.getenv("EC2_AVAILABILITY_ZONE");
-		port = hostList.get(0).getPort();
-		hosts.addAll(hostList);
-	}
-
 	
 	@Override
 	public List<HostToken> getTokens() {
@@ -99,11 +104,13 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 					allTokens.add(hToken);
 				}
 			} catch (Exception e) {
+				Logger.warn("Could not get json response for token topology [" + e.getMessage() + "]");
 			}
 		}
 		return new ArrayList<HostToken>(allTokens);
 	}
 	
+	@Override
 	public HostToken getTokenForHost(final Host host) {
 		this.hosts.add(host);
 		String jsonPayload = getHttpResponseWithRetries();
@@ -256,10 +263,8 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 			hostList.add(new Host("ec2-54-211-220-55.compute-1.amazonaws.com", 11211, Status.Up));
 			hostList.add(new Host("ec2-54-80-65-203.compute-1.amazonaws.com", 11211, Status.Up));
 			
-			HostSupplier mockSupplier = mock(HostSupplier.class);
-			when(mockSupplier.getHosts()).thenReturn(hostList);
-			
-			TokenMapSupplierImpl tokenSupplier = new TokenMapSupplierImpl(mockSupplier);
+			TokenMapSupplierImpl tokenSupplier = new TokenMapSupplierImpl();
+			tokenSupplier.initWithHosts(hostList);
 			
 			List<HostToken> hTokens = tokenSupplier.parseTokenListFromJson(json);
 			

@@ -1,10 +1,3 @@
-package com.netflix.dyno.connectionpool;
-
-import java.util.concurrent.Future;
-
-import com.netflix.dyno.connectionpool.exception.DynoConnectException;
-import com.netflix.dyno.connectionpool.exception.DynoException;
-
 /*******************************************************************************
  * Copyright 2011 Netflix
  * 
@@ -20,6 +13,12 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
+package com.netflix.dyno.connectionpool;
+
+import java.util.concurrent.Future;
+
+import com.netflix.dyno.connectionpool.exception.DynoConnectException;
+import com.netflix.dyno.connectionpool.exception.DynoException;
 
 /**
  * Interface to an instance of a connection on a host.

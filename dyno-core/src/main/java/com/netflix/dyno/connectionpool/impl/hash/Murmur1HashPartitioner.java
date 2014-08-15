@@ -13,6 +13,11 @@ import com.netflix.dyno.connectionpool.HashPartitioner;
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.connectionpool.impl.utils.IOUtilities;
 
+/**
+ * Impl of {@link HashPartitioner} that uses {@link Murmur1Hash}
+ * @author poberai
+ *
+ */
 public class Murmur1HashPartitioner implements HashPartitioner {
 
     private static final String UTF_8 = "UTF-8";
@@ -47,7 +52,7 @@ public class Murmur1HashPartitioner implements HashPartitioner {
 	}
 
 	@Override
-	public HostToken getToken(List<HostToken> hostTokens, Long keyHash) {
+	public HostToken getToken(Long keyHash) {
 		throw new RuntimeException("NotImplemented");
 	}
 	

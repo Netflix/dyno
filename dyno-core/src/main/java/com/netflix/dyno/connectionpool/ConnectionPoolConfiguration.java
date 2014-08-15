@@ -69,18 +69,45 @@ public interface ConnectionPoolConfiguration {
      */
     public int getConnectTimeout();
     
+    /**
+     * 
+     * @return
+     */
     public int getPoolShutdownDelay();
     
+    /**
+     * 
+     * @return
+     */
     public boolean localDcAffinity(); 
     
+    /**
+     * 
+     * @return
+     */
     public ErrorMonitorFactory getErrorMonitorFactory();
     
+    /**
+     * 
+     * @return
+     */
     public RetryPolicyFactory getRetryPolicyFactory();
     
+    /**
+     * 
+     * @return
+     */
     public HostSupplier getHostSupplier();
     
+    /**
+     * 
+     * @return
+     */
     public TokenMapSupplier getTokenSupplier();
     
+    /**
+     * 
+     * @return
+     */
     public int getPingFrequencySeconds();
-    
 }

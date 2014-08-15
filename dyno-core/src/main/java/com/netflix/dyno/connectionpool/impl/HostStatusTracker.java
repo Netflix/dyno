@@ -1,6 +1,20 @@
+/*******************************************************************************
+ * Copyright 2011 Netflix
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -8,12 +22,25 @@ import java.util.Set;
 import org.junit.Assert;
 import org.junit.Test;
 
+import com.netflix.dyno.connectionpool.ConnectionPool;
 import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.HostConnectionPool;
+import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
 
+/**
+ * Helper class that can be used in conjunction with a {@link HostSupplier} repeatedly to understand whether the change within the 
+ * active and inactive host set. 
+ * Implementations of {@link ConnectionPool} can then use this utility to adapt to topology changes and hence manage the corresponding 
+ * {@link HostConnectionPool} objects for the set of active hosts. 
+ * 
+ * @author poberai
+ *
+ */
 public class HostStatusTracker {
 	
+	// the set of active and inactive hosts
 	private final Set<Host> activeHosts = new HashSet<Host>();
 	private final Set<Host> inactiveHosts = new HashSet<Host>();
 	
@@ -28,6 +55,11 @@ public class HostStatusTracker {
 		inactiveHosts.addAll(down);
 	}
 
+	/**
+	 * Helper method to check that there is no overlap b/w hosts up and down. 
+	 * @param A
+	 * @param B
+	 */
 	private void verifyMutuallyExclusive(Collection<Host> A, Collection<Host> B) {
 		
 		Set<Host> left = new HashSet<Host>(A);
@@ -84,10 +116,25 @@ public class HostStatusTracker {
 		return newInactiveHostsFound;
 	}
 	
+	/**
+	 * Helper method that checks if anything has changed b/w the current state and the new set of hosts up and down
+	 * @param hostsUp
+	 * @param hostsDown
+	 * @return true/false indicating whether the set of hosts has changed or not.
+	 */
 	public boolean checkIfChanged(Collection<Host> hostsUp, Collection<Host> hostsDown) {
 		return activeSetChanged(hostsUp) || inactiveSetChanged(hostsUp, hostsDown);
 	}
 	
+	/**
+	 * Helper method that actually changes the state of the class to reflect the new set of hosts up and down
+	 * Note that the new HostStatusTracker is returned that holds onto the new state. Calling classes must update their
+	 * references to use the new HostStatusTracker
+	 * 
+	 * @param hostsUp
+	 * @param hostsDown
+	 * @return
+	 */
 	public HostStatusTracker computeNewHostStatus(Collection<Host> hostsUp, Collection<Host> hostsDown) {
 		
 		verifyMutuallyExclusive(hostsUp, hostsDown);
@@ -253,7 +300,11 @@ public class HostStatusTracker {
 			
 			Set<String> expected = new HashSet<String>();
 			if (names != null && names.length > 0) {
-				expected = new HashSet<String>(Arrays.asList(names));
+				for (String n : names) {
+					if (n != null && !n.isEmpty()) {
+						expected.add(n);
+					}
+				}
 			}
 			
 			Set<String> result = new HashSet<String>( CollectionUtils.transform(set, new Transform<Host, String>() {

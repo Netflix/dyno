@@ -35,14 +35,10 @@ public class EurekaHostsSupplier implements HostSupplier {
 
 	// The C* cluster name for discovering nodes
 	private final String applicationName;
-	private DiscoveryClient discoveryClient = null;
+	private final DiscoveryClient discoveryClient;
 	
 	private final AtomicReference<List<Host>> cachedRef = new AtomicReference<List<Host>>(null);
 	
-	public EurekaHostsSupplier(String applicationName) {
-		this.applicationName = applicationName.toUpperCase();
-	}
-
 	public EurekaHostsSupplier(String applicationName, DiscoveryClient dClient) {
 		this.applicationName = applicationName.toUpperCase();
 		this.discoveryClient = dClient;
@@ -64,12 +60,8 @@ public class EurekaHostsSupplier implements HostSupplier {
 	private List<Host> getUpdateFromEureka() {
 		
 		if (discoveryClient == null) {
-			discoveryClient = LibInstanceHolder.getDiscoveryClient();
-		}
-		
-		if (discoveryClient == null) {
-			Logger.error("Error getting discovery client");
-			throw new RuntimeException("Failed to create discovery client");
+			Logger.error("Discovery client cannot be null");
+			throw new RuntimeException("EurekaHostsSupplier needs a non-null DiscoveryClient");
 		}
 
 		Logger.info("Dyno fetching instance list for app: " + applicationName);

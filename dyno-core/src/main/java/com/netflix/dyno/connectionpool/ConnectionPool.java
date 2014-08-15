@@ -1,5 +1,3 @@
-package com.netflix.dyno.connectionpool;
-
 /*******************************************************************************
  * Copyright 2011 Netflix
  * 
@@ -15,6 +13,7 @@ package com.netflix.dyno.connectionpool;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  ******************************************************************************/
+package com.netflix.dyno.connectionpool;
 
 import java.util.Collection;
 import java.util.List;

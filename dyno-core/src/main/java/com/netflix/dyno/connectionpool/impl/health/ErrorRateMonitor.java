@@ -1,3 +1,18 @@
+/*******************************************************************************
+ * Copyright 2011 Netflix
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl.health;
 
 import java.util.ArrayList;
@@ -20,8 +35,16 @@ import com.netflix.dyno.connectionpool.ErrorRateMonitorConfig;
 import com.netflix.dyno.connectionpool.ErrorRateMonitorConfig.ErrorThreshold;
 import com.netflix.dyno.connectionpool.impl.health.RateTracker.Bucket;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
-import com.netflix.dyno.connectionpool.impl.utils.RateLimiterUtil;
+import com.netflix.dyno.connectionpool.impl.utils.RateLimitUtil;
 
+/**
+ * Class that can be used to track the error rates for {@link ConnectionPoolHealthTracker}
+ * It makes use of {@link RateTracker} to track the error rates and then periodically applies the 
+ * {@link ErrorRateMonitorConfig} to apply error rate check policies to determine error threshold violations.
+ * 
+ * @author poberai
+ *
+ */
 public class ErrorRateMonitor {
 
 	private final List<ErrorCheckPolicy> policies = new ArrayList<ErrorCheckPolicy>();
@@ -206,7 +229,7 @@ public class ErrorRateMonitor {
 			int numThreads = 5; 
 			ExecutorService threadPool = Executors.newFixedThreadPool(numThreads);
 			
-			final AtomicReference<RateLimiterUtil> limiter = new AtomicReference<RateLimiterUtil>(RateLimiterUtil.create(rates.get(0)));
+			final AtomicReference<RateLimitUtil> limiter = new AtomicReference<RateLimitUtil>(RateLimitUtil.create(rates.get(0)));
 			final AtomicBoolean stop = new AtomicBoolean(false);
 			
 			final CyclicBarrier barrier = new CyclicBarrier(numThreads+1);
@@ -223,10 +246,11 @@ public class ErrorRateMonitor {
 						
 						barrier.await();
 						while (!stop.get() && !Thread.currentThread().isInterrupted()) {
-							limiter.get().acquire();
-							boolean success = errorMonitor.trackErrorRate(1);
-							if (!success) {
-								errorCount.incrementAndGet();
+							if (limiter.get().acquire()) {
+								boolean success = errorMonitor.trackErrorRate(1);
+								if (!success) {
+									errorCount.incrementAndGet();
+								}
 							}
 						}
 						latch.countDown();
@@ -245,7 +269,7 @@ public class ErrorRateMonitor {
 				Thread.sleep(sleepPerIteration*1000);
 				if (round < rates.size()) {
 					System.out.println("Changing rate to " + rates.get(round));
-					limiter.set(RateLimiterUtil.create(rates.get(round)));
+					limiter.set(RateLimitUtil.create(rates.get(round)));
 				}
 				round++;
 			} while (round <= numIterations);

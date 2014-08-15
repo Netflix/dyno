@@ -1,10 +1,25 @@
+/*******************************************************************************
+ * Copyright 2011 Netflix
+ * 
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Random;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -16,6 +31,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -38,10 +54,26 @@ import com.netflix.dyno.connectionpool.RetryPolicy;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
+import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
 import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
 
-
+/**
+ * Main impl for {@link HostConnectionPool}
+ * 
+ * This class does not allow shared access to the connections being managed for this pool. 
+ * Hence it uses a {@link LinkedBlockingQueue} to manage the available connections. 
+ * When a connection needs to be borrowed, we wait or poll the queue. As connections are returned, they are added back into the queue. 
+ * This is the normal behavior during the "Active" state of this pool. 
+ * 
+ * The class also manages another state called "Inactive" where it can be put "Down" where it stops accepting requests for borrowing more connections, 
+ * and simply terminates every connection that is returned to it. This is generally useful when the host is going away, or where the error rate 
+ * from the connections of this pool are greater than a configured error threshold and then an external component decides to recycle the connection pool. 
+ * 
+ * @author poberai
+ *
+ * @param <CL>
+ */
 public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
 	private static final Logger Logger = LoggerFactory.getLogger(HostConnectionPoolImpl.class);
@@ -57,11 +89,18 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 	private final ConnectionPoolConfiguration cpConfig; 
 	private final ConnectionPoolMonitor monitor; 
 	
+	// states that dictate the behavior of the pool
+	
+	// cp not inited is the starting state of the pool. The pool will not allow connections to be borrowed in this state
 	private final ConnectionPoolState<CL> cpNotInited = new ConnectionPoolNotInited();
+	// cp active is where connections of the pool can be borrowed and returned
 	private final ConnectionPoolState<CL> cpActive = new ConnectionPoolActive(this);
+	// cp reconnecting is where connections cannot be borrowed and all returning connections will be shutdown
 	private final ConnectionPoolState<CL> cpReconnecting = new ConnectionPoolReconnectingOrDown();
+	// similar to reconnecting
 	private final ConnectionPoolState<CL> cpDown = new ConnectionPoolReconnectingOrDown();
 	
+	// The thread safe reference to the pool state
 	private final AtomicReference<ConnectionPoolState<CL>> cpState = new AtomicReference<ConnectionPoolState<CL>>(cpNotInited);
 	
 	public HostConnectionPoolImpl(Host host, ConnectionFactory<CL> conFactory, 
@@ -267,20 +306,10 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		@Override
 		public boolean returnConnection(Connection<CL> connection) {
 			try {
-				//DynoConnectException e = connection.getLastException();
-				
 				if (numActiveConnections.get() > cpConfig.getMaxConnsPerHost()) {
 					
 					// Just close the connection
 					return closeConnection(connection);
-					
-//				} else if (e != null && e instanceof FatalConnectionException) {
-//					
-//					// create another connection and then close this one
-//					System.out.println("\nReviving single connection\n");
-//					reviveSingleConnection();
-//					System.out.println("\nClosing single connection\n");
-//					return closeConnection(connection);
 					
 				} else {
 					// add connection back to the pool
@@ -292,32 +321,6 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 			}
 		}
 
-//		private void reviveSingleConnection() {
-//			
-//			recoveryThreadPool.submit(new Callable<Void>() {
-//
-//				@Override
-//				public Void call() throws Exception {
-//					
-//					if (cpState.get() != cpActive) {
-//						// Do not create the connection
-//						return null;
-//					}
-//					
-//					System.out.println("\nCreating connection from recoveryThreadPool\n");
-//					Connection<CL> connection = cpState.get().createConnection();
-//					System.out.println("\nFinished Creating connection from recoveryThreadPool\n");
-//					
-//					// Check again if the pool has been shutdown
-//					if (cpState.get() != cpActive) {
-//						// Do not create the connection
-//						cpState.get().closeConnection(connection);
-//					}
-//					return null;
-//				}
-//			});
-//		}
-		
 		@Override
 		public boolean closeConnection(Connection<CL> connection) {
 			try  {
@@ -369,12 +372,12 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
 		@Override
 		public Connection<CL> createConnection() {
-			throw new DynoConnectException("Cannot create new connection when pool is down");
+			throw new PoolOfflineException(getHost(), "Cannot create new connection when pool is down");
 		}
 
 		@Override
 		public Connection<CL> borrowConnection(int duration, TimeUnit unit) {
-			throw new DynoConnectException("Cannot borrow connection when pool is down");
+			throw new PoolOfflineException(getHost(), "Cannot borrow connection when pool is down");
 		}
 
 		@Override
@@ -434,13 +437,19 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 			
 		}
 		
-		private static AtomicBoolean stop = new AtomicBoolean(false);
+		//private static AtomicBoolean stop = new AtomicBoolean(false);
 		private static HostConnectionPoolImpl<TestClient> pool;
 		private static ExecutorService threadPool;
+		private static int numWorkers = 10;
 		
 		private static class TestConnection implements Connection<TestClient> {
 
 			private DynoConnectException ex;
+			private HostConnectionPool<TestClient> myPool;
+			
+			private TestConnection(HostConnectionPool<TestClient> pool) {
+				myPool = pool;
+			}
 			@Override
 			public <R> OperationResult<R> execute(Operation<TestClient, R> op) throws DynoException {
 				return null;
@@ -452,7 +461,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
 			@Override
 			public Host getHost() {
-				return null;
+				return TestHost;
 			}
 
 			@Override
@@ -466,7 +475,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
 			@Override
 			public HostConnectionPool<TestClient> getParentConnectionPool() {
-				return null;
+				return myPool;
 			}
 			
 			public void setException(DynoConnectException e) {
@@ -493,27 +502,26 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
 			@Override
 			public Connection<TestClient> createConnection(HostConnectionPool<TestClient> pool, ConnectionObservor cObservor) throws DynoConnectException, ThrottledException {
-				return new TestConnection();
+				return new TestConnection(pool);
 			}
-			
 		};
+		
 		private static ConnectionPoolConfigurationImpl config = new ConnectionPoolConfigurationImpl("TestClient");
 		private static CountingConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
 		
 		@BeforeClass
 		public static void beforeClass() {
-			threadPool = Executors.newFixedThreadPool(10);
+			threadPool = Executors.newFixedThreadPool(numWorkers);
 		}
 		
 		@Before
 		public void beforeTest() {
-			stop.set(false);
+			//stop.set(false);
 			cpMonitor = new CountingConnectionPoolMonitor(); // reset all monitor stats
 		}
 		
 		@After
 		public void afterTest() {
-			stop.set(true);
 			if (pool != null) {
 				pool.shutdown();
 			}
@@ -521,135 +529,66 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
 		@AfterClass
 		public static void afterClass() {
-			stop.set(true);
 			threadPool.shutdownNow();
 		}
 		
-		//@Test
+		@Test
 		public void testRegularProcess() throws Exception {
+			
+			final BasicResult result = new BasicResult();
+			final TestControl control = new TestControl(4);
 			
 			pool = new HostConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor, threadPool);
 			int numConns = pool.primeConnections();
-			System.out.println("numConns: " + numConns);
 
-			List<Future<BasicResult>> futures = new ArrayList<Future<BasicResult>>(); 
-			
-			for (int i=0; i<3; i++) {
-				futures.add(threadPool.submit(new BasicWorker()));
+			for (int i=0; i<4; i++) {
+				threadPool.submit(new BasicWorker(result, control));
 			}
 			
 			Thread.sleep(300);
 			
-			stop.set(true);
-			
-			int totalOps = 0;
-			for (Future<BasicResult> f : futures) {
-				totalOps += f.get().opCount.get();
-			}
-			
-			System.out.println(totalOps);
-			
+			control.stop();
+			control.waitOnFinish();
+
 			pool.shutdown();
 			
-			System.out.println("Conns borrowed: " + cpMonitor.getConnectionBorrowedCount());
-			System.out.println("Conns returned: " + cpMonitor.getConnectionReturnedCount());
-			System.out.println("Conns created: " + cpMonitor.getConnectionCreatedCount());
-			System.out.println("Conns closed: " + cpMonitor.getConnectionClosedCount());
-			System.out.println("Conns create failed: " + cpMonitor.getConnectionCreateFailedCount());
+			Assert.assertEquals(config.getMaxConnsPerHost(), numConns);
+			Assert.assertEquals(result.opCount.get(), cpMonitor.getConnectionBorrowedCount());
+			Assert.assertEquals(result.opCount.get(), cpMonitor.getConnectionReturnedCount());
+			Assert.assertEquals(config.getMaxConnsPerHost(), cpMonitor.getConnectionCreatedCount());
+			Assert.assertEquals(config.getMaxConnsPerHost(), cpMonitor.getConnectionClosedCount());
+			Assert.assertEquals(0, result.failureCount.get());
 		}
 		
-		//@Test
+		@Test
 		public void testPoolTimeouts() throws Exception {
 		
 			pool = new HostConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor, threadPool);
 			int numConns = pool.primeConnections();
-			System.out.println("numConns: " + numConns);
 
-			List<Future<BasicResult>> futures = new ArrayList<Future<BasicResult>>(); 
-			
+			final BasicResult result = new BasicResult();
+			final TestControl control = new TestControl(4);
+
 			for (int i=0; i<4; i++) {   // Note 4 threads .. which is more than the no of available conns .. hence we should see timeouts
-				futures.add(threadPool.submit(new BasicWorker(55)));
+				threadPool.submit(new BasicWorker(result, control, 55));
 			}
 			
 			Thread.sleep(300);
 			
-			stop.set(true);
-			
-			BasicResult result = new BasicResult();
-			for (Future<BasicResult> f : futures) {
-				result.addResult(f.get());
-			}
-			
-			System.out.println(result.toString());
+			control.stop();
+			control.waitOnFinish();
 			
 			pool.shutdown();
 			
-			System.out.println("\n\nConns borrowed: " + cpMonitor.getConnectionBorrowedCount());
-			System.out.println("Conns returned: " + cpMonitor.getConnectionReturnedCount());
-			System.out.println("Conns created: " + cpMonitor.getConnectionCreatedCount());
-			System.out.println("Conns closed: " + cpMonitor.getConnectionClosedCount());
-			System.out.println("Conns create failed: " + cpMonitor.getConnectionCreateFailedCount());
-		}
-		
-		//@Test
-		public void testCloseBadConnections() throws Exception {
-			
-			pool = new HostConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor, threadPool);
-			int numConns = pool.primeConnections();
-			System.out.println("numConns: " + numConns);
+			Assert.assertEquals(config.getMaxConnsPerHost(), numConns);
 
-			final List<Future<BasicResult>> futures = new ArrayList<Future<BasicResult>>(); 
+			Assert.assertEquals(result.successCount.get(), cpMonitor.getConnectionBorrowedCount());
+			Assert.assertEquals(result.successCount.get(), cpMonitor.getConnectionReturnedCount());
+			Assert.assertEquals(config.getMaxConnsPerHost(), cpMonitor.getConnectionCreatedCount());
+			Assert.assertEquals(config.getMaxConnsPerHost(), cpMonitor.getConnectionClosedCount());
+			Assert.assertEquals(0, cpMonitor.getConnectionCreateFailedCount());
 			
-			final List<WorkerThatCanFailOperations> workers = new ArrayList<WorkerThatCanFailOperations>();
-			
-			for (int i=0; i<2; i++) {   // Note 4 threads .. which is more than the no of available conns .. hence we should see timeouts
-				WorkerThatCanFailOperations worker = new WorkerThatCanFailOperations();
-				workers.add(worker);
-				futures.add(threadPool.submit(worker));
-			}
-			
-			Thread.sleep(300);
-			
-			final AtomicBoolean stopFailingConnections = new AtomicBoolean(false);
-			
-			Future<Integer> failCount = threadPool.submit(new Callable<Integer>() {
-
-				@Override
-				public Integer call() throws Exception {
-					Random rand = new Random();
-					Integer count = 0;
-					while (!stopFailingConnections.get() && !Thread.currentThread().isInterrupted()) {
-						workers.get(rand.nextInt(workers.size())).failOperation.set(true);
-						count++;
-						Thread.sleep(20);
-					}
-					return count;
-				}
-				
-			});
-			
-			Thread.sleep(1000);
-			
-			stopFailingConnections.set(true);
-			Thread.sleep(100);
-			stop.set(true);
-			
-			BasicResult result = new BasicResult();
-			for (Future<BasicResult> f : futures) {
-				result.addResult(f.get());
-			}
-			
-			System.out.println(result.toString());
-			System.out.println("\nConnections failed: " + failCount.get());
-			
-			pool.shutdown();
-			
-			System.out.println("\n\nConns borrowed: " + cpMonitor.getConnectionBorrowedCount());
-			System.out.println("Conns returned: " + cpMonitor.getConnectionReturnedCount());
-			System.out.println("Conns created: " + cpMonitor.getConnectionCreatedCount());
-			System.out.println("Conns closed: " + cpMonitor.getConnectionClosedCount());
-			System.out.println("Conns create failed: " + cpMonitor.getConnectionCreateFailedCount());
-			
+			Assert.assertTrue(result.failureCount.get() > 0);
 		}
 		
 		@Test
@@ -657,66 +596,68 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 			
 			pool = new HostConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor, threadPool);
 			int numConns = pool.primeConnections();
-			System.out.println("numConns: " + numConns);
 
-			final List<Future<BasicResult>> futures = new ArrayList<Future<BasicResult>>(); 
-			
-			final List<BasicWorker> workers = new ArrayList<BasicWorker>();
-			
-			for (int i=0; i<2; i++) {   // Note 4 threads .. which is more than the no of available conns .. hence we should see timeouts
-				BasicWorker worker = new BasicWorker();
-				workers.add(worker);
-				futures.add(threadPool.submit(worker));
+			final BasicResult result = new BasicResult();
+			final TestControl control = new TestControl(4);
+
+			for (int i=0; i<4; i++) {   // Note 4 threads .. which is more than the no of available conns .. hence we should see timeouts
+				threadPool.submit(new BasicWorker(result, control));
 			}
 			
 			Thread.sleep(500);
 			
+			Assert.assertTrue(result.opCount.get() > 0);
+			Assert.assertEquals(0, result.failureCount.get());
+
 			pool.markAsDown(new FatalConnectionException("mark pool as down"));
 			
 			Thread.sleep(200);
 			
-			stop.set(true);
-			
-			BasicResult result = new BasicResult();
-			for (Future<BasicResult> f : futures) {
-				result.addResult(f.get());
-			}
-			
-			System.out.println(result.toString());
+			control.stop();
+			control.waitOnFinish();
 			
 			pool.shutdown();
 			
-			System.out.println("\n\nConns borrowed: " + cpMonitor.getConnectionBorrowedCount());
-			System.out.println("Conns returned: " + cpMonitor.getConnectionReturnedCount());
-			System.out.println("Conns created: " + cpMonitor.getConnectionCreatedCount());
-			System.out.println("Conns closed: " + cpMonitor.getConnectionClosedCount());
-			System.out.println("Conns create failed: " + cpMonitor.getConnectionCreateFailedCount());
+			Assert.assertEquals(config.getMaxConnsPerHost(), numConns);
 
+			Assert.assertEquals(result.successCount.get(), cpMonitor.getConnectionBorrowedCount());
+			Assert.assertEquals(result.successCount.get(), cpMonitor.getConnectionReturnedCount());
+			Assert.assertEquals(config.getMaxConnsPerHost(), cpMonitor.getConnectionCreatedCount());
+			Assert.assertEquals(config.getMaxConnsPerHost(), cpMonitor.getConnectionClosedCount());
+			Assert.assertEquals(0, cpMonitor.getConnectionCreateFailedCount());
+			
+			Assert.assertTrue(result.failureCount.get() > 0);
 		}
 		
-		private class BasicWorker implements Callable<BasicResult> {
+		private class BasicWorker implements Callable<Void> {
 
-			private final BasicResult result = new BasicResult();
+			private final BasicResult result;
+			private final TestControl control;
 			
-			private int sleepMs = 10;
+			private int sleepMs = -1;
 			
-			private BasicWorker() {
-				
+			private BasicWorker(BasicResult result, TestControl testControl) {
+				this.result = result;
+				this.control = testControl;
 			}
 			
-			private BasicWorker(int sleep) {
+			private BasicWorker(BasicResult result, TestControl testControl, int sleep) {
+				this.result = result;
+				this.control = testControl;
 				this.sleepMs = sleep;
 			}
 			
 			@Override
-			public BasicResult call() throws Exception {
+			public Void call() throws Exception {
 				
-				while (!stop.get() && !Thread.currentThread().isInterrupted()) {
+				while (!control.isStopped() && !Thread.currentThread().isInterrupted()) {
 
 					Connection<TestClient> connection = null;
 					try {
-						Thread.sleep(sleepMs);
 						connection = pool.borrowConnection(20, TimeUnit.MILLISECONDS);
+						if (sleepMs > 0) {
+							Thread.sleep(sleepMs);
+						}
 						pool.returnConnection(connection);
 						result.successCount.incrementAndGet();
 						result.lastSuccess.set(true);
@@ -732,63 +673,46 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 					}
 				}
 				
-				return result;
+				control.reportFinish();
+				return null;
 			}
 		}
 		
-		private class WorkerThatCanFailOperations implements Callable<BasicResult> {
-
-			private final BasicResult result = new BasicResult();
-			private final AtomicBoolean failOperation = new AtomicBoolean(false);
+		private class TestControl { 
 			
-			private int sleepMs = 10;
+			private final AtomicBoolean stop = new AtomicBoolean(false);
+			private final CountDownLatch latch;
 			
-			private WorkerThatCanFailOperations() {
-				
+			private TestControl(int n) {
+				latch = new CountDownLatch(n);
 			}
 			
+			private void reportFinish() {
+				latch.countDown();
+			}
 			
-			@Override
-			public BasicResult call() throws Exception {
-				
-				while (!stop.get() && !Thread.currentThread().isInterrupted()) {
-
-					try {
-						Connection<TestClient> connection = pool.borrowConnection(20, TimeUnit.MILLISECONDS);
-						Thread.sleep(sleepMs);
-						
-						if (failOperation.get()) {
-							((TestConnection)connection).setException(new FatalConnectionException("fail connection"));
-							failOperation.set(false); // reset the latch
-						}
-						pool.returnConnection(connection);
-						result.successCount.incrementAndGet();
-					} catch (InterruptedException e) {
-					} catch (DynoException e) {
-						result.failureCount.incrementAndGet();
-					} finally {
-						result.opCount.incrementAndGet();
-					}
-				}
-				
-				return result;
+			private void waitOnFinish() throws InterruptedException {
+				latch.await();
+			}
+			
+			private boolean isStopped() {
+				return stop.get();
+			}
+			
+			private void stop() {
+				stop.set(true);
 			}
 		}
 		
 		private class BasicResult { 
 			
-			private AtomicInteger opCount = new AtomicInteger(0);
-			private AtomicInteger successCount = new AtomicInteger(0);
-			private AtomicInteger failureCount = new AtomicInteger(0);
+			private final AtomicInteger opCount = new AtomicInteger(0);
+			private final AtomicInteger successCount = new AtomicInteger(0);
+			private final AtomicInteger failureCount = new AtomicInteger(0);
 			
 			private AtomicBoolean lastSuccess = new AtomicBoolean(false);
 			
-			private void addResult(BasicResult other) {
-				opCount.addAndGet(other.opCount.get());
-				successCount.addAndGet(other.successCount.get());
-				failureCount.addAndGet(other.failureCount.get());
-				boolean success = lastSuccess.get() && other.lastSuccess.get();
-				lastSuccess.set(success);
+			private BasicResult() {
 			}
 
 			@Override
@@ -796,12 +720,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				return "BasicResult [opCount=" + opCount + ", successCount=" + successCount + 
 						", failureCount=" + failureCount + ", lastSuccess=" + lastSuccess.get() + "]";
 			}
-			
-			
 		}
-		
-		
-		
 	}
 
 	@Override
