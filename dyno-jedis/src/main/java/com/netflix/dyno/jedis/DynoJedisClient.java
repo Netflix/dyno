@@ -50,7 +50,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 	private enum OpName {
 		 APPEND, BITCOUNT, BLPOP, BRPOP, DECR, DECRBY, DEL, DUMP, ECHO, EXISTS, EXPIRE, EXPIREAT, GET, GETBIT, GETRANGE, GETSET, 
 		 HDEL, HEXISTS,  HGET, HGETALL, HINCRBY, HINCRBYFLOAT, HKEYS, HLEN, HMGET, HMSET, HSET, HSETNX, HVALS, 
-		 INCR, INCRBY, INCRBYFLOAT, LINDEX, LINSERT, LLEN, LPOP, LPUSH, LPUSHX, LRANGE, LREM, LSET, LTRIM, 
+		 INCR, INCRBY, INCRBYFLOAT, KEYS, LINDEX, LINSERT, LLEN, LPOP, LPUSH, LPUSHX, LRANGE, LREM, LSET, LTRIM, 
 		 MOVE, PERSIST, PEXPIRE, PEXPIREAT, PSETEX, PTTL, RESTORE, RPOP, RPOPLPUSH, RPUSH, RPUSHX, 
 		 SADD, SCARD, SDIFF, SDIFFSTORE, SET, SETBIT, SETEX, SETNX, SETRANGE, SINTER, SINTERSTORE, SISMEMBER, SMEMBERS, 
 		 SMOVE, SORT, SPOP, SRANDMEMBER, SREM, STRLEN, SUBSTR, SUNION, SUNIONSTORE, TTL, TYPE, 
@@ -1949,7 +1949,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
 	public OperationResult<Set<String>> d_keys(final String pattern) {
 	
-		return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(pattern, OpName.BITCOUNT) {
+		return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(pattern, OpName.KEYS) {
 
 			@Override
 			public Set<String> execute(Jedis client, ConnectionContext state) throws DynoException {
