@@ -15,7 +15,6 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl.lb;
 
-import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -27,27 +26,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.netflix.dyno.connectionpool.BaseOperation;
-import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.Operation;
-import com.netflix.dyno.connectionpool.TokenMapSupplier;
-import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
-import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
-import com.netflix.dyno.connectionpool.impl.ConnectionContextImpl;
 import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy;
 import com.netflix.dyno.connectionpool.impl.hash.BinarySearchTokenMapper;
 import com.netflix.dyno.connectionpool.impl.hash.Murmur1HashPartitioner;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
-import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
 
 /**
  * Simple class that implements {@link HostSelectionStrategy} using the TOKEN AWARE algorithm. 
@@ -60,114 +53,90 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
  */
 public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 
-	private final TokenMapSupplier tokenSupplier;
 	private final BinarySearchTokenMapper tokenMapper;
-	private String myDC = null;
 
-	private final ConcurrentHashMap<Host, HostConnectionPool<CL>> hostPools = new ConcurrentHashMap<Host, HostConnectionPool<CL>>();
-	
-	private static final String KeyHash = "KeyHash";
+	private final ConcurrentHashMap<Long, HostConnectionPool<CL>> tokenPools = new ConcurrentHashMap<Long, HostConnectionPool<CL>>();
 	
 	public TokenAwareSelection() {
-		this(new TokenMapSupplierImpl());
-	}
-	
-	public TokenAwareSelection(TokenMapSupplier tokenMapSupplier) {
 		
-		if( tokenMapSupplier == null) {
-			throw new DynoConnectException("TokenSupplier cannot be null when using TOKEN AWARE. See ConnectionPoolConfiguration.withTokenSupplier()");
-		}
-		
-		this.tokenSupplier = tokenMapSupplier;
 		this.tokenMapper = new BinarySearchTokenMapper(new Murmur1HashPartitioner());
 	}
 
 	@Override
-	public void initWithHosts(Map<Host, HostConnectionPool<CL>> hPools) {
+	public void initWithHosts(Map<HostToken, HostConnectionPool<CL>> hPools) {
 		
-		Host host = hPools.keySet().iterator().next();
-		myDC = host != null ? host.getDC() : null;
-		
-		hostPools.putAll(hPools);
-		
-		List<Host> hosts = new ArrayList<Host>(hostPools.keySet());
-		
-		this.tokenSupplier.initWithHosts(hosts);
-		List<HostToken> allHostTokens = tokenSupplier.getTokens();
-		
-		if (allHostTokens == null || allHostTokens.isEmpty()) {
-			throw new NoAvailableHostsException("Could not find any hosts from token supplier");
-		}
-		
-		Collection<HostToken> localZoneTokens = CollectionUtils.filter(allHostTokens,  new Predicate<HostToken>() {
+		tokenPools.putAll(CollectionUtils.transformMapKeys(hPools, new Transform<HostToken, Long>() {
 
 			@Override
-			public boolean apply(HostToken x) {
-				String hostDC = x.getHost().getDC();
-				return myDC != null ? myDC.equalsIgnoreCase(hostDC) : true;
+			public Long get(HostToken x) {
+				return x.getToken();
 			}
-		});
-		
-		this.tokenMapper.initSearchMecahnism(localZoneTokens);
+			
+		}));
+
+		this.tokenMapper.initSearchMecahnism(hPools.keySet());
 	}
 
 	@Override
-	public Connection<CL> getConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
+	public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op) throws NoAvailableHostsException {
 		
 		String key = op.getKey();
 		Long keyHash = tokenMapper.hash(key);
 		HostToken hToken = tokenMapper.getToken(keyHash);
 		
-		if (hToken == null) {
-			return null;
+		HostConnectionPool<CL> hostPool = null;
+		if (hToken != null) {
+			hostPool = tokenPools.get(hToken.getToken());
 		}
 		
-		HostConnectionPool<CL> hostPool = hostPools.get(hToken.getHost());
-		
-		if (hostPool == null || !hostPool.isActive()) {
-			return null;
+		if (hostPool == null) {
+			throw new NoAvailableHostsException("Could not find host connection pool for key: " + key + ", hash: " + keyHash);
 		}
 		
-		Connection<CL> connection = hostPool.borrowConnection(duration, unit);
-		connection.getContext().setMetadata(KeyHash, keyHash);
-		return connection;
+		return hostPool;
 	}
 
 	@Override
-	public Map<BaseOperation<CL, ?>, Connection<CL>> getConnection(Collection<BaseOperation<CL, ?>> ops, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
+	public Map<HostConnectionPool<CL>,BaseOperation<CL,?>> getPoolsForOperationBatch(Collection<BaseOperation<CL, ?>> ops) throws NoAvailableHostsException {
+		throw new RuntimeException("Not Implemented");
+	}
+	
+	@Override
+	public List<HostConnectionPool<CL>> getOrderedHostPools() {
+		return new ArrayList<HostConnectionPool<CL>>(tokenPools.values());
+	}
+	
+	@Override
+	public HostConnectionPool<CL> getPoolForToken(Long token) {
+		return tokenPools.get(token);
+	}
+	
+	public List<HostConnectionPool<CL>> getPoolsForTokens(Long start, Long end) {
 		throw new RuntimeException("Not Implemented");
 	}
 
 	@Override
-	public Connection<CL> getFallbackConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
-		throw new RuntimeException("Not Implemented");
-	}
-
-	@Override
-	public void addHost(Host host, HostConnectionPool<CL> hostPool) {
+	public boolean addHostPool(HostToken hostToken, HostConnectionPool<CL> hostPool) {
 		
-		String dc = host.getDC();
-		boolean isSameDc = myDC != null ? myDC.equalsIgnoreCase(dc) : true;
-		
-		if (isSameDc) {
-			HostToken hostToken = tokenSupplier.getTokenForHost(host);
-			if (hostToken != null) {
-				tokenMapper.addHostToken(hostToken);
-				hostPools.put(host, hostPool);
-			}
+		HostConnectionPool<CL> prevPool = tokenPools.put(hostToken.getToken(), hostPool);
+		if (prevPool == null) {
+			tokenMapper.addHostToken(hostToken);
+			return true;
+		}  else {
+			return false;
 		}
 	}
 
 	@Override
-	public void removeHost(Host host, HostConnectionPool<CL> hostPool) {
-		String dc = host.getDC();
-		boolean isSameDc = myDC != null ? myDC.equalsIgnoreCase(dc) : true;
+	public boolean removeHostPool(HostToken hostToken) {
 		
-		if (isSameDc) {
-			HostConnectionPool<CL> prev = hostPools.remove(host);
-			if (prev != null) {
-				tokenMapper.removeHost(host);
-			}
+		HostConnectionPool<CL> prev = tokenPools.get(hostToken.getToken());
+		if (prev != null) {
+			tokenMapper.remoteHostToken(hostToken);
+			tokenPools.remove(hostToken.getToken());
+			return true;
+		} else {
+			return false;
 		}
 	}
 
@@ -178,96 +147,61 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 
 	
 	public String toString() {
-		return "dc: " + myDC + " " + tokenMapper.toString();
+		return "TokenAwareSelection: " + tokenMapper.toString();
 	}
 	
 	
 	public static class UnitTest { 
 		
+		/**
+		cqlsh:dyno_bootstrap> select "availabilityZone","hostname","token" from tokens where "appId" = 'dynomite_redis_puneet';
+
+			availabilityZone | hostname                                   | token
+			------------------+--------------------------------------------+------------
+   			us-east-1c |  ec2-54-83-179-213.compute-1.amazonaws.com | 1383429731
+   			us-east-1c |  ec2-54-224-184-99.compute-1.amazonaws.com |  309687905
+   			us-east-1c |  ec2-54-91-190-159.compute-1.amazonaws.com | 3530913377
+   			us-east-1c |   ec2-54-81-31-218.compute-1.amazonaws.com | 2457171554
+   			us-east-1e | ec2-54-198-222-153.compute-1.amazonaws.com |  309687905
+   			us-east-1e | ec2-54-198-239-231.compute-1.amazonaws.com | 2457171554
+   			us-east-1e |  ec2-54-226-212-40.compute-1.amazonaws.com | 1383429731
+   			us-east-1e | ec2-54-197-178-229.compute-1.amazonaws.com | 3530913377
+
+		cqlsh:dyno_bootstrap> 
+		 */
+	
+		private final HostToken h1 = new HostToken(309687905L, new Host("h1", -1, Status.Up));
+		private final HostToken h2 = new HostToken(1383429731L, new Host("h2", -1, Status.Up));
+		private final HostToken h3 = new HostToken(2457171554L, new Host("h3", -1, Status.Up));
+		private final HostToken h4 = new HostToken(3530913377L, new Host("h4", -1, Status.Up));
+		
+		private final Murmur1HashPartitioner m1Hash = new Murmur1HashPartitioner();
+		
 		@Test
 		public void testTokenAware() throws Exception {
 			
-			TreeMap<Host, HostConnectionPool<Integer>> pools = new TreeMap<Host, HostConnectionPool<Integer>>(new Comparator<Host>() {
+			TreeMap<HostToken, HostConnectionPool<Integer>> pools = new TreeMap<HostToken, HostConnectionPool<Integer>>(new Comparator<HostToken>() {
 
 				@Override
-				public int compare(Host o1, Host o2) {
-					return o1.getHostName().compareTo(o2.getHostName());
+				public int compare(HostToken o1, HostToken o2) {
+					return o1.getHost().getHostName().compareTo(o2.getHost().getHostName());
 				}
 			});
 
-			for (int i=1; i<=4; i++) {
-				Host h = new Host("h"+i, Status.Up);
-				pools.put(h, getMockHostConnectionPool(h));
-			}
+			pools.put(h1, getMockHostConnectionPool(h1));
+			pools.put(h2, getMockHostConnectionPool(h2));
+			pools.put(h3, getMockHostConnectionPool(h3));
+			pools.put(h4, getMockHostConnectionPool(h4));
 			
-			Map<Host, HostToken> map = getTestTokenMap();
-			TokenAwareSelection<Integer> tokenAwareSelector = new TokenAwareSelection<Integer>(new TestTokenMapSupplier(map));
+			TokenAwareSelection<Integer> tokenAwareSelector = new TokenAwareSelection<Integer>();
 			tokenAwareSelector.initWithHosts(pools);
 			
 			Map<String, Integer> result = new HashMap<String, Integer>();
-			
 			runTest(0L, 100000L, result, tokenAwareSelector);
 			
 			System.out.println("Token distribution: " + result);
 			
 			verifyTokenDistribution(result);
-		}
-		
-		private class TestTokenMapSupplier implements TokenMapSupplier {
-			
-			private final Map<Host, HostToken> tokenMap = new HashMap<Host, HostToken>();
-			
-			private TestTokenMapSupplier(Map<Host, HostToken> map) {
-				tokenMap.putAll(map);
-			}
-			
-			@Override
-			public List<HostToken> getTokens() {
-				return new ArrayList<HostToken>(tokenMap.values());
-			}
-
-			@Override
-			public HostToken getTokenForHost(Host host) {
-				return tokenMap.get(host);
-			}
-
-			@Override
-			public void initWithHosts(Collection<Host> hosts) {
-			}
-		}
-		
-		
-		private Map<Host, HostToken> getTestTokenMap() {
-
-			/**
-			cqlsh:dyno_bootstrap> select "availabilityZone","hostname","token" from tokens where "appId" = 'dynomite_redis_puneet';
-
-availabilityZone | hostname                                   | token
-------------------+--------------------------------------------+------------
-       us-east-1c |  ec2-54-83-179-213.compute-1.amazonaws.com | 1383429731
-       us-east-1c |  ec2-54-224-184-99.compute-1.amazonaws.com |  309687905
-       us-east-1c |  ec2-54-91-190-159.compute-1.amazonaws.com | 3530913377
-       us-east-1c |   ec2-54-81-31-218.compute-1.amazonaws.com | 2457171554
-       us-east-1e | ec2-54-198-222-153.compute-1.amazonaws.com |  309687905
-       us-east-1e | ec2-54-198-239-231.compute-1.amazonaws.com | 2457171554
-       us-east-1e |  ec2-54-226-212-40.compute-1.amazonaws.com | 1383429731
-       us-east-1e | ec2-54-197-178-229.compute-1.amazonaws.com | 3530913377
-
-cqlsh:dyno_bootstrap> 
-			 */
-
-			HostToken h1 = new HostToken(309687905L, new Host("h1", -1, Status.Up));
-			HostToken h2 = new HostToken(1383429731L, new Host("h2", -1, Status.Up));
-			HostToken h3 = new HostToken(2457171554L, new Host("h3", -1, Status.Up));
-			HostToken h4 = new HostToken(3530913377L, new Host("h4", -1, Status.Up));
-
-			Map<Host, HostToken> map = new HashMap<Host, HostToken>();
-			map.put(h1.getHost(), h1);
-			map.put(h2.getHost(), h2);
-			map.put(h3.getHost(), h3);
-			map.put(h4.getHost(), h4);
-
-			return map;
 		}
 		
 		private BaseOperation<Integer, Long> getTestOperation(final Long n) {
@@ -291,12 +225,11 @@ cqlsh:dyno_bootstrap>
 			for (long i=start; i<=end; i++) {
 				
 				BaseOperation<Integer, Long> op = getTestOperation(i);
-				Connection<Integer> connection = tokenAwareSelector.getConnection(op, 1, TimeUnit.MILLISECONDS);
+				HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op);
 
-				Long keyHash = (Long) connection.getContext().getMetadata(KeyHash);
-				String hostName = connection.getHost().getHostName();
+				String hostName = pool.getHost().getHostName();
 				
-				verifyKeyHash(op.getKey(), keyHash, hostName);
+				verifyKeyHash(op.getKey(), hostName);
 				
 				Integer count = result.get(hostName);
 				if (count == null) {
@@ -306,7 +239,9 @@ cqlsh:dyno_bootstrap>
 			}
 		}
 
-		private void verifyKeyHash(String key, Long keyHash, String hostname) {
+		private void verifyKeyHash(String key, String hostname) {
+			
+			Long keyHash = m1Hash.hash(key);
 			
 			String expectedHostname = null;
 			
@@ -344,18 +279,11 @@ cqlsh:dyno_bootstrap>
 		}
 		
 		@SuppressWarnings("unchecked")
-		private HostConnectionPool<Integer> getMockHostConnectionPool(final Host host) {
-			
-			final ConnectionContextImpl context = new ConnectionContextImpl();
-
-			Connection<Integer> mockConnection = mock(Connection.class);
-			
-			when(mockConnection.getHost()).thenReturn(host);
-			when(mockConnection.getContext()).thenReturn(context);
+		private HostConnectionPool<Integer> getMockHostConnectionPool(final HostToken hostToken) {
 			
 			HostConnectionPool<Integer> mockHostPool = mock(HostConnectionPool.class);
 			when(mockHostPool.isActive()).thenReturn(true);
-			when(mockHostPool.borrowConnection(any(Integer.class), any(TimeUnit.class))).thenReturn(mockConnection);
+			when(mockHostPool.getHost()).thenReturn(hostToken.getHost());
 			
 			return mockHostPool;
 		}

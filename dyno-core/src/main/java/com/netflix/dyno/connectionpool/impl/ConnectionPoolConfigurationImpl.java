@@ -55,6 +55,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private int pingFrequencySeconds = DEFAULT_PING_FREQ_SECONDS; 
 	private boolean localDcAffinity = DEFAULT_LOCAL_DC_AFFINITY; 
 	private LoadBalancingStrategy lbStrategy = DEFAULT_LB_STRATEGY; 
+	private String localDC;
 	
 	private RetryPolicyFactory retryFactory = new RetryPolicyFactory() {
 
@@ -68,6 +69,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	
 	public ConnectionPoolConfigurationImpl(String name) {
 		this.name = name;
+		this.localDC = System.getenv("EC2_AVAILABILITY_ZONE");
 	}
 	
 	@Override
@@ -272,5 +274,14 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 				
 			});
 		}
+	}
+
+	@Override
+	public String getLocalDC() {
+		return localDC;
+	}
+	
+	public void setLocalDC(String dc) {
+		this.localDC = dc;
 	}
 }

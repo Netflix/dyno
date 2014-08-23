@@ -1,5 +1,7 @@
 package com.netflix.dyno.jedis;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -1944,18 +1946,25 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
 	@Override
 	public Set<String> keys(String pattern) {
-		return d_keys(pattern).getResult();
+		
+		Set<String> allResults = new HashSet<String>();
+		Collection<OperationResult<Set<String>>> results = d_keys(pattern);
+		for (OperationResult<Set<String>> result : results) {
+			allResults.addAll(result.getResult());
+		}
+		return allResults;
 	}
 
-	public OperationResult<Set<String>> d_keys(final String pattern) {
+	public Collection<OperationResult<Set<String>>> d_keys(final String pattern) {
 	
-		return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(pattern, OpName.KEYS) {
+		Collection<OperationResult<Set<String>>> results = connPool.executeWithRing(new BaseKeyOperation<Set<String>>(pattern, OpName.KEYS) {
 
 			@Override
 			public Set<String> execute(Jedis client, ConnectionContext state) throws DynoException {
 				return client.keys(pattern);
 			}
 		});
+		return results;
 	}
 	
 	@Override

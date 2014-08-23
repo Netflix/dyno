@@ -102,6 +102,16 @@ public class CollectionUtils {
 		return toMap;
 	}
 
+	public static <X,Y,Z> Map<Y,Z> transformMapKeys(Map<X,Z> from, Transform<X,Y> transform) {
+		
+		Map<Y,Z> toMap = new HashMap<Y,Z>();
+		for (X x : from.keySet()) {
+			Y y = transform.get(x);
+			toMap.put(y, from.get(x));
+		}
+		return toMap;
+	}
+
 	public static <X,Y> MapDifference<X,Y> difference(Map<X,Y> left, Map<X,Y> right) {
 		
 		MapDifference<X,Y> diff = new MapDifference<X,Y>();
