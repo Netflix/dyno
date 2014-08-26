@@ -281,7 +281,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		return localDC;
 	}
 	
-	public void setLocalDC(String dc) {
+	public ConnectionPoolConfigurationImpl setLocalDC(String dc) {
 		this.localDC = dc;
+		return this;
 	}
 }

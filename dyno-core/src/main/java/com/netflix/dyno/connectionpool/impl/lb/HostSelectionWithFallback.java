@@ -202,7 +202,14 @@ public class HostSelectionWithFallback<CL> {
 
 	public Collection<Connection<CL>> getConnectionsToRing(int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
 		
-		final Collection<Long> tokens = CollectionUtils.transform(hostTokens.values(), new Transform<HostToken, Long>() {
+		final Collection<HostToken> localZoneTokens = CollectionUtils.filter(hostTokens.values(), new Predicate<HostToken>() {
+			@Override
+			public boolean apply(HostToken x) {
+				return localDC != null ? localDC.equalsIgnoreCase(x.getHost().getDC()) : true; 
+			}
+		});
+		
+		final Collection<Long> tokens = CollectionUtils.transform(localZoneTokens, new Transform<HostToken, Long>() {
 			@Override
 			public Long get(HostToken x) {
 				return x.getToken();
