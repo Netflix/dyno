@@ -17,6 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import net.spy.memcached.MemcachedClient;
 
+import org.apache.commons.lang.NotImplementedException;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -304,7 +305,11 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 		throw lastException;
 	}
 
-
+	@Override
+	public <R> Collection<OperationResult<R>> executeWithRing(Operation<CL, R> op) throws DynoException {
+		throw new NotImplementedException("Not implemented");
+	}
+	
 	/**
 	 * Asynchronously executes  the {@link Operation} using the {@link MemcachedConnectionPool} underneath.
 	 * It also maintains {@link ConnectionPoolMonitor} metrics. Since this is an async operation, we don't do any 
@@ -887,4 +892,5 @@ public class RollingMemcachedConnectionPoolImpl<CL> implements ConnectionPool<CL
 			pool.shutdown();
 		}
 	}
+
 }

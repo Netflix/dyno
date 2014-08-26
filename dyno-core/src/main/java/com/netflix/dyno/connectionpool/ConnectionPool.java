@@ -93,7 +93,15 @@ public interface ConnectionPool<CL> {
      * @throws OperationException
      */
     <R> OperationResult<R> executeWithFailover(Operation<CL, R> op) throws DynoException;
-            
+    
+    /**
+     * Scatter gather style operation
+     * @param op
+     * @return
+     * @throws DynoException
+     */
+    <R> Collection<OperationResult<R>> executeWithRing(Operation<CL, R> op) throws DynoException;
+
     <R> Future<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException;
 
     /**
@@ -105,5 +113,4 @@ public interface ConnectionPool<CL> {
      * Setup the connection pool and start any maintenance threads
      */
     Future<Boolean> start();
-
 }

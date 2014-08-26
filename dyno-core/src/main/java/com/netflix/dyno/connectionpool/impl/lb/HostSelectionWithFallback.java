@@ -27,12 +27,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
@@ -41,20 +41,25 @@ import org.slf4j.LoggerFactory;
 
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
+import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancingStrategy;
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
+import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
-import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.CountingConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy;
+import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy.HostSelectionStrategyFactory;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
 
 /**
  * Class that implements the {@link HostSelectionStrategy} interface. 
@@ -70,7 +75,8 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
  *
  * @param <CL>
  */
-public class HostSelectionWithFallback<CL> implements HostSelectionStrategy<CL> {
+
+public class HostSelectionWithFallback<CL> {
 
 	private static final Logger Logger = LoggerFactory.getLogger(HostSelectionWithFallback.class);
 
@@ -80,9 +86,11 @@ public class HostSelectionWithFallback<CL> implements HostSelectionStrategy<CL> 
 	private final HostSelectionStrategy<CL> localSelector;
 	// Track selectors for each remote DC
 	private final ConcurrentHashMap<String, HostSelectionStrategy<CL>> remoteDCSelectors = new ConcurrentHashMap<String, HostSelectionStrategy<CL>>();
-	// The map of all Host -> HostConnectionPool 
-	private final ConcurrentHashMap<Host, HostConnectionPool<CL>> hostPools = new ConcurrentHashMap<Host, HostConnectionPool<CL>>();
 
+	private final ConcurrentHashMap<Host, HostToken> hostTokens = new ConcurrentHashMap<Host, HostToken>();
+
+	private final TokenMapSupplier tokenSupplier; 
+	private final ConnectionPoolConfiguration cpConfig;
 	private final ConnectionPoolMonitor cpMonitor; 
 
 	// list of names of remote zones. Used for RoundRobin over remote zones when local zone host is down
@@ -90,180 +98,154 @@ public class HostSelectionWithFallback<CL> implements HostSelectionStrategy<CL> 
 
 	private final HostSelectionStrategyFactory<CL> selectorFactory;
 
-	public HostSelectionWithFallback(HostSelectionStrategyFactory<CL> sFactory, ConnectionPoolMonitor monitor) {
+	public HostSelectionWithFallback(ConnectionPoolConfiguration config, ConnectionPoolMonitor monitor) {
 
-		this(sFactory, monitor, new Callable<String>() {
-
-			@Override
-			public String call() throws Exception {
-				return System.getenv("EC2_AVAILABILITY_ZONE");
-			}
-		});
-	}
-
-	public HostSelectionWithFallback(HostSelectionStrategyFactory<CL> sFactory, ConnectionPoolMonitor monitor, Callable<String> localDCFunc) {
-
-		try {
-			localDC = localDCFunc.call();
-			Logger.info("Local dc: "  + localDC);
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-
-		selectorFactory = sFactory;
 		cpMonitor = monitor;
+		cpConfig = config;
+		localDC = cpConfig.getLocalDC();
+		tokenSupplier = cpConfig.getTokenSupplier();
 
-		localSelector = selectorFactory.vendSelectionStrategy();
+		selectorFactory = new DefaultSelectionFactory(cpConfig);
+		localSelector = selectorFactory.vendPoolSelectionStrategy();
 	}
 
-	@Override
-	public void initWithHosts(Map<Host, HostConnectionPool<CL>> hPools) {
-
-		hostPools.putAll(hPools);
-
-		Set<String> remoteDCs = new HashSet<String>();
-
-		for (Host host : hPools.keySet()) {
-			String dc = host.getDC();
-			if (localDC != null && !localDC.isEmpty() && dc != null && !dc.isEmpty() && !localDC.equals(dc)) {
-				remoteDCs.add(dc);
-			}
-		}
-
-		Map<Host, HostConnectionPool<CL>> localPools = getHostPoolsForDC(localDC);
-		localSelector.initWithHosts(localPools);
-
-		for (String dc : remoteDCs) {
-
-			Map<Host, HostConnectionPool<CL>> dcPools = getHostPoolsForDC(dc);
-
-			HostSelectionStrategy<CL> remoteSelector = selectorFactory.vendSelectionStrategy();
-			remoteSelector.initWithHosts(dcPools);
-
-			remoteDCSelectors.put(dc, remoteSelector);
-		}
-
-		remoteDCNames.swapWithList(remoteDCSelectors.keySet());
-	}
-
-	@Override
 	public Connection<CL> getConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
+		return getConnection(op, null, duration, unit);
+	}
 
-		Connection<CL> connection = null; 
+	private Connection<CL> getConnection(BaseOperation<CL, ?> op, Long token, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
+
+		HostConnectionPool<CL> hostPool = null; 
 		DynoConnectException lastEx = null;
 		
+		boolean useFallback = false;
+		
 		try {
-			connection = localSelector.getConnection(op, duration, unit);
+			hostPool = (op != null) ? localSelector.getPoolForOperation(op) : localSelector.getPoolForToken(token);
+			useFallback = !isConnectionPoolActive(hostPool);
+			
 		} catch (NoAvailableHostsException e) {
 			lastEx = e;
 			cpMonitor.incOperationFailure(null, e);
-		} catch (PoolOfflineException e) {
-			lastEx = e;
-			cpMonitor.incOperationFailure(null, e);
-		} catch (PoolTimeoutException e) {
-			lastEx = e;
-			cpMonitor.incOperationFailure(null, e);
-		} catch (PoolExhaustedException e) {
-			lastEx = e;
-			cpMonitor.incOperationFailure(null, e);
+			useFallback = true;
 		}
-
-		if (lastEx != null) {
-			
-			Host host = lastEx.getHost();
-			if (host != null) { 
-				cpMonitor.incFailover(host, null);
+		
+		if (!useFallback) {
+			try { 
+				return hostPool.borrowConnection(duration, unit);
+			} catch (DynoConnectException e) {
+				lastEx = e;
+				cpMonitor.incOperationFailure(null, e);
+				useFallback = true;
 			}
-			
+		}
+		
+		if (useFallback && cpConfig.getMaxFailoverCount() > 0) {
+			// Check if we have any remotes to fallback to
 			int numRemotes = remoteDCNames.getEntireList().size();
 			if (numRemotes == 0) {
-				throw lastEx; // give up
+				if (lastEx != null) {
+					throw lastEx; // give up
+				} else {
+					throw new PoolOfflineException(hostPool.getHost(), "host pool is offline and no DCs available for fallback");
+				}
+			} else {
+				hostPool = getFallbackHostPool(op, null /** No token*/);
 			}
-
-			connection = getFallbackConnection(op, duration, unit);
-			
-		} else if (!isConnectionPoolActive(connection)) {
-			
-			Host host = connection != null ? connection.getHost() : null;
-			cpMonitor.incFailover(host, null);
-			connection = getFallbackConnection(op, duration, unit);
 		}
 		
-		if (connection != null) {
-			return connection;
+		if (hostPool == null) {
+			throw new NoAvailableHostsException("Found no hosts when using fallback DC");
 		}
 		
-		if (lastEx != null) {
-			throw lastEx;
-		} else {
-			throw new PoolExhaustedException("No available connections in connection pool");
-		}
+		return hostPool.borrowConnection(duration, unit);
 	}
 
-
-	@Override
-	public Connection<CL> getFallbackConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
-
-		int numRemotes = remoteDCNames.getEntireList().size();
-
-		Connection<CL> connection = null;
-		DynoException lastEx = null;
+	private HostConnectionPool<CL> getFallbackHostPool(BaseOperation<CL, ?> op, Long token) {
 		
+		int numRemotes = remoteDCNames.getEntireList().size();
 		if (numRemotes == 0) {
-			throw new NoAvailableHostsException("Could not find any remote hosts for fallback connection");
+			throw new NoAvailableHostsException("Could not find any remote DCs for fallback");
 		}
 
-		while ((numRemotes > 0) && (connection == null)) {
+		int numTries = Math.min(numRemotes, cpConfig.getMaxFailoverCount());
+		
+		DynoException lastEx = null;
+		
+		while ((numTries > 0)) {
 
-			numRemotes--;
-			String dc = remoteDCNames.getNextElement();
-			HostSelectionStrategy<CL> remoteDCSelector = remoteDCSelectors.get(dc);
+			numTries--;
+			String remoteDC = remoteDCNames.getNextElement();
+			HostSelectionStrategy<CL> remoteDCSelector = remoteDCSelectors.get(remoteDC);
 
 			try {
-				connection = remoteDCSelector.getConnection(op, duration, unit);
-
-				if (!isConnectionPoolActive(connection)) {
-					connection = null; // look for another connection
+				
+				HostConnectionPool<CL> fallbackHostPool = 
+						(op != null) ? remoteDCSelector.getPoolForOperation(op) : remoteDCSelector.getPoolForToken(token);
+				
+				if (isConnectionPoolActive(fallbackHostPool)) {
+					return fallbackHostPool;
 				}
 
 			} catch (NoAvailableHostsException e) {
 				cpMonitor.incOperationFailure(null, e);
 				lastEx = e;
-			} catch (PoolExhaustedException e) {
-				cpMonitor.incOperationFailure(null, e);
+			}
+		}
+		
+		if (lastEx != null) {
+			throw lastEx;
+		} else {
+			throw new NoAvailableHostsException("Local zone host offline and could not find any remote hosts for fallback connection");
+		}
+	}
+
+	public Collection<Connection<CL>> getConnectionsToRing(int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
+		
+		final Collection<HostToken> localZoneTokens = CollectionUtils.filter(hostTokens.values(), new Predicate<HostToken>() {
+			@Override
+			public boolean apply(HostToken x) {
+				return localDC != null ? localDC.equalsIgnoreCase(x.getHost().getDC()) : true; 
+			}
+		});
+		
+		final Collection<Long> tokens = CollectionUtils.transform(localZoneTokens, new Transform<HostToken, Long>() {
+			@Override
+			public Long get(HostToken x) {
+				return x.getToken();
+			}
+		});
+		
+		DynoConnectException lastEx = null;
+		
+		List<Connection<CL>> connections = new ArrayList<Connection<CL>>();
+				
+		for (Long token : tokens) {
+			try { 
+				connections.add(getConnection(null, token, duration, unit));
+			} catch (DynoConnectException e) {
+				Logger.warn("Failed to get connection when getting all connections from ring", e.getMessage());
 				lastEx = e;
+				break;
 			}
 		}
-
-		if (connection == null) {
-			if (lastEx != null) {
-				throw lastEx;
-			} else {
-				throw new PoolExhaustedException("Local zone host is down and no remote zone hosts for fallback");
+		
+		if (lastEx != null) {
+			// Return all previously borrowed connection to avoid any conneciton leaks
+			for (Connection<CL> connection : connections) {
+				try {
+					connection.getParentConnectionPool().returnConnection(connection);
+				} catch (DynoConnectException e) {
+					// do nothing
+				}
 			}
-		}
-
-		return connection;
-	}
-
-	@Override
-	public void addHost(Host host, HostConnectionPool<CL> hostPool) {
-		hostPools.put(host, hostPool);
-		HostSelectionStrategy<CL> selector = findSelector(host);
-		if (selector != null) {
-			selector.addHost(host, hostPool);
+			throw lastEx;
+			
+		} else {
+			return connections;
 		}
 	}
 
-	@Override
-	public void removeHost(Host host, HostConnectionPool<CL> hostPool) {
-
-		hostPools.remove(host);
-		HostSelectionStrategy<CL> selector = findSelector(host);
-		if (selector != null) {
-			selector.removeHost(host, hostPool);
-		}
-	}
 
 	private HostSelectionStrategy<CL> findSelector(Host host) {
 		String dc = host.getDC();
@@ -279,11 +261,10 @@ public class HostSelectionWithFallback<CL> implements HostSelectionStrategy<CL> 
 		return remoteSelector;
 	}
 
-	private boolean isConnectionPoolActive(Connection<CL> connection) {
-		if (connection == null) {
+	private boolean isConnectionPoolActive(HostConnectionPool<CL> hPool) {
+		if (hPool == null) {
 			return false;
 		}
-		HostConnectionPool<CL> hPool = connection.getParentConnectionPool();
 		Host host = hPool.getHost();
 
 		if (!host.isUp()) {
@@ -293,44 +274,110 @@ public class HostSelectionWithFallback<CL> implements HostSelectionStrategy<CL> 
 		}
 	}
 
+	private Map<HostToken, HostConnectionPool<CL>> getHostPoolsForDC(final Map<HostToken, HostConnectionPool<CL>> map, final String dc) {
 
-	@Override
-	public Map<BaseOperation<CL, ?>, Connection<CL>> getConnection(Collection<BaseOperation<CL, ?>> ops, int duration, TimeUnit unit)
-			throws NoAvailableHostsException, PoolExhaustedException {
-
-		Map<BaseOperation<CL, ?>, Connection<CL>> map = new HashMap<BaseOperation<CL, ?>, Connection<CL>>();
-
-		for (BaseOperation<CL, ?> op : ops) {
-			Connection<CL> connectionForOp = getConnection(op, duration, unit);
-			map.put(op, connectionForOp);
-		}
-		return map;
-	}
-
-	private Map<Host, HostConnectionPool<CL>> getHostPoolsForDC(final String dc) {
-
-		Map<Host, HostConnectionPool<CL>> dcPools = 
-				CollectionUtils.filterKeys(hostPools, new Predicate<Host>() {
+		Map<HostToken, HostConnectionPool<CL>> dcPools = 
+				CollectionUtils.filterKeys(map, new Predicate<HostToken>() {
 
 					@Override
-					public boolean apply(Host x) {
+					public boolean apply(HostToken x) {
 						if (localDC == null) {
 							return true;
 						}
-						return dc.equals(x.getDC());
+						return dc.equals(x.getHost().getDC());
 					}
-
 				});
 		return dcPools;
 	}
-
-
-	public Long getKeyHash(String key) {
-		return null;
-//		TokenAwareSelector tSelector = (TokenAwareSelector) localSelector;
-//		return tSelector.getKeyHash(key);
-	}
 	
+	public void initWithHosts(Map<Host, HostConnectionPool<CL>> hPools) {
+
+		// Get the list of tokens for these hosts
+		tokenSupplier.initWithHosts(hPools.keySet());
+		List<HostToken> allHostTokens = tokenSupplier.getTokens();
+
+		Map<HostToken, HostConnectionPool<CL>> tokenPoolMap = new HashMap<HostToken, HostConnectionPool<CL>>();
+		
+		// Update inner state with the host tokens.
+		
+		for (HostToken hToken : allHostTokens) {
+			hostTokens.put(hToken.getHost(), hToken);
+			tokenPoolMap.put(hToken, hPools.get(hToken.getHost()));
+		}
+		
+		Set<String> remoteDCs = new HashSet<String>();
+
+		for (Host host : hPools.keySet()) {
+			String dc = host.getDC();
+			if (localDC != null && !localDC.isEmpty() && dc != null && !dc.isEmpty() && !localDC.equals(dc)) {
+				remoteDCs.add(dc);
+			}
+		}
+
+		Map<HostToken, HostConnectionPool<CL>> localPools = getHostPoolsForDC(tokenPoolMap, localDC);
+		localSelector.initWithHosts(localPools);
+
+		for (String dc : remoteDCs) {
+
+			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForDC(tokenPoolMap, dc);
+
+			HostSelectionStrategy<CL> remoteSelector = selectorFactory.vendPoolSelectionStrategy();
+			remoteSelector.initWithHosts(dcPools);
+
+			remoteDCSelectors.put(dc, remoteSelector);
+		}
+
+		remoteDCNames.swapWithList(remoteDCSelectors.keySet());
+	}
+
+
+	public void addHost(Host host, HostConnectionPool<CL> hostPool) {
+		
+		HostToken hostToken = tokenSupplier.getTokenForHost(host);
+		if (hostToken == null) {
+			throw new DynoConnectException("Could not find host token for host: " + host);
+		}
+		
+		hostTokens.put(hostToken.getHost(), hostToken);
+		
+		HostSelectionStrategy<CL> selector = findSelector(host);
+		if (selector != null) {
+			selector.addHostPool(hostToken, hostPool);
+		}
+	}
+
+	public void removeHost(Host host, HostConnectionPool<CL> hostPool) {
+
+		HostToken hostToken = hostTokens.remove(host);
+		if (hostToken != null) {
+			HostSelectionStrategy<CL> selector = findSelector(host);
+			if (selector != null) {
+				selector.removeHostPool(hostToken);
+			}
+		}
+	}
+
+	private class DefaultSelectionFactory implements HostSelectionStrategyFactory<CL> {
+
+		private final LoadBalancingStrategy lbStrategy;
+		private DefaultSelectionFactory(ConnectionPoolConfiguration config) {
+			lbStrategy = config.getLoadBalancingStrategy();
+		}
+		@Override
+		public HostSelectionStrategy<CL> vendPoolSelectionStrategy() {
+			
+			switch (lbStrategy) {
+			case RoundRobin:
+				return new RoundRobinSelection<CL>();
+			case TokenAware:
+				return new TokenAwareSelection<CL>();
+			default :
+				throw new RuntimeException("LoadBalancing strategy not supported! " + cpConfig.getLoadBalancingStrategy().name());
+			}
+		}
+		
+	}
+
 	public static class UnitTest {
 		
 		private Map<Host, AtomicBoolean> poolStatus = new HashMap<Host, AtomicBoolean>();
@@ -348,39 +395,32 @@ public class HostSelectionWithFallback<CL> implements HostSelectionStrategy<CL> 
 			}
 		};
 		
+		private final ConnectionPoolConfigurationImpl cpConfig = new ConnectionPoolConfigurationImpl("test");
+		private final ConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
+
+		Host h1 = new Host("h1", Status.Up).setDC("localTestDC");
+		Host h2 = new Host("h2", Status.Up).setDC("localTestDC");
+		Host h3 = new Host("h3", Status.Up).setDC("remoteDC1");
+		Host h4 = new Host("h4", Status.Up).setDC("remoteDC1");
+		Host h5 = new Host("h5", Status.Up).setDC("remoteDC2");
+		Host h6 = new Host("h6", Status.Up).setDC("remoteDC2");
+		
+		Host[] arr = {h1, h2, h3, h4, h5, h6};
+		List<Host> hosts = Arrays.asList(arr);
+
+		@Before
+		public void beforeTest() {
+			cpConfig.setLocalDC("localTestDC");
+			cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.RoundRobin);
+			cpConfig.withTokenSupplier(getTokenMapSupplier());
+		}
+		
 		@Test
 		public void testFallbackToRemotePoolWhenPoolInactive() throws Exception {
 			
-			Callable<String> localDCFunc = new Callable<String>() {
-				@Override
-				public String call() throws Exception {
-					return "localTestDC";
-				}
-			};
-			
-			HostSelectionStrategyFactory<Integer> sFactory = new HostSelectionStrategyFactory<Integer>() {
-
-				@Override
-				public HostSelectionStrategy<Integer> vendSelectionStrategy() {
-					return new RoundRobinSelection<Integer>();
-				}
-			};
-			
-			ConnectionPoolMonitor cpMon = new CountingConnectionPoolMonitor();
-			
-			HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(sFactory, cpMon, localDCFunc);
+			HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
 			
 			Map<Host, HostConnectionPool<Integer>> pools = new HashMap<Host, HostConnectionPool<Integer>>();
-			
-			Host h1 = new Host("h1", Status.Up).setDC("localTestDC");
-			Host h2 = new Host("h2", Status.Up).setDC("localTestDC");
-			Host h3 = new Host("h3", Status.Up).setDC("remoteDC1");
-			Host h4 = new Host("h4", Status.Up).setDC("remoteDC1");
-			Host h5 = new Host("h5", Status.Up).setDC("remoteDC2");
-			Host h6 = new Host("h6", Status.Up).setDC("remoteDC2");
-			
-			Host[] arr = {h1, h2, h3, h4, h5, h6};
-			List<Host> hosts = Arrays.asList(arr);
 			
 			for (Host host : hosts) {
 				poolStatus.put(host, new AtomicBoolean(true));
@@ -435,36 +475,9 @@ public class HostSelectionWithFallback<CL> implements HostSelectionStrategy<CL> 
 		@Test
 		public void testFallbackToRemotePoolWhenHostDown() throws Exception {
 			
-			Callable<String> localDCFunc = new Callable<String>() {
-				@Override
-				public String call() throws Exception {
-					return "localTestDC";
-				}
-			};
-			
-			HostSelectionStrategyFactory<Integer> sFactory = new HostSelectionStrategyFactory<Integer>() {
-
-				@Override
-				public HostSelectionStrategy<Integer> vendSelectionStrategy() {
-					return new RoundRobinSelection<Integer>();
-				}
-			};
-			
-			ConnectionPoolMonitor cpMon = new CountingConnectionPoolMonitor();
-			
-			HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(sFactory, cpMon, localDCFunc);
+			HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
 			
 			Map<Host, HostConnectionPool<Integer>> pools = new HashMap<Host, HostConnectionPool<Integer>>();
-			
-			Host h1 = new Host("h1", Status.Up).setDC("localTestDC");
-			Host h2 = new Host("h2", Status.Up).setDC("localTestDC");
-			Host h3 = new Host("h3", Status.Up).setDC("remoteDC1");
-			Host h4 = new Host("h4", Status.Up).setDC("remoteDC1");
-			Host h5 = new Host("h5", Status.Up).setDC("remoteDC2");
-			Host h6 = new Host("h6", Status.Up).setDC("remoteDC2");
-			
-			Host[] arr = {h1, h2, h3, h4, h5, h6};
-			List<Host> hosts = Arrays.asList(arr);
 			
 			for (Host host : hosts) {
 				poolStatus.put(host, new AtomicBoolean(true));
@@ -528,13 +541,14 @@ public class HostSelectionWithFallback<CL> implements HostSelectionStrategy<CL> 
 			notExpected.removeAll(expected);
 			
 			for (String e : expected) {
-				Assert.assertTrue(result.contains(e));
+				Assert.assertTrue("Result: " + result + ", expected: " + e, result.contains(e));
 			}
 			for (String ne : notExpected) {
-				Assert.assertFalse(result.contains(ne));
+				Assert.assertFalse("Result: " + result, result.contains(ne));
 			}
 		}
 		
+		@SuppressWarnings("unchecked")
 		private HostConnectionPool<Integer> getMockHostConnectionPool(final Host host, final AtomicBoolean status) {
 			
 			Connection<Integer> mockConnection = mock(Connection.class); 
@@ -557,5 +571,53 @@ public class HostSelectionWithFallback<CL> implements HostSelectionStrategy<CL> 
 			return mockPool;
 		}
 		
+
+		/**
+		cqlsh:dyno_bootstrap> select "availabilityZone","hostname","token" from tokens where "appId" = 'dynomite_redis_puneet';
+
+			availabilityZone | hostname                                   | token
+			------------------+--------------------------------------------+------------
+   			us-east-1c |  ec2-54-83-179-213.compute-1.amazonaws.com | 1383429731
+   			us-east-1c |  ec2-54-224-184-99.compute-1.amazonaws.com |  309687905
+   			us-east-1c |  ec2-54-91-190-159.compute-1.amazonaws.com | 3530913377
+   			us-east-1c |   ec2-54-81-31-218.compute-1.amazonaws.com | 2457171554
+   			us-east-1e | ec2-54-198-222-153.compute-1.amazonaws.com |  309687905
+   			us-east-1e | ec2-54-198-239-231.compute-1.amazonaws.com | 2457171554
+   			us-east-1e |  ec2-54-226-212-40.compute-1.amazonaws.com | 1383429731
+   			us-east-1e | ec2-54-197-178-229.compute-1.amazonaws.com | 3530913377
+
+		cqlsh:dyno_bootstrap> 
+		 */
+	
+		private TokenMapSupplier getTokenMapSupplier() {
+			
+			final Map<Host, HostToken> tokenMap = new HashMap<Host, HostToken>();
+
+			return new TokenMapSupplier () {
+				@Override
+				public List<HostToken> getTokens() {
+					return new ArrayList<HostToken>(tokenMap.values());
+				}
+
+				@Override
+				public HostToken getTokenForHost(Host host) {
+					return tokenMap.get(host);
+				}
+
+				@Override
+				public void initWithHosts(Collection<Host> hosts) {
+					
+					tokenMap.clear();
+					
+					tokenMap.put(h1, new HostToken(1383429731L, h1));
+					tokenMap.put(h2, new HostToken(3530913377L, h2));
+					tokenMap.put(h3, new HostToken(1383429731L, h3));
+					tokenMap.put(h4, new HostToken(3530913377L, h4));
+					tokenMap.put(h5, new HostToken(1383429731L, h5));
+					tokenMap.put(h6, new HostToken(3530913377L, h6));
+				}
+			};
+		}
 	}
+		
 }

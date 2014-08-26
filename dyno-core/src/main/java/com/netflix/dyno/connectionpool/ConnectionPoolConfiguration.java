@@ -110,4 +110,10 @@ public interface ConnectionPoolConfiguration {
      * @return
      */
     public int getPingFrequencySeconds();
+    
+    /**
+     * 
+     * @return
+     */
+    public String getLocalDC();
 }

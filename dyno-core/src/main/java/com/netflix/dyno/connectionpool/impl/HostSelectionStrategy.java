@@ -16,6 +16,7 @@
 package com.netflix.dyno.connectionpool.impl;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -25,6 +26,7 @@ import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
+import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 
 /**
  * Interface that encapsulates a strategy for selecting a {@link Connection} to a {@link Host} for the given {@link BaseOperation}
@@ -35,74 +37,70 @@ import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 public interface HostSelectionStrategy<CL> {
 
 	/**
-	 * Get a connection to this host within the specified time duration
+	 * 
 	 * @param op
-	 * @param duration
-	 * @param unit
 	 * @return
-	 * @throws NoAvailableHostsException if there are no connections or pool is not inited etc
-	 * @throws PoolExhaustedException  if all connections within the pool are busy serving other requests and no connection becomes available 
-	 *         within the specified time duration      
+	 * @throws NoAvailableHostsException
 	 */
-	public Connection<CL> getConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException;
+	public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op) throws NoAvailableHostsException;
 
 	/**
-	 * Get a map of connections for the specified operations. This is used for scatter gather type of operations. 
-	 * Please note that the underlying connection pool must be sized appropriately when using this operation since this is a less available operations
-	 * by design
 	 * 
 	 * @param ops
-	 * @param duration
-	 * @param unit
 	 * @return
 	 * @throws NoAvailableHostsException
-	 * @throws PoolExhaustedException
 	 */
-	public Map<BaseOperation<CL,?>,Connection<CL>> getConnection(Collection<BaseOperation<CL, ?>> ops, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException;
+	public Map<HostConnectionPool<CL>,BaseOperation<CL,?>> getPoolsForOperationBatch(Collection<BaseOperation<CL, ?>> ops) throws NoAvailableHostsException;
 	
 	/**
-	 * Explicitly fetch a fallback connection from the fallback dc or set of hosts for the specified operation within the specified time duration
-	 * @param op
-	 * @param duration
-	 * @param unit
+	 * 
 	 * @return
-	 * @throws NoAvailableHostsException
-	 * @throws PoolExhaustedException
 	 */
-	public Connection<CL> getFallbackConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException;
+	public List<HostConnectionPool<CL>> getOrderedHostPools();
+	
+	/**
+	 * 
+	 * @param token
+	 * @return
+	 */
+	public HostConnectionPool<CL> getPoolForToken(Long token);
+	
+	/**
+	 * 
+	 * @param start
+	 * @param end
+	 * @return
+	 */
+	public List<HostConnectionPool<CL>> getPoolsForTokens(Long start, Long end);
 
 	/**
 	 * Init the connection pool with the set of hosts provided
 	 * @param hostPools
 	 */
-	public void initWithHosts(Map<Host, HostConnectionPool<CL>> hostPools);
+	public void initWithHosts(Map<HostToken, HostConnectionPool<CL>> hostPools);
 	
 	/**
 	 * Add a host to the selection strategy. This is useful when the underlying dynomite topology changes.
-	 * @param host
+	 * @param HostToken
 	 * @param hostPool
+	 * @return true/false indicating whether the pool was indeed added
 	 */
-	public void addHost(Host host, HostConnectionPool<CL> hostPool);
+	public boolean addHostPool(HostToken host, HostConnectionPool<CL> hostPool);
 	
 	/**
 	 * Remove a host from the selection strategy. This is useful when the underlying dynomite topology changes.
-	 * @param host
-	 * @param hostPool
+	 * @param HostToken
+	 * @return true/false indicating whether the pool was indeed removed
 	 */
-	public void removeHost(Host host, HostConnectionPool<CL> hostPool);
-	
-	/**
-	 * Interface that encapsulates a factory for vending {@link HostSelectionStrategy}
-	 * @author poberai
-	 *
-	 * @param <CL>
-	 */
+	public boolean removeHostPool(HostToken host);
+
 	public static interface HostSelectionStrategyFactory<CL> {
 		
 		/**
 		 * Create/Return a HostSelectionStrategy 
 		 * @return HostSelectionStrategy
 		 */
-		public HostSelectionStrategy<CL> vendSelectionStrategy();
+		public HostSelectionStrategy<CL> vendPoolSelectionStrategy();
 	}
+
 }

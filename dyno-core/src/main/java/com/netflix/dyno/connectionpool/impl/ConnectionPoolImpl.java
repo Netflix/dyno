@@ -17,7 +17,9 @@ package com.netflix.dyno.connectionpool.impl;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -25,6 +27,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -55,19 +58,18 @@ import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.RetryPolicy;
 import com.netflix.dyno.connectionpool.RetryPolicy.RetryPolicyFactory;
+import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
-import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
+import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl.ErrorRateMonitorConfigImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl.HostConnectionPoolFactory.Type;
-import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy.HostSelectionStrategyFactory;
 import com.netflix.dyno.connectionpool.impl.health.ConnectionPoolHealthTracker;
 import com.netflix.dyno.connectionpool.impl.lb.HostSelectionWithFallback;
-import com.netflix.dyno.connectionpool.impl.lb.RoundRobinSelection;
-import com.netflix.dyno.connectionpool.impl.lb.TokenAwareSelection;
+import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 
@@ -114,7 +116,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	
 	private final AtomicBoolean started = new AtomicBoolean(false);
 	
-	private HostSelectionStrategy<CL> selectionStrategy; 
+	private HostSelectionWithFallback<CL> selectionStrategy; 
 	
 	private Type poolType;
 
@@ -144,7 +146,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		MonitorConsole.getInstance().addMonitorConsole(cpConfig.getName(), cpMon);
 	}
 	
-	public HostSelectionStrategy<CL> getTokenSelection() {
+	public HostSelectionWithFallback<CL> getTokenSelection() {
 		return selectionStrategy;
 	}
 	
@@ -275,13 +277,13 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			Connection<CL> connection = null;
 			
 			try { 
-				if (lastException != null && retry.allowRemoteDCFallback()) {
-					connection = 
-							selectionStrategy.getFallbackConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
-				} else {
+//				if (lastException != null && retry.allowRemoteDCFallback()) {
+//					connection = 
+//							selectionStrategy.getFallbackConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
+//				} else {
 					connection = 
 							selectionStrategy.getConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
-				}
+//				}
 				OperationResult<R> result = connection.execute(op);
 				
 				// Add context to the result from the successful execution
@@ -326,6 +328,90 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		throw lastException;
 	}
 
+	@Override
+	public <R> Collection<OperationResult<R>> executeWithRing(Operation<CL, R> op) throws DynoException {
+
+		// Start recording the operation
+		long startTime = System.currentTimeMillis();
+
+		Collection<Connection<CL>> connections = selectionStrategy.getConnectionsToRing(cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
+
+		LinkedBlockingQueue<Connection<CL>> connQueue = new LinkedBlockingQueue<Connection<CL>>();
+		connQueue.addAll(connections);
+
+		List<OperationResult<R>> results = new ArrayList<OperationResult<R>>();
+
+		DynoException lastException = null;
+
+		try { 
+			while(!connQueue.isEmpty()) {
+
+				Connection<CL> connection = connQueue.poll();
+
+				RetryPolicy retry = cpConfiguration.getRetryPolicyFactory().getRetryPolicy();
+				retry.begin();
+
+				do {
+					try { 
+						OperationResult<R> result = connection.execute(op);
+
+						// Add context to the result from the successful execution
+						result.setNode(connection.getHost())
+						.addMetadata(connection.getContext().getAll());
+
+						retry.success();
+						cpMonitor.incOperationSuccess(connection.getHost(), System.currentTimeMillis()-startTime);
+
+						results.add(result); 
+
+					} catch(NoAvailableHostsException e) {
+						cpMonitor.incOperationFailure(null, e);
+
+						throw e;
+					} catch(DynoException e) {
+
+						retry.failure(e);
+						lastException = e;
+
+						cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, e);
+
+						// Track the connection health so that the pool can be purged at a later point
+						if (connection != null) {
+							cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
+						}
+
+					} catch(Throwable t) {
+						throw new RuntimeException(t);
+					} finally {
+						connection.getContext().reset();
+						connection.getParentConnectionPool().returnConnection(connection);
+					}
+
+				} while(retry.allowRetry());
+			}
+			
+			// we fail the entire operation on a partial failure. hence need to clean up the rest of the pending connections
+		} finally {
+			List<Connection<CL>> remainingConns = new ArrayList<Connection<CL>>();
+			connQueue.drainTo(remainingConns);
+			for (Connection<CL> connectionToClose : remainingConns) {
+				try { 
+					connectionToClose.getContext().reset();
+					connectionToClose.getParentConnectionPool().returnConnection(connectionToClose);
+				} catch (Throwable t) {
+
+				}
+			}
+		}
+
+		if (lastException != null) {
+			throw lastException;
+		} else {
+			return results;
+		}
+	}
+	
+	
 	@Override
 	public void shutdown() {
 		for (Host host : cpMap.keySet()) {
@@ -386,32 +472,12 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		return getEmptyFutureTask(true);
 	}
 	
-	private HostSelectionStrategy<CL> initSelectionStrategy() {
+	private HostSelectionWithFallback<CL> initSelectionStrategy() {
 		
-		HostSelectionStrategyFactory<CL> sFactory = null; 
-		
-		switch (cpConfiguration.getLoadBalancingStrategy()) {
-		case RoundRobin:
-			sFactory = new HostSelectionStrategyFactory<CL>() {
-				@Override
-				public HostSelectionStrategy<CL> vendSelectionStrategy() {
-					return new RoundRobinSelection<CL>();
-				}
-			};
-			break;
-		case TokenAware:
-			sFactory = new HostSelectionStrategyFactory<CL>() {
-				@Override
-				public HostSelectionStrategy<CL> vendSelectionStrategy() {
-					return new TokenAwareSelection<CL>(cpConfiguration.getTokenSupplier());
-				}
-			};
-			break;
-		default :
-			throw new RuntimeException("LoadBalancing strategy not supported! " + cpConfiguration.getLoadBalancingStrategy().name());
+		if (cpConfiguration.getTokenSupplier() == null) {
+			throw new RuntimeException("TokenMapSupplier not configured");
 		}
-
-		HostSelectionWithFallback<CL> selection = new HostSelectionWithFallback<CL>(sFactory, cpMonitor);
+		HostSelectionWithFallback<CL> selection = new HostSelectionWithFallback<CL>(cpConfiguration, cpMonitor);
 		selection.initWithHosts(cpMap);
 		return selection;
 	}
@@ -581,16 +647,16 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			}
 		};
 		
-		private Host host1 = new Host("host1", 8080, Status.Up);
-		private Host host2 = new Host("host2", 8080, Status.Up);
-		private Host host3 = new Host("host3", 8080, Status.Up);
+		private Host host1 = new Host("host1", 8080, Status.Up).setDC("localDC");
+		private Host host2 = new Host("host2", 8080, Status.Up).setDC("localDC");
+		private Host host3 = new Host("host3", 8080, Status.Up).setDC("localDC");
 		
 		@Before
 		public void beforeTest() {
 
-			host1 = new Host("host1", 8080, Status.Up);
-			host2 = new Host("host2", 8080, Status.Up);
-			host3 = new Host("host3", 8080, Status.Up);
+			host1 = new Host("host1", 8080, Status.Up).setDC("localDC");
+			host2 = new Host("host2", 8080, Status.Up).setDC("localDC");
+			host3 = new Host("host3", 8080, Status.Up).setDC("localDC");
 
 			client = new TestClient();
 			cpConfig = new ConnectionPoolConfigurationImpl("TestClient").setLoadBalancingStrategy(LoadBalancingStrategy.RoundRobin);
@@ -601,6 +667,11 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 					return new ArrayList<Host>();
 				}
 			});
+			
+			cpConfig.setLocalDC("localDC");
+			cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.RoundRobin);
+			
+			cpConfig.withTokenSupplier(getTokenMapSupplier());
 			
 			cpMonitor = new CountingConnectionPoolMonitor();
 		}
@@ -649,6 +720,62 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			
 			Assert.assertEquals(client.ops.get(), cpMonitor.getConnectionBorrowedCount());
 			Assert.assertEquals(client.ops.get(), cpMonitor.getConnectionReturnedCount());
+		}
+		
+		private TokenMapSupplier getTokenMapSupplier() {
+			
+			/**
+			cqlsh:dyno_bootstrap> select "availabilityZone","hostname","token" from tokens where "appId" = 'dynomite_redis_puneet';
+
+				availabilityZone | hostname                                   | token
+				------------------+--------------------------------------------+------------
+	   			us-east-1c |  ec2-54-83-179-213.compute-1.amazonaws.com | 1383429731
+	   			us-east-1c |  ec2-54-224-184-99.compute-1.amazonaws.com |  309687905
+	   			us-east-1c |  ec2-54-91-190-159.compute-1.amazonaws.com | 3530913377
+	   			us-east-1c |   ec2-54-81-31-218.compute-1.amazonaws.com | 2457171554
+	   			us-east-1e | ec2-54-198-222-153.compute-1.amazonaws.com |  309687905
+	   			us-east-1e | ec2-54-198-239-231.compute-1.amazonaws.com | 2457171554
+	   			us-east-1e |  ec2-54-226-212-40.compute-1.amazonaws.com | 1383429731
+	   			us-east-1e | ec2-54-197-178-229.compute-1.amazonaws.com | 3530913377
+
+			cqlsh:dyno_bootstrap> 
+			 */
+			final Map<Host, HostToken> tokenMap = new HashMap<Host, HostToken>();
+
+			return new TokenMapSupplier () {
+				@Override
+				public List<HostToken> getTokens() {
+					return new ArrayList<HostToken>(tokenMap.values());
+				}
+
+				@Override
+				public HostToken getTokenForHost(Host host) {
+					Host h = host;
+					if (h.getHostName().equals("host1")) {
+						tokenMap.put(host1, new HostToken(309687905L, host1));
+					} else if (h.getHostName().equals("host2")) {
+						tokenMap.put(host2, new HostToken(1383429731L, host2));
+					} else if (h.getHostName().equals("host3")) {
+						tokenMap.put(host3, new HostToken(2457171554L, host3));
+					}
+					return tokenMap.get(host);
+				}
+
+				@Override
+				public void initWithHosts(Collection<Host> hosts) {
+					
+					tokenMap.clear();
+					for (Host h : hosts) {
+						if (h.getHostName().equals("host1")) {
+							tokenMap.put(host1, new HostToken(309687905L, host1));
+						} else if (h.getHostName().equals("host2")) {
+							tokenMap.put(host2, new HostToken(1383429731L, host2));
+						} else if (h.getHostName().equals("host3")) {
+							tokenMap.put(host3, new HostToken(2457171554L, host3));
+						}
+					}
+				}
+			};
 		}
 		
 		@Test
@@ -793,7 +920,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			try {
 				executeTestClientOperation(pool);
 				Assert.fail("TEST FAILED");
-			} catch (PoolExhaustedException e) {
+			} catch (PoolTimeoutException e) {
 				threadPool.shutdownNow();
 				pool.shutdown();
 			}
@@ -976,7 +1103,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 										}
 									});
 								} catch (DynoException e) {
-									//System.out.println("FAILED Test Worker operation: " + e.getMessage());
+//									System.out.println("FAILED Test Worker operation: " + e.getMessage());
+//									e.printStackTrace();
 								}
 							}
 
@@ -996,4 +1124,5 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			pool.shutdown();
 		}
 	}
+
 }
