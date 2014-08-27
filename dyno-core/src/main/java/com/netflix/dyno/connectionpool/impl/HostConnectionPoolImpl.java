@@ -48,7 +48,6 @@ import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.Operation;
-import com.netflix.dyno.connectionpool.OperationMonitor;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.RetryPolicy;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
@@ -721,10 +720,5 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 						", failureCount=" + failureCount + ", lastSuccess=" + lastSuccess.get() + "]";
 			}
 		}
-	}
-
-	@Override
-	public OperationMonitor getOperationMonitor() {
-		return null;
 	}
 }

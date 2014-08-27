@@ -1,38 +1,34 @@
 package com.netflix.dyno.connectionpool.impl;
 
+import static org.mockito.Mockito.mock;
+
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;
-import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionFactory;
 import com.netflix.dyno.connectionpool.ConnectionObservor;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
-import com.netflix.dyno.connectionpool.Operation;
-import com.netflix.dyno.connectionpool.OperationMonitor;
-import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
@@ -100,15 +96,17 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 	@Override
 	public boolean closeConnection(Connection<CL> connection) {
 		try  {
-			connection.close();
-			rrSelector.removeElement(connection);
-			connMap.remove(connection);
+			Connection<CL> prevConnection = connMap.remove(connection);
+			if (prevConnection != null) {
+				connection.close();
+				rrSelector.removeElement(connection);
+				cpMonitor.incConnectionClosed(host, connection.getLastException());
+			}
 			return true;
 		} catch (Exception e) {
 			Logger.error("Failed to close connection for host: " + host, e);
 			return false;
 		} finally {
-			cpMonitor.incConnectionClosed(host, connection.getLastException());
 		}
 	}
 
@@ -120,10 +118,7 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 			return; // already marked as down
 		}
 		
-		boolean success = active.compareAndSet(true, false);
-		if (success) {
-			shutdown();
-		}
+		active.compareAndSet(true, false);
 	}
 
 	@Override
@@ -195,11 +190,6 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 		return connMap.keySet();
 	}
 
-	@Override
-	public OperationMonitor getOperationMonitor() {
-		return null;
-	}
-
 	private Connection<CL> createConnection() throws DynoException {
 		
 		Connection<CL> connection = connFactory.createConnection((HostConnectionPool<CL>) this, null);
@@ -228,113 +218,39 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 
 	public static class UnitTest { 
 		
+		// TEST UTILS SETUP
 		private static final Host TestHost = new Host("TestHost", 1234);
 		
-		// TEST UTILS SETUP
-		private class TestClient {
-			
-		}
+		private class TestClient {}
 		
-		private static AtomicBoolean stop = new AtomicBoolean(false);
 		private static SimpleAsyncConnectionPoolImpl<TestClient> pool;
 		private static ExecutorService threadPool;
 		
-		private static class TestConnection implements Connection<TestClient> {
-
-			private final String id = UUID.randomUUID().toString();
-			
-			private DynoConnectException ex;
-			@Override
-			public <R> OperationResult<R> execute(Operation<TestClient, R> op) throws DynoException {
-				return null;
-			}
-
-			@Override
-			public void close() {
-			}
-
-			@Override
-			public Host getHost() {
-				return null;
-			}
-
-			@Override
-			public void open() throws DynoException {
-			}
-
-			@Override
-			public DynoConnectException getLastException() {
-				return ex;
-			}
-
-			@Override
-			public HostConnectionPool<TestClient> getParentConnectionPool() {
-				return null;
-			}
-
-			@Override
-			public void execPing() {
-			}
-
-			public void setException(DynoConnectException e) {
-				ex = e;
-			}
-
-			@Override
-			public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<TestClient, R> op) throws DynoException {
-				throw new RuntimeException("Not Implemented");
-			}
-
-			@Override
-			public int hashCode() {
-				final int prime = 31;
-				int result = 1;
-				result = prime * result + ((id == null) ? 0 : id.hashCode());
-				return result;
-			}
-
-			@Override
-			public boolean equals(Object obj) {
-				if (this == obj) return true;
-				if (obj == null) return false;
-				if (getClass() != obj.getClass()) return false;
-				TestConnection other = (TestConnection) obj;
-				return id != null ? id.equals(other.id) : other.id == null;
-			}
-
-			@Override
-			public ConnectionContext getContext() {
-				return null;
-			}
-		}
-		
 		private static ConnectionFactory<TestClient> connFactory = new ConnectionFactory<TestClient>() {
 
+			@SuppressWarnings("unchecked")
+			Connection<TestClient> connection = mock(Connection.class);
 			@Override
 			public Connection<TestClient> createConnection(HostConnectionPool<TestClient> pool, ConnectionObservor cObservor) throws DynoConnectException, ThrottledException {
-				return new TestConnection();
+				return connection;
 			}
-			
 		};
+		
 		private static ConnectionPoolConfigurationImpl config = new ConnectionPoolConfigurationImpl("TestClient");
 		private static CountingConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
 		
 		@BeforeClass
 		public static void beforeClass() {
 			threadPool = Executors.newFixedThreadPool(10);
-			// TODO: fix this - use ConnectionPoolHealkthTracker instead
-			//ConnectionRecycler.getInstance().start();
 		}
 		
 		@Before
 		public void beforeTest() {
-			stop.set(false);
 			cpMonitor = new CountingConnectionPoolMonitor(); // reset all monitor stats
 		}
 		
 		@After
 		public void afterTest() {
-			stop.set(true);
 			if (pool != null) {
 				pool.shutdown();
 			}
@@ -342,252 +258,217 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 
 		@AfterClass
 		public static void afterClass() {
-			stop.set(true);
 			threadPool.shutdownNow();
-			// TODO: fix this - use ConnectionPoolHealkthTracker instead
-			//ConnectionRecycler.getInstance().stop();
 		}
 		
-		//@Test
+		@Test
 		public void testRegularProcess() throws Exception {
 			
 			pool = new SimpleAsyncConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor);
-			int numConns = pool.primeConnections();
-			System.out.println("numConns: " + numConns);
+			pool.primeConnections();
 
-			List<Future<BasicResult>> futures = new ArrayList<Future<BasicResult>>(); 
+			int nThreads = 3; 
+			final TestControl control = new TestControl(3);
+			final BasicResult total = new BasicResult();
 			
-			for (int i=0; i<3; i++) {
-				futures.add(threadPool.submit(new BasicWorker()));
+			for (int i=0; i<nThreads; i++) {
+				threadPool.submit(new BasicWorker(total, control));
 			}
 			
 			Thread.sleep(300);
 			
-			stop.set(true);
+			control.stop();
+			control.waitOnFinish();
 			
-			BasicResult total = new BasicResult();
-			for (Future<BasicResult> f : futures) {
-				total.addResult(f.get());
-			}
-			
-			System.out.println(total);
+			Assert.assertEquals("Total: " + total, total.opCount.get(), total.successCount.get());
+			Assert.assertEquals("Total: " + total, 0, total.failureCount.get());
+			Assert.assertTrue("Total: " + total, total.lastSuccess.get());
 			
 			pool.shutdown();
 			
-			System.out.println("Conns borrowed: " + cpMonitor.getConnectionBorrowedCount());
-			System.out.println("Conns returned: " + cpMonitor.getConnectionReturnedCount());
-			System.out.println("Conns created: " + cpMonitor.getConnectionCreatedCount());
-			System.out.println("Conns closed: " + cpMonitor.getConnectionClosedCount());
-			System.out.println("Conns create failed: " + cpMonitor.getConnectionCreateFailedCount());
-			
-			System.out.println("Op success: " + cpMonitor.getOperationSuccessCount());
-			System.out.println("Op failure: " + cpMonitor.getOperationFailureCount());
-			System.out.println("Op timeout: " + cpMonitor.getOperationTimeoutCount());
-		}
-		
-		
-		//@Test
-		public void testCloseBadConnections() throws Exception {
-			
-			pool = new SimpleAsyncConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor);
-			int numConns = pool.primeConnections();
-			System.out.println("numConns: " + numConns);
-
-			final List<Future<BasicResult>> futures = new ArrayList<Future<BasicResult>>(); 
-			
-			for (int i=0; i<2; i++) {   
-				BasicWorker worker = new BasicWorker();
-				futures.add(threadPool.submit(worker));
-			}
-
-			Thread.sleep(300);
-			
-			final AtomicBoolean stopFailingConnections = new AtomicBoolean(false);
-			
-			final WorkerThatCanFailOperations badWorker = new WorkerThatCanFailOperations();
-			futures.add(threadPool.submit(badWorker));
-			
-			Future<Integer> failCount = threadPool.submit(new Callable<Integer>() {
-
-				@Override
-				public Integer call() throws Exception {
-					Integer count = 0;
-					while (!stopFailingConnections.get() && !Thread.currentThread().isInterrupted()) {
-						badWorker.failOperation.set(true);
-						count++;
-						Thread.sleep(50);
-					}
-					return count;
-				}
-				
-			});
-			
-			Thread.sleep(1000);
-			
-			stopFailingConnections.set(true);
-			Thread.sleep(100);
-			stop.set(true);
-			
-			BasicResult result = new BasicResult();
-			for (Future<BasicResult> f : futures) {
-				result.addResult(f.get());
-			}
-			
-			System.out.println(result.toString());
-			System.out.println("\nConnections failed: " + failCount.get());
-			
-			pool.shutdown();
-			
-			//System.out.println("Reviving single connection " + pool.reviveCount.get() + " " + pool.rrCount.get());
-
-			System.out.println("\n\nConns borrowed: " + cpMonitor.getConnectionBorrowedCount());
-			System.out.println("Conns returned: " + cpMonitor.getConnectionReturnedCount());
-			System.out.println("Conns created: " + cpMonitor.getConnectionCreatedCount());
-			System.out.println("Conns closed: " + cpMonitor.getConnectionClosedCount());
-			System.out.println("Conns create failed: " + cpMonitor.getConnectionCreateFailedCount());
-			
+			Assert.assertEquals("Conns borrowed: " + cpMonitor.getConnectionBorrowedCount(), total.successCount.get(), cpMonitor.getConnectionBorrowedCount());
+			Assert.assertEquals("Conns returned: " + cpMonitor.getConnectionReturnedCount(), cpMonitor.getConnectionBorrowedCount(), cpMonitor.getConnectionReturnedCount());
+			Assert.assertEquals("Conns created: " + cpMonitor.getConnectionCreatedCount(), config.getMaxConnsPerHost(), cpMonitor.getConnectionCreatedCount());
+			Assert.assertEquals("Conns closed: " + cpMonitor.getConnectionClosedCount(), cpMonitor.getConnectionCreatedCount(), cpMonitor.getConnectionClosedCount());
+			Assert.assertEquals("Conns create failed: " + cpMonitor.getConnectionCreateFailedCount(), 0, cpMonitor.getConnectionCreateFailedCount());
 		}
 		
 		@Test
 		public void testMarkHostAsDown() throws Exception {
 			
 			pool = new SimpleAsyncConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor);
-			int numConns = pool.primeConnections();
-			System.out.println("numConns: " + numConns);
+			pool.primeConnections();
 
-			final List<Future<BasicResult>> futures = new ArrayList<Future<BasicResult>>(); 
+			int nThreads = 3; 
+			final TestControl control = new TestControl(3);
+			final BasicResult total = new BasicResult();
 			
+			for (int i=0; i<nThreads; i++) {
+				threadPool.submit(new BasicWorker(total, control));
+			}
 			
-			for (int i=0; i<2; i++) {   // Note 4 threads .. which is more than the no of available conns .. hence we should see timeouts
-				BasicWorker worker = new BasicWorker();
-				futures.add(threadPool.submit(worker));
+			Thread.sleep(500);
+
+			pool.markAsDown(new FatalConnectionException("mark pool as down"));
+			
+			Thread.sleep(200);
+		
+			control.stop();
+			control.waitOnFinish();
+		
+			Assert.assertTrue("Total: " + total, total.failureCount.get() > 0);
+			Assert.assertFalse("Total: " + total, total.lastSuccess.get());
+			Assert.assertEquals("Total: " + total, total.opCount.get(),  (total.successCount.get() + total.failureCount.get()));
+			
+			pool.shutdown();
+			
+			Assert.assertEquals("Conns borrowed: " + cpMonitor.getConnectionBorrowedCount(), total.successCount.get(), cpMonitor.getConnectionBorrowedCount());
+			Assert.assertEquals("Conns returned: " + cpMonitor.getConnectionReturnedCount(), cpMonitor.getConnectionBorrowedCount(), cpMonitor.getConnectionReturnedCount());
+			Assert.assertEquals("Conns created: " + cpMonitor.getConnectionCreatedCount(), config.getMaxConnsPerHost(), cpMonitor.getConnectionCreatedCount());
+			Assert.assertEquals("Conns closed: " + cpMonitor.getConnectionClosedCount(), cpMonitor.getConnectionCreatedCount(), cpMonitor.getConnectionClosedCount());
+			Assert.assertEquals("Conns create failed: " + cpMonitor.getConnectionCreateFailedCount(), 0, cpMonitor.getConnectionCreateFailedCount());
+		}
+		
+		@Test
+		public void testReconnect() throws Exception {
+			
+			pool = new SimpleAsyncConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor);
+			pool.primeConnections();
+			
+			int nThreads = 3; 
+			TestControl control = new TestControl(3);
+			BasicResult total = new BasicResult();
+			
+			for (int i=0; i<nThreads; i++) {
+				threadPool.submit(new BasicWorker(total, control));
 			}
 			
 			Thread.sleep(500);
 			
+			Assert.assertFalse("Total: " + total, total.failureCount.get() > 0);
+			Assert.assertTrue("Total: " + total, total.lastSuccess.get());
+
 			pool.markAsDown(new FatalConnectionException("mark pool as down"));
 			
 			Thread.sleep(200);
+		
+			control.stop();
+			control.waitOnFinish();
+		
+			Assert.assertTrue("Total: " + total, total.failureCount.get() > 0);
+			Assert.assertFalse("Total: " + total, total.lastSuccess.get());
+			Assert.assertEquals("Total: " + total, total.opCount.get(),  (total.successCount.get() + total.failureCount.get()));
+
+			pool.reconnect();
+			Thread.sleep(100);
 			
-			stop.set(true);
+			control = new TestControl(3);
+			total = new BasicResult();
 			
-			BasicResult result = new BasicResult();
-			for (Future<BasicResult> f : futures) {
-				result.addResult(f.get());
+			for (int i=0; i<nThreads; i++) {
+				threadPool.submit(new BasicWorker(total, control));
 			}
+
+			Thread.sleep(500);
 			
-			System.out.println(result.toString());
+			control.stop();
+			control.waitOnFinish();
 			
+			Assert.assertEquals("Total: " + total, total.opCount.get(), total.successCount.get());
+			Assert.assertEquals("Total: " + total, 0, total.failureCount.get());
+			Assert.assertTrue("Total: " + total, total.lastSuccess.get());
+
 			pool.shutdown();
 			
-			System.out.println("\n\nConns borrowed: " + cpMonitor.getConnectionBorrowedCount());
-			System.out.println("Conns returned: " + cpMonitor.getConnectionReturnedCount());
-			System.out.println("Conns created: " + cpMonitor.getConnectionCreatedCount());
-			System.out.println("Conns closed: " + cpMonitor.getConnectionClosedCount());
-			System.out.println("Conns create failed: " + cpMonitor.getConnectionCreateFailedCount());
-
+			Assert.assertEquals("Conns returned: " + cpMonitor.getConnectionReturnedCount(), cpMonitor.getConnectionBorrowedCount(), cpMonitor.getConnectionReturnedCount());
+			Assert.assertEquals("Conns created: " + cpMonitor.getConnectionCreatedCount(), 2*config.getMaxConnsPerHost(), cpMonitor.getConnectionCreatedCount());
+			Assert.assertEquals("Conns closed: " + cpMonitor.getConnectionClosedCount(), cpMonitor.getConnectionCreatedCount(), cpMonitor.getConnectionClosedCount());
+			Assert.assertEquals("Conns create failed: " + cpMonitor.getConnectionCreateFailedCount(), 0, cpMonitor.getConnectionCreateFailedCount());
 		}
-		
-		private class BasicWorker implements Callable<BasicResult> {
 
-			private final BasicResult result = new BasicResult();
+		private class BasicWorker implements Callable<Void> {
+
+			private final BasicResult result;
+			private final TestControl control;
 			
-			private int sleepMs = 10;
+			private int sleepMs = -1;
 			
-			private BasicWorker() {
-				
+			private BasicWorker(BasicResult result, TestControl testControl) {
+				this.result = result;
+				this.control = testControl;
 			}
 			
-			private BasicWorker(int sleep) {
+			private BasicWorker(BasicResult result, TestControl testControl, int sleep) {
+				this.result = result;
+				this.control = testControl;
 				this.sleepMs = sleep;
 			}
 			
 			@Override
-			public BasicResult call() throws Exception {
+			public Void call() throws Exception {
 				
-				while (!stop.get() && !Thread.currentThread().isInterrupted()) {
+				while (!control.isStopped() && !Thread.currentThread().isInterrupted()) {
 
 					Connection<TestClient> connection = null;
 					try {
-						Thread.sleep(sleepMs);
 						connection = pool.borrowConnection(20, TimeUnit.MILLISECONDS);
+						if (sleepMs > 0) {
+							Thread.sleep(sleepMs);
+						}
 						pool.returnConnection(connection);
 						result.successCount.incrementAndGet();
 						result.lastSuccess.set(true);
 					} catch (InterruptedException e) {
 					} catch (DynoConnectException e) {
-						System.out.println(e.getMessage());
 						result.failureCount.incrementAndGet();
 						result.lastSuccess.set(false);
-						if (connection != null) {
-							((TestConnection)connection).setException(e);
-						}
 					} finally {
 						result.opCount.incrementAndGet();
 					}
 				}
 				
-				System.out.println("Worker stopping: " + result);
-				return result;
+				control.reportFinish();
+				return null;
 			}
 		}
 		
-		private class WorkerThatCanFailOperations implements Callable<BasicResult> {
-
-			private final BasicResult result = new BasicResult();
-			private final AtomicBoolean failOperation = new AtomicBoolean(false);
+		private class TestControl { 
 			
-			private int sleepMs = 10;
+			private final AtomicBoolean stop = new AtomicBoolean(false);
+			private final CountDownLatch latch;
 			
-			private WorkerThatCanFailOperations() {
-				
+			private TestControl(int n) {
+				latch = new CountDownLatch(n);
 			}
 			
+			private void reportFinish() {
+				latch.countDown();
+			}
 			
-			@Override
-			public BasicResult call() throws Exception {
-				
-				while (!stop.get() && !Thread.currentThread().isInterrupted()) {
-
-					try {
-						Connection<TestClient> connection = pool.borrowConnection(20, TimeUnit.MILLISECONDS);
-						Thread.sleep(sleepMs);
-						
-						if (failOperation.get()) {
-							//System.out.println("Worker failing conn");
-							((TestConnection)connection).setException(new FatalConnectionException("fail connection"));
-							failOperation.set(false); // reset the latch
-						}
-						pool.returnConnection(connection);
-						result.successCount.incrementAndGet();
-					} catch (InterruptedException e) {
-					} catch (DynoException e) {
-						result.failureCount.incrementAndGet();
-					} finally {
-						result.opCount.incrementAndGet();
-					}
-				}
-				
-				return result;
+			private void waitOnFinish() throws InterruptedException {
+				latch.await();
+			}
+			
+			private boolean isStopped() {
+				return stop.get();
+			}
+			
+			private void stop() {
+				stop.set(true);
 			}
 		}
 		
 		private class BasicResult { 
 			
-			private AtomicInteger opCount = new AtomicInteger(0);
-			private AtomicInteger successCount = new AtomicInteger(0);
-			private AtomicInteger failureCount = new AtomicInteger(0);
+			private final AtomicInteger opCount = new AtomicInteger(0);
+			private final AtomicInteger successCount = new AtomicInteger(0);
+			private final AtomicInteger failureCount = new AtomicInteger(0);
 			
-			private AtomicBoolean lastSuccess = new AtomicBoolean(true);
+			private AtomicBoolean lastSuccess = new AtomicBoolean(false);
 			
-			private void addResult(BasicResult other) {
-				opCount.addAndGet(other.opCount.get());
-				successCount.addAndGet(other.successCount.get());
-				failureCount.addAndGet(other.failureCount.get());
-				boolean success = lastSuccess.get() && other.lastSuccess.get();
-				lastSuccess.set(success);
+			private BasicResult() {
 			}
-			
+
 			@Override
 			public String toString() {
 				return "BasicResult [opCount=" + opCount + ", successCount=" + successCount + 
