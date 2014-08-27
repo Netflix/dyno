@@ -2086,7 +2086,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 		this.connPool.shutdown();
 	}
 	
-	public RedisPipeline pipelined() {
+	public DynoJedisPipeline pipelined() {
 		return new DynoJedisPipeline(getConnPool());
 	}
 
