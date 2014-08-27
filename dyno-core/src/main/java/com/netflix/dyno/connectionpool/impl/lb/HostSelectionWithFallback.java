@@ -150,7 +150,7 @@ public class HostSelectionWithFallback<CL> {
 					throw new PoolOfflineException(hostPool.getHost(), "host pool is offline and no DCs available for fallback");
 				}
 			} else {
-				hostPool = getFallbackHostPool(op, null /** No token*/);
+				hostPool = getFallbackHostPool(op, token);
 			}
 		}
 		

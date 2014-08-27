@@ -15,6 +15,7 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisCommands;
 import redis.clients.jedis.JedisPubSub;
 import redis.clients.jedis.MultiKeyCommands;
+import redis.clients.jedis.RedisPipeline;
 import redis.clients.jedis.SortingParams;
 import redis.clients.jedis.Tuple;
 import redis.clients.jedis.ZParams;
@@ -2083,6 +2084,10 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
 	public void stopClient() {
 		this.connPool.shutdown();
+	}
+	
+	public RedisPipeline pipelined() {
+		return new DynoJedisPipeline(getConnPool());
 	}
 
 	public static class Builder {
