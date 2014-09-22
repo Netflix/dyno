@@ -41,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.netflix.dyno.connectionpool.AsyncOperation;
+import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionFactory;
@@ -411,6 +412,14 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		}
 	}
 	
+	/**
+	 * Use with EXTREME CAUTION. Connection that is borrowed must be returned, else we will have connection pool exhaustion
+	 * @param baseOperation
+	 * @return
+	 */
+	public <R> Connection<CL> getConnectionForOperation(BaseOperation<CL, R> baseOperation) {
+		return selectionStrategy.getConnection(baseOperation, cpConfiguration.getConnectTimeout(), TimeUnit.MILLISECONDS);
+	}
 	
 	@Override
 	public void shutdown() {

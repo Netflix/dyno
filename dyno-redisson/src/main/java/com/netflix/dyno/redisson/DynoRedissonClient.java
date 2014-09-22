@@ -16,6 +16,7 @@ import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl.HostConnectionPoolFactory.Type;
 import com.netflix.dyno.contrib.DynoCPMonitor;
+import com.netflix.dyno.contrib.DynoOPMonitor;
 
 public class DynoRedissonClient {
 	
@@ -101,8 +102,9 @@ public class DynoRedissonClient {
 			assert(cpConfig != null);
 			
 			DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);
+			DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
 			
-			RedissonConnectionFactory connFactory = new RedissonConnectionFactory(new NioEventLoopGroup(4));
+			RedissonConnectionFactory connFactory = new RedissonConnectionFactory(new NioEventLoopGroup(4), opMonitor);
 
 			ConnectionPoolImpl<RedisAsyncConnection<String, String>> pool = 
 					new ConnectionPoolImpl<RedisAsyncConnection<String, String>>(connFactory, cpConfig, cpMonitor, Type.Async);

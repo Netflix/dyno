@@ -16,6 +16,7 @@ import com.netflix.dyno.connectionpool.ConnectionObservor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.Operation;
+import com.netflix.dyno.connectionpool.OperationMonitor;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
@@ -27,29 +28,33 @@ import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
 public class RedissonConnectionFactory implements ConnectionFactory<RedisAsyncConnection<String, String>> {
 	
 	private final EventLoopGroup eventGroupLoop;
+	private final OperationMonitor opMonitor;
 	
-	public RedissonConnectionFactory(EventLoopGroup group) {
+	public RedissonConnectionFactory(EventLoopGroup group, OperationMonitor operationMonitor) {
 		eventGroupLoop = group;
+		opMonitor = operationMonitor;
 	}
 
 	@Override
 	public Connection<RedisAsyncConnection<String, String>> createConnection(HostConnectionPool<RedisAsyncConnection<String, String>> pool, ConnectionObservor connectionObservor)  throws DynoConnectException, ThrottledException {
-		return new RedissonConnection(pool, eventGroupLoop);
+		return new RedissonConnection(pool, eventGroupLoop, opMonitor);
 	}
 	
 	public static class RedissonConnection implements Connection<RedisAsyncConnection<String, String>> {
 
 		private final HostConnectionPool<RedisAsyncConnection<String, String>> hostPool;
 		private final RedisClient client;
+		private final OperationMonitor opMonitor;
 		
 		private RedisAsyncConnection<String, String> rConn = null;
 		private final AtomicReference<DynoConnectException> lastEx = new AtomicReference<DynoConnectException>(null);
 
 		private final ConnectionContextImpl context = new ConnectionContextImpl();
 		
-		public RedissonConnection(HostConnectionPool<RedisAsyncConnection<String, String>> hPool, EventLoopGroup eventGroupLoop) {
+		public RedissonConnection(HostConnectionPool<RedisAsyncConnection<String, String>> hPool, EventLoopGroup eventGroupLoop, OperationMonitor opMonitor) {
 			this.hostPool = hPool;
 			Host host = hostPool.getHost();
+			this.opMonitor = opMonitor;
 			this.client = new RedisClient(eventGroupLoop, host.getHostName(), host.getPort());
 		}
 		
@@ -57,7 +62,7 @@ public class RedissonConnectionFactory implements ConnectionFactory<RedisAsyncCo
 		public <R> OperationResult<R> execute(Operation<RedisAsyncConnection<String, String>, R> op) throws DynoException {
 			try { 
 				R result = op.execute(rConn, null); // Note that connection context is not implemented yet
-				return new OperationResultImpl<R>(op.getName(), result, hostPool.getOperationMonitor())
+				return new OperationResultImpl<R>(op.getName(), result, opMonitor)
 												 .attempts(1)
 												 .setNode(getHost());
 				
@@ -72,7 +77,7 @@ public class RedissonConnectionFactory implements ConnectionFactory<RedisAsyncCo
 			final long start = System.currentTimeMillis();
 			try { 
 				Future<R> future = op.executeAsync(rConn);
-				return new FutureOperationalResultImpl<R>(op.getName(), future, start, hostPool.getOperationMonitor()).node(getHost());
+				return new FutureOperationalResultImpl<R>(op.getName(), future, start, opMonitor).node(getHost());
 				
 			} catch (DynoConnectException e) {
 				lastEx.set(e);

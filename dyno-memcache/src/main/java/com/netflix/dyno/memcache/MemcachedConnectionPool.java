@@ -273,10 +273,6 @@ public class MemcachedConnectionPool<CL> implements HostConnectionPool<CL> {
 		return shutdown.get();
 	}
 
-	/**
-	 * @return {@link OperationMonitor}
-	 */
-	@Override
 	public OperationMonitor getOperationMonitor() {
 		return operationMonitor;
 	}

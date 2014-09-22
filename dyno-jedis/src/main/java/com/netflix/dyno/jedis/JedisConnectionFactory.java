@@ -40,8 +40,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 		return new JedisConnection(pool);
 	}
 
-	
-	private class JedisConnection implements Connection<Jedis> {
+	public class JedisConnection implements Connection<Jedis> {
 
 		private final HostConnectionPool<Jedis> hostPool;
 		private final Jedis jedisClient; 
@@ -129,6 +128,10 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 		@Override
 		public ConnectionContext getContext() {
 			return context;
+		}
+		
+		public Jedis getClient() {
+			return jedisClient;
 		}
 	}
 }

@@ -77,16 +77,19 @@ public class ConnectionPoolHealthTracker<CL> {
 	private final AtomicBoolean startedPing = new AtomicBoolean(false);
 	
 	private static final Integer DEFAULT_SLEEP_MILLIS = 10*1000; 
+	private static final Integer DEFAULT_POOL_RECONNECT_WAIT_MILLIS = 5*1000; 
 	private final Integer SleepMillis; 
+	private final Integer PoolReconnectWaitMillis; 
 	
 	public ConnectionPoolHealthTracker(ConnectionPoolConfiguration config, ScheduledExecutorService thPool) {
-		this(config, thPool, DEFAULT_SLEEP_MILLIS);
+		this(config, thPool, DEFAULT_SLEEP_MILLIS, DEFAULT_POOL_RECONNECT_WAIT_MILLIS);
 	}
 		
-	public ConnectionPoolHealthTracker(ConnectionPoolConfiguration config, ScheduledExecutorService thPool, int sleepMillis) {
+	public ConnectionPoolHealthTracker(ConnectionPoolConfiguration config, ScheduledExecutorService thPool, int sleepMillis, int poolReconnectWaitMillis) {
 		cpConfiguration = config;	
 		threadPool = thPool;
 		SleepMillis = sleepMillis;
+		PoolReconnectWaitMillis = poolReconnectWaitMillis;
 	}
 
 	public void start() {
@@ -119,6 +122,10 @@ public class ConnectionPoolHealthTracker<CL> {
 						try {
 							Logger.info("Reconnecting pool for host: " + host);
 							pool.markAsDown(null);
+							if (PoolReconnectWaitMillis > 0) {
+								Logger.info("Sleeping to allow enough time to drain connections");
+								Thread.sleep(PoolReconnectWaitMillis);
+							}
 							pool.reconnect();
 							if (pool.isActive()) {
 								Logger.info("Host pool reactivated: " + host);
@@ -236,7 +243,7 @@ public class ConnectionPoolHealthTracker<CL> {
 		public void testConnectionPoolRecycle() throws Exception {
 			
 			ConnectionPoolConfiguration config = new ConnectionPoolConfigurationImpl("test");
-			ConnectionPoolHealthTracker<Integer> tracker = new ConnectionPoolHealthTracker<Integer>(config, threadPool, 1000);
+			ConnectionPoolHealthTracker<Integer> tracker = new ConnectionPoolHealthTracker<Integer>(config, threadPool, 1000, -1);
 			tracker.start();
 			
 			Host h1 = new Host("h1", Status.Up);
@@ -264,7 +271,7 @@ public class ConnectionPoolHealthTracker<CL> {
 		public void testBadConnectionPoolKeepsReconnecting() throws Exception {
 			
 			ConnectionPoolConfiguration config = new ConnectionPoolConfigurationImpl("test");
-			ConnectionPoolHealthTracker<Integer> tracker = new ConnectionPoolHealthTracker<Integer>(config, threadPool, 1000);
+			ConnectionPoolHealthTracker<Integer> tracker = new ConnectionPoolHealthTracker<Integer>(config, threadPool, 1000, -1);
 			tracker.start();
 			
 			Host h1 = new Host("h1", Status.Up);

@@ -4,79 +4,114 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 import com.netflix.dyno.connectionpool.OperationMonitor;
+import com.netflix.dyno.connectionpool.impl.utils.EstimatedHistogram;
+import com.netflix.dyno.contrib.EstimatedHistogramBasedCounter.EstimatedHistogramMean;
+import com.netflix.dyno.contrib.EstimatedHistogramBasedCounter.EstimatedHistogramPercentile;
 import com.netflix.servo.DefaultMonitorRegistry;
 import com.netflix.servo.monitor.Counter;
 import com.netflix.servo.monitor.Monitors;
-import com.netflix.servo.monitor.Timer;
 
 public class DynoOPMonitor implements OperationMonitor {
 
-	private static final String Success = "SUCCESS"; 
-	private static final String Error = "ERROR"; 
-	
-	private final ConcurrentHashMap<String, Counter> counterMap = new ConcurrentHashMap<String, Counter>();
-	private final ConcurrentHashMap<String, Timer> timerMap = new ConcurrentHashMap<String, Timer>();
+	private final ConcurrentHashMap<String, DynoOpCounter> counterMap = new ConcurrentHashMap<String, DynoOpCounter>();
+	private final ConcurrentHashMap<String, DynoTimingCounters> timerMap = new ConcurrentHashMap<String, DynoTimingCounters>();
 
-	private final String SuccessPrefix;
-	private final String ErrorPrefix;
-	private final String TimerPrefix;
+	private final String appName;
 
-	public DynoOPMonitor(String prefix) {
-		SuccessPrefix = "Dyno__" + prefix + "__" + Success + "__";
-		ErrorPrefix   = "Dyno__" + prefix + "__" + Error + "__";
-		TimerPrefix   = "Dyno__" + prefix + "__";
+	public DynoOPMonitor(String applicationName) {
+		appName = applicationName;
 	}
 	
 	@Override
 	public void recordLatency(String opName, long duration, TimeUnit unit) {
-		getOrCreateTimer(TimerPrefix + opName).record(duration, unit);
+		getOrCreateTimers(opName).recordLatency(duration, unit);
 	}
 
 	@Override
 	public void recordSuccess(String opName) {
-		getOrCreateCounter(SuccessPrefix + opName).increment();
+		getOrCreateCounter(opName).incrementSuccess();
 	}
 
 	@Override
 	public void recordFailure(String opName, String reason) {
-		getOrCreateCounter(ErrorPrefix + opName).increment();
+		getOrCreateCounter(opName).incrementFailure();
 	}
 	
-	private Counter getOrCreateCounter(String name) {
+	private class DynoOpCounter {
 		
-		Counter counter = counterMap.get(name);
+		private final Counter success; 
+		private final Counter failure;
 		
+		private DynoOpCounter(String appName, String opName) {
+			
+			success = Monitors.newCounter("Dyno__" + appName + "__" + opName + "__SUCCESS");
+			failure = Monitors.newCounter("Dyno__" + appName + "__" + opName + "__ERROR");
+		}
+		
+		private void incrementSuccess() {
+			success.increment();
+		}
+		
+		private void incrementFailure() {
+			failure.increment();
+		}
+	}
+	
+	private DynoOpCounter getOrCreateCounter(String opName) {
+		
+		DynoOpCounter counter = counterMap.get(opName);
 		if (counter == null) {
-			counter = Monitors.newCounter(name);
-			Counter oldCounter = counterMap.putIfAbsent(name, counter);
-			if (oldCounter == null) {
-				DefaultMonitorRegistry.getInstance().register(counter);
-				return counter;
-			} else {
-				return oldCounter;
-			}
+			counter = new DynoOpCounter(appName, opName);
+		}
+		DynoOpCounter prevCounter = counterMap.putIfAbsent(opName, counter);
+		if (prevCounter != null) {
+			return prevCounter;
 		} else {
-			return counter;
+			DefaultMonitorRegistry.getInstance().register(counter.success);
+			DefaultMonitorRegistry.getInstance().register(counter.failure);
+			return counter; 
 		}
 	}
-	
-	private Timer getOrCreateTimer(String name) {
+
+	private class DynoTimingCounters {
 		
-		Timer timer = timerMap.get(name);
+		private final EstimatedHistogramMean latMean; 
+		private final EstimatedHistogramPercentile lat99;
+		private final EstimatedHistogramPercentile lat995;
+		private final EstimatedHistogramPercentile lat999;
 		
+		private final EstimatedHistogram estHistogram; 
+		
+		private DynoTimingCounters(String appName, String opName) {
+
+			estHistogram = new EstimatedHistogram();
+			latMean = new EstimatedHistogramMean("Dyno__" + appName + "__" + opName + "__latMean", estHistogram);
+			lat99 = new EstimatedHistogramPercentile("Dyno__" + appName + "__" + opName + "__lat99", estHistogram, 0.99);
+			lat995 = new EstimatedHistogramPercentile("Dyno__" + appName + "__" + opName + "__lat995", estHistogram, 0.995);
+			lat999 = new EstimatedHistogramPercentile("Dyno__" + appName + "__" + opName + "__lat999", estHistogram, 0.999);
+		}
+		
+		public void recordLatency(long duration, TimeUnit unit) {
+			long durationMillis = TimeUnit.MILLISECONDS.convert(duration, unit);
+			estHistogram.add(durationMillis);
+		}
+	}
+
+	private DynoTimingCounters getOrCreateTimers(String opName) {
+		
+		DynoTimingCounters timer = timerMap.get(opName);
 		if (timer == null) {
-			timer = Monitors.newTimer(name, TimeUnit.MILLISECONDS);
-			Timer oldTimer = timerMap.putIfAbsent(name, timer);
-			if (oldTimer == null) {
-				System.out.println("\n\nREGISTERING TIMER : " + name);
-				DefaultMonitorRegistry.getInstance().register(timer);
-				return timer;
-			} else {
-				return oldTimer;
-			}
+			timer = new DynoTimingCounters(appName, opName);
+		}
+		DynoTimingCounters prevTimer = timerMap.putIfAbsent(opName, timer);
+		if (prevTimer != null) {
+			return prevTimer;
 		} else {
-			return timer;
+			DefaultMonitorRegistry.getInstance().register(timer.latMean);
+			DefaultMonitorRegistry.getInstance().register(timer.lat99);
+			DefaultMonitorRegistry.getInstance().register(timer.lat995);
+			DefaultMonitorRegistry.getInstance().register(timer.lat999);
+			return timer; 
 		}
 	}
-	
 }

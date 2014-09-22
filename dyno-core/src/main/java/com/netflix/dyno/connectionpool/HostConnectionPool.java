@@ -121,8 +121,12 @@ public interface HostConnectionPool<CL> {
      * @return Return true if the has been shut down and is no longer accepting traffic.
      */
     boolean isShutdown();
-
-    OperationMonitor getOperationMonitor();
     
+    /**
+     * Get all connections for the managed pool underneath. 
+     * USE with EXTREME CAUTION since all vended connections must be returned to the pool
+     * in order to avoid pool exhaustion.
+     * @return Collection<Connection<CL>>
+     */
     Collection<Connection<CL>> getAllConnections();
 }

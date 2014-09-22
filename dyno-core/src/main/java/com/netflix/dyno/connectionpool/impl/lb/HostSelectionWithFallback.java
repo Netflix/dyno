@@ -150,7 +150,7 @@ public class HostSelectionWithFallback<CL> {
 					throw new PoolOfflineException(hostPool.getHost(), "host pool is offline and no DCs available for fallback");
 				}
 			} else {
-				hostPool = getFallbackHostPool(op, null /** No token*/);
+				hostPool = getFallbackHostPool(op, token);
 			}
 		}
 		
@@ -530,8 +530,160 @@ public class HostSelectionWithFallback<CL> {
 			verifyExactly(hostnames, "h1", "h2");
 		}
 		
-		private void verifyExactly(Set<String> result, String ... hostnames) {
+		@Test
+		public void testGetConnectionsFromRingNormal() throws Exception {
 			
+			HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
+			
+			Map<Host, HostConnectionPool<Integer>> pools = new HashMap<Host, HostConnectionPool<Integer>>();
+			
+			for (Host host : hosts) {
+				poolStatus.put(host, new AtomicBoolean(true));
+				pools.put(host, getMockHostConnectionPool(host, poolStatus.get(host)));
+			}
+			
+			selection.initWithHosts(pools);
+
+			Collection<String> hostnames = runConnectionsToRingTest(selection);
+			verifyExactly(hostnames, "h1", "h2");
+		}
+		
+		@Test
+		public void testGetConnectionsFromRingWhenPrimaryHostPoolInactive() throws Exception {
+			
+			HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
+			
+			Map<Host, HostConnectionPool<Integer>> pools = new HashMap<Host, HostConnectionPool<Integer>>();
+			
+			for (Host host : hosts) {
+				poolStatus.put(host, new AtomicBoolean(true));
+				pools.put(host, getMockHostConnectionPool(host, poolStatus.get(host)));
+			}
+			
+			selection.initWithHosts(pools);
+
+			// Put Host H1 as DOWN
+			poolStatus.get(h1).set(false);
+			
+			Collection<String> hostnames = runConnectionsToRingTest(selection);
+			verifyPresent(hostnames, "h2");
+			verifyAtLeastOnePresent(hostnames, "h3", "h5");
+			
+			// Put Host H2 as DOWN
+			selection.initWithHosts(pools);
+			poolStatus.get(h1).set(true);
+			poolStatus.get(h2).set(false);
+			
+			hostnames = runConnectionsToRingTest(selection);
+			
+			verifyPresent(hostnames, "h1");
+			verifyAtLeastOnePresent(hostnames, "h4", "h6");
+		
+			// Put Hosts H1 and H2 as DOWN
+			selection.initWithHosts(pools);
+			poolStatus.get(h1).set(false);
+			poolStatus.get(h2).set(false);
+
+			hostnames = runConnectionsToRingTest(selection);
+			verifyAtLeastOnePresent(hostnames, "h3", "h5");
+			verifyAtLeastOnePresent(hostnames, "h4", "h6");
+			
+			// Put Hosts H1,H2,H3 as DOWN
+			selection.initWithHosts(pools);
+			poolStatus.get(h1).set(false);
+			poolStatus.get(h2).set(false);
+			poolStatus.get(h3).set(false);
+
+			hostnames = runConnectionsToRingTest(selection);
+			verifyPresent(hostnames, "h4", "h5");
+
+			// Put Hosts H1,H2,H3,H4 as DOWN
+			selection.initWithHosts(pools);
+			poolStatus.get(h1).set(false);
+			poolStatus.get(h2).set(false);
+			poolStatus.get(h3).set(false);
+			poolStatus.get(h4).set(false);
+
+			hostnames = runConnectionsToRingTest(selection);
+			verifyExactly(hostnames, "h5", "h6");
+		}
+		
+		@Test
+		public void testGetConnectionsFromRingWhenHostDown() throws Exception {
+			
+			HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
+			
+			Map<Host, HostConnectionPool<Integer>> pools = new HashMap<Host, HostConnectionPool<Integer>>();
+			
+			for (Host host : hosts) {
+				poolStatus.put(host, new AtomicBoolean(true));
+				pools.put(host, getMockHostConnectionPool(host, poolStatus.get(host)));
+			}
+			
+			selection.initWithHosts(pools);
+
+			// Put Host H1 as DOWN
+			h1.setStatus(Status.Down);
+			
+			Collection<String> hostnames = runConnectionsToRingTest(selection);
+			verifyPresent(hostnames, "h2");
+			verifyAtLeastOnePresent(hostnames, "h3", "h5");
+			
+			// Put Host H2 as DOWN
+			selection.initWithHosts(pools);
+			h1.setStatus(Status.Up);
+			h2.setStatus(Status.Down);
+			
+			hostnames = runConnectionsToRingTest(selection);
+			
+			verifyPresent(hostnames, "h1");
+			verifyAtLeastOnePresent(hostnames, "h4", "h6");
+		
+			// Put Hosts H1 and H2 as DOWN
+			selection.initWithHosts(pools);
+			h1.setStatus(Status.Down);
+			h2.setStatus(Status.Down);
+
+			hostnames = runConnectionsToRingTest(selection);
+			verifyAtLeastOnePresent(hostnames, "h3", "h5");
+			verifyAtLeastOnePresent(hostnames, "h4", "h6");
+			
+			// Put Hosts H1,H2,H3 as DOWN
+			selection.initWithHosts(pools);
+			h1.setStatus(Status.Down);
+			h2.setStatus(Status.Down);
+			h3.setStatus(Status.Down);
+
+			hostnames = runConnectionsToRingTest(selection);
+			verifyPresent(hostnames, "h4", "h5");
+
+			// Put Hosts H1,H2,H3,H4 as DOWN
+			selection.initWithHosts(pools);
+			h1.setStatus(Status.Down);
+			h2.setStatus(Status.Down);
+			h3.setStatus(Status.Down);
+			h4.setStatus(Status.Down);
+
+			hostnames = runConnectionsToRingTest(selection);
+			verifyExactly(hostnames, "h5", "h6");
+		}
+
+		private Collection<String> runConnectionsToRingTest(HostSelectionWithFallback<Integer> selection) {
+			
+			Collection<Connection<Integer>> connections = selection.getConnectionsToRing(10, TimeUnit.MILLISECONDS);
+			
+			return CollectionUtils.transform(connections, new Transform<Connection<Integer>, String>() {
+				@Override
+				public String get(Connection<Integer> x) {
+					return x.getHost().getHostName();
+				}
+			});
+			
+		}
+		
+		private void verifyExactly(Collection<String> resultCollection, String ... hostnames) {
+			
+			Set<String> result = new HashSet<String>(resultCollection);
 			Set<String> all = new HashSet<String>();
 			all.add("h1"); all.add("h2"); all.add("h3");
 			all.add("h4"); all.add("h5"); all.add("h6");
@@ -548,6 +700,27 @@ public class HostSelectionWithFallback<CL> {
 			}
 		}
 		
+		private void verifyPresent(Collection<String> resultCollection, String ... hostnames) {
+			
+			Set<String> result = new HashSet<String>(resultCollection);
+			for (String h : hostnames) {
+				Assert.assertTrue("Result: " + result + ", expected: " + h, result.contains(h));
+			}
+		}
+	
+		private void verifyAtLeastOnePresent(Collection<String> resultCollection, String ... hostnames) {
+			
+			Set<String> result = new HashSet<String>(resultCollection);
+			boolean present = false;
+			for (String h : hostnames) {
+				if (result.contains(h)) {
+					present = true;
+					break;
+				}
+			}
+			Assert.assertTrue("Result: " + result + ", expected at least one of: " + hostnames, present);
+		}
+
 		@SuppressWarnings("unchecked")
 		private HostConnectionPool<Integer> getMockHostConnectionPool(final Host host, final AtomicBoolean status) {
 			
