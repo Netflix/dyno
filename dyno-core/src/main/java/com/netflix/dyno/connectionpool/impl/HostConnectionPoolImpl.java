@@ -427,6 +427,10 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		}
 	}
 	
+	public String toString() {
+		return "HostConnectionPool: [Host: " + host.getHostName() + ", Active: " + isActive() + "]";
+	}
+	
 	public static class UnitTest { 
 		
 		private static final Host TestHost = new Host("TestHost", 1234);

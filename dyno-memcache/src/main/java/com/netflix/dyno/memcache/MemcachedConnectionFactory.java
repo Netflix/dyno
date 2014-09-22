@@ -138,7 +138,7 @@ public class MemcachedConnectionFactory implements ConnectionFactory<MemcachedCl
 			
 			try { 
 				R result = op.execute(mClient, null); // Note that connection context is not implemented yet
-				return new OperationResultImpl<R>(op.getName(), result, mConnPool.getOperationMonitor())
+				return new OperationResultImpl<R>(op.getName(), result, null)
 												 .attempts(1)
 												 .setNode(getHost());
 				
@@ -160,7 +160,7 @@ public class MemcachedConnectionFactory implements ConnectionFactory<MemcachedCl
 			final long start = System.currentTimeMillis();
 			try { 
 				Future<R> future = op.executeAsync(mClient);
-				return new FutureOperationalResultImpl<R>(op.getName(), future, start, mConnPool.getOperationMonitor()).node(getHost());
+				return new FutureOperationalResultImpl<R>(op.getName(), future, start, null).node(getHost());
 				
 			} catch (DynoConnectException e) {
 				lastEx.set(e);
