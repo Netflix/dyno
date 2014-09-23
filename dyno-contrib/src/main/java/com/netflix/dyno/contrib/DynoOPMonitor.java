@@ -92,8 +92,8 @@ public class DynoOPMonitor implements OperationMonitor {
 		}
 		
 		public void recordLatency(long duration, TimeUnit unit) {
-			long durationMillis = TimeUnit.MILLISECONDS.convert(duration, unit);
-			estHistogram.add(durationMillis);
+			long durationMicros = TimeUnit.MICROSECONDS.convert(duration, unit);
+			estHistogram.add(durationMicros);
 		}
 	}
 
