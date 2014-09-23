@@ -14,7 +14,7 @@ public abstract class EstimatedHistogramBasedCounter extends AbstractMonitor<Num
 	 * Creates a new instance of the counter.
 	 */
 	public EstimatedHistogramBasedCounter(final String name, final EstimatedHistogram histogram) {
-		super(MonitorConfig.builder(name).build().withAdditionalTag(DataSourceType.COUNTER));
+		super(MonitorConfig.builder(name).build().withAdditionalTag(DataSourceType.GAUGE));
 		this.estHistogram = histogram;
 	}
 
