@@ -60,17 +60,17 @@ public class DynoOPMonitor implements OperationMonitor {
 	private DynoOpCounter getOrCreateCounter(String opName) {
 		
 		DynoOpCounter counter = counterMap.get(opName);
-		if (counter == null) {
-			counter = new DynoOpCounter(appName, opName);
+		if (counter != null) {
+			return counter;
 		}
+		counter = new DynoOpCounter(appName, opName);
 		DynoOpCounter prevCounter = counterMap.putIfAbsent(opName, counter);
 		if (prevCounter != null) {
 			return prevCounter;
-		} else {
-			DefaultMonitorRegistry.getInstance().register(counter.success);
-			DefaultMonitorRegistry.getInstance().register(counter.failure);
-			return counter; 
 		}
+		DefaultMonitorRegistry.getInstance().register(counter.success);
+		DefaultMonitorRegistry.getInstance().register(counter.failure);
+		return counter; 
 	}
 
 	private class DynoTimingCounters {
@@ -100,18 +100,18 @@ public class DynoOPMonitor implements OperationMonitor {
 	private DynoTimingCounters getOrCreateTimers(String opName) {
 		
 		DynoTimingCounters timer = timerMap.get(opName);
-		if (timer == null) {
-			timer = new DynoTimingCounters(appName, opName);
+		if (timer != null) {
+			return timer;
 		}
+		timer = new DynoTimingCounters(appName, opName);
 		DynoTimingCounters prevTimer = timerMap.putIfAbsent(opName, timer);
 		if (prevTimer != null) {
 			return prevTimer;
-		} else {
-			DefaultMonitorRegistry.getInstance().register(timer.latMean);
-			DefaultMonitorRegistry.getInstance().register(timer.lat99);
-			DefaultMonitorRegistry.getInstance().register(timer.lat995);
-			DefaultMonitorRegistry.getInstance().register(timer.lat999);
-			return timer; 
 		}
+		DefaultMonitorRegistry.getInstance().register(timer.latMean);
+		DefaultMonitorRegistry.getInstance().register(timer.lat99);
+		DefaultMonitorRegistry.getInstance().register(timer.lat995);
+		DefaultMonitorRegistry.getInstance().register(timer.lat999);
+		return timer; 
 	}
 }
