@@ -106,8 +106,11 @@ public class CollectionUtils {
 		
 		Map<Y,Z> toMap = new HashMap<Y,Z>();
 		for (X x : from.keySet()) {
-			Y y = transform.get(x);
-			toMap.put(y, from.get(x));
+			Z z = from.get(x);
+			if (z != null) {
+				Y y = transform.get(x);
+				toMap.put(y, z);
+			}
 		}
 		return toMap;
 	}
