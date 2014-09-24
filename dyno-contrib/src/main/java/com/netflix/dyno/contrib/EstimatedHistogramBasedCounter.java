@@ -5,6 +5,7 @@ import com.netflix.dyno.connectionpool.impl.utils.EstimatedHistogram;
 import com.netflix.servo.annotations.DataSourceType;
 import com.netflix.servo.monitor.AbstractMonitor;
 import com.netflix.servo.monitor.MonitorConfig;
+import com.netflix.servo.tag.BasicTag;
 
 public abstract class EstimatedHistogramBasedCounter extends AbstractMonitor<Number> {
 
@@ -13,8 +14,10 @@ public abstract class EstimatedHistogramBasedCounter extends AbstractMonitor<Num
 	/**
 	 * Creates a new instance of the counter.
 	 */
-	public EstimatedHistogramBasedCounter(final String name, final EstimatedHistogram histogram) {
-		super(MonitorConfig.builder(name).build().withAdditionalTag(DataSourceType.GAUGE));
+	public EstimatedHistogramBasedCounter(final String name, final String opName, final EstimatedHistogram histogram) {
+		super(MonitorConfig.builder(name).build()
+				.withAdditionalTag(DataSourceType.GAUGE)
+				.withAdditionalTag(new BasicTag("dyno_op", opName)));
 		this.estHistogram = histogram;
 	}
 
@@ -45,8 +48,8 @@ public abstract class EstimatedHistogramBasedCounter extends AbstractMonitor<Num
 	
 	public static class EstimatedHistogramMean extends EstimatedHistogramBasedCounter {
 
-		public EstimatedHistogramMean(String name, EstimatedHistogram histogram) {
-			super(name, histogram);
+		public EstimatedHistogramMean(final String name, final String opName, final EstimatedHistogram histogram) {
+			super(name, opName, histogram);
 		}
 
 		@Override
@@ -59,8 +62,8 @@ public abstract class EstimatedHistogramBasedCounter extends AbstractMonitor<Num
 
 		private final double percentile;
 		
-		public EstimatedHistogramPercentile(String name, EstimatedHistogram histogram, double pVal) {
-			super(name, histogram);
+		public EstimatedHistogramPercentile(final String name, final String opName, final EstimatedHistogram histogram, double pVal) {
+			super(name, opName, histogram);
 			percentile = pVal;
 		}
 

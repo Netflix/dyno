@@ -57,7 +57,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 		@Override
 		public <R> OperationResult<R> execute(Operation<Jedis, R> op) throws DynoException {
 			
-			long startTime = System.currentTimeMillis();
+			long startTime = System.nanoTime()/1000;
 			String opName = op.getName();
 
 			OperationResultImpl<R> opResult = null;
@@ -79,9 +79,9 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 				throw lastDynoException;
 				
 			} finally {
-				long duration = System.currentTimeMillis() - startTime;
+				long duration = System.nanoTime()/1000 - startTime;
 				if (opResult != null) {
-					opResult.setLatency(duration, TimeUnit.MILLISECONDS);
+					opResult.setLatency(duration, TimeUnit.MICROSECONDS);
 				}
 			}
 		}

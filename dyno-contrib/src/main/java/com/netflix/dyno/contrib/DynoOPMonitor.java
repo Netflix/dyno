@@ -8,8 +8,11 @@ import com.netflix.dyno.connectionpool.impl.utils.EstimatedHistogram;
 import com.netflix.dyno.contrib.EstimatedHistogramBasedCounter.EstimatedHistogramMean;
 import com.netflix.dyno.contrib.EstimatedHistogramBasedCounter.EstimatedHistogramPercentile;
 import com.netflix.servo.DefaultMonitorRegistry;
+import com.netflix.servo.monitor.BasicCounter;
 import com.netflix.servo.monitor.Counter;
+import com.netflix.servo.monitor.MonitorConfig;
 import com.netflix.servo.monitor.Monitors;
+import com.netflix.servo.tag.BasicTag;
 
 public class DynoOPMonitor implements OperationMonitor {
 
@@ -43,9 +46,8 @@ public class DynoOPMonitor implements OperationMonitor {
 		private final Counter failure;
 		
 		private DynoOpCounter(String appName, String opName) {
-			
-			success = Monitors.newCounter("Dyno__" + appName + "__" + opName + "__SUCCESS");
-			failure = Monitors.newCounter("Dyno__" + appName + "__" + opName + "__ERROR");
+			success = getNewCounter("Dyno__" + appName + "__" + opName + "__SUCCESS", opName);
+			failure = getNewCounter("Dyno__" + appName + "__" + opName + "__ERROR", opName);
 		}
 		
 		private void incrementSuccess() {
@@ -54,6 +56,12 @@ public class DynoOPMonitor implements OperationMonitor {
 		
 		private void incrementFailure() {
 			failure.increment();
+		}
+		
+		private BasicCounter getNewCounter(String metricName, String opName) {
+			MonitorConfig config = 
+					MonitorConfig.builder(metricName).withTag(new BasicTag("dyno_op", opName)).build();
+			return new BasicCounter(config);
 		}
 	}
 	
@@ -85,10 +93,10 @@ public class DynoOPMonitor implements OperationMonitor {
 		private DynoTimingCounters(String appName, String opName) {
 
 			estHistogram = new EstimatedHistogram();
-			latMean = new EstimatedHistogramMean("Dyno__" + appName + "__" + opName + "__latMean", estHistogram);
-			lat99 = new EstimatedHistogramPercentile("Dyno__" + appName + "__" + opName + "__lat99", estHistogram, 0.99);
-			lat995 = new EstimatedHistogramPercentile("Dyno__" + appName + "__" + opName + "__lat995", estHistogram, 0.995);
-			lat999 = new EstimatedHistogramPercentile("Dyno__" + appName + "__" + opName + "__lat999", estHistogram, 0.999);
+			latMean = new EstimatedHistogramMean("Dyno__" + appName + "__" + opName + "__latMean", opName, estHistogram);
+			lat99 = new EstimatedHistogramPercentile("Dyno__" + appName + "__" + opName + "__lat990", opName, estHistogram, 0.99);
+			lat995 = new EstimatedHistogramPercentile("Dyno__" + appName + "__" + opName + "__lat995", opName, estHistogram, 0.995);
+			lat999 = new EstimatedHistogramPercentile("Dyno__" + appName + "__" + opName + "__lat999", opName, estHistogram, 0.999);
 		}
 		
 		public void recordLatency(long duration, TimeUnit unit) {
