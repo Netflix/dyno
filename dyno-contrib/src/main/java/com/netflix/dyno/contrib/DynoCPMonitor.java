@@ -119,19 +119,19 @@ public class DynoCPMonitor extends CountingConnectionPoolMonitor {
 	}
 
 
-	@Monitor(name = "HostCount", type = DataSourceType.COUNTER)
+	@Monitor(name = "HostCount", type = DataSourceType.GAUGE)
 	@Override
 	public long getHostCount() {
 		return super.getHostCount();
 	}
 
-	@Monitor(name = "HostUpCount", type = DataSourceType.COUNTER)
+	@Monitor(name = "HostUpCount", type = DataSourceType.GAUGE)
 	@Override
 	public long getHostUpCount() {
 		return super.getHostUpCount();
 	}
 	
-	@Monitor(name = "HostDownCount", type = DataSourceType.COUNTER)
+	@Monitor(name = "HostDownCount", type = DataSourceType.GAUGE)
 	@Override
 	public long getHostDownCount() {
 		return super.getHostDownCount();
