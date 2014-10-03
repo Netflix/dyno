@@ -113,7 +113,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	private final ConnectionPoolConfiguration cpConfiguration; 
 	private final ConnectionPoolMonitor cpMonitor; 
 	
-	private final ScheduledExecutorService recoveryThreadPool = Executors.newScheduledThreadPool(1);
+	private final HostsUpdator hostsUpdator; 
+	private final ScheduledExecutorService connPoolThreadPool = Executors.newScheduledThreadPool(1);
 	
 	private final AtomicBoolean started = new AtomicBoolean(false);
 	
@@ -131,7 +132,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		this.cpMonitor = cpMon;
 		this.poolType = type; 
 		
-		this.cpHealthTracker = new ConnectionPoolHealthTracker<CL>(cpConfiguration, recoveryThreadPool);
+		this.cpHealthTracker = new ConnectionPoolHealthTracker<CL>(cpConfiguration, connPoolThreadPool);
 
 		switch (type) {
 			case Sync:
@@ -143,6 +144,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			default:
 				throw new RuntimeException("unknown type");
 		};
+	
+		this.hostsUpdator = new HostsUpdator(cpConfiguration.getHostSupplier());
 		
 		MonitorConsole.getInstance().addMonitorConsole(cpConfig.getName(), cpMon);
 	}
@@ -158,6 +161,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 	public boolean addHost(Host host, boolean refreshLoadBalancer) {
 		
+		host.setPort(cpConfiguration.getPort());
+
 		HostConnectionPool<CL> connPool = cpMap.get(host);
 		
 		if (connPool != null) {
@@ -206,6 +211,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		HostConnectionPool<CL> hostPool = cpMap.remove(host);
 		if (hostPool != null) {
 			selectionStrategy.removeHost(host, hostPool);
+			cpHealthTracker.removeHost(host);
 			cpMonitor.hostRemoved(host);
 			hostPool.shutdown();
 			return true;
@@ -249,11 +255,15 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	public Future<Boolean> updateHosts(Collection<Host> hostsUp, Collection<Host> hostsDown) {
 		
 		boolean condition = false;
-		for (Host hostUp : hostsUp) {
-			condition |= addHost(hostUp);
+		if (hostsUp != null && !hostsUp.isEmpty()) {
+			for (Host hostUp : hostsUp) {
+				condition |= addHost(hostUp);
+			}
 		}
-		for (Host hostDown : hostsDown) {
-			condition |= removeHost(hostDown);
+		if (hostsDown != null && !hostsDown.isEmpty()) {
+			for (Host hostDown : hostsDown) {
+				condition |= removeHost(hostDown);
+			}
 		}
 		return getEmptyFutureTask(condition);
 	}
@@ -278,13 +288,9 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			Connection<CL> connection = null;
 			
 			try { 
-//				if (lastException != null && retry.allowRemoteDCFallback()) {
-//					connection = 
-//							selectionStrategy.getFallbackConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
-//				} else {
 					connection = 
 							selectionStrategy.getConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
-//				}
+
 				OperationResult<R> result = connection.execute(op);
 				
 				// Add context to the result from the successful execution
@@ -427,7 +433,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			removeHost(host);
 		}
 		cpHealthTracker.stop();
-		recoveryThreadPool.shutdownNow();
+		hostsUpdator.stop();
+		connPoolThreadPool.shutdownNow();
 	}
 
 	@Override
@@ -442,40 +449,33 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			throw new DynoException("Host supplier not configured!");
 		}
 
-		Collection<Host> hosts = hostSupplier.getHosts();
-
-		List<Host> hostsUp = new ArrayList<Host>(CollectionUtils.filter(hosts, new Predicate<Host>() {
-			@Override
-			public boolean apply(Host input) {
-				return input.isUp();
-			}
-		}));
-
+		HostStatusTracker hostStatus = hostsUpdator.refreshHosts();
+		Collection<Host> hostsUp = hostStatus.getActiveHosts();
 		
+		if (hostsUp == null || hostsUp.isEmpty()) {
+			throw new NoAvailableHostsException("No available hosts when starting connection pool");
+		}
+
 		for (Host host : hostsUp) {
-			// Set the Port on every host
-			host.setPort(cpConfiguration.getPort());
 			// Add host connection pool, but don't init the load balancer yet
 			addHost(host, false);  
-		}
-		
-		// Check for any available hosts before starting pool. 
-		List<Host> availableHosts = new ArrayList<Host>(CollectionUtils.filter(cpMap.keySet(), new Predicate<Host>() {
-			@Override
-			public boolean apply(Host input) {
-				return input.isUp();
-			}
-		}));
-		
-
-		if (availableHosts == null || availableHosts.isEmpty()) {
-			throw new NoAvailableHostsException("No available hosts when starting connection pool");
 		}
 
 		boolean success = started.compareAndSet(false, true);
 		if (success) {
 			selectionStrategy = initSelectionStrategy();
 			cpHealthTracker.start();
+			
+			connPoolThreadPool.scheduleWithFixedDelay(new Runnable() {
+
+				@Override
+				public void run() {
+					
+					HostStatusTracker hostStatus = hostsUpdator.refreshHosts();
+					updateHosts(hostStatus.getActiveHosts(), hostStatus.getInactiveHosts());
+				}
+				
+			}, 30*1000, 30*1000, TimeUnit.MILLISECONDS);
 		}
 		
 		return getEmptyFutureTask(true);
@@ -518,7 +518,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 		@Override
 		public HostConnectionPool<CL> createHostConnectionPool(Host host, ConnectionPoolImpl<CL> parentPoolImpl) {
-			return new HostConnectionPoolImpl<CL>(host, connFactory, cpConfiguration, cpMonitor, recoveryThreadPool);
+			return new HostConnectionPoolImpl<CL>(host, connFactory, cpConfiguration, cpMonitor);
 		}
 	}
 	
@@ -545,6 +545,9 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			
 			cpMonitor.incOperationSuccess(connection.getHost(), System.currentTimeMillis()-startTime);
 			
+//			futureResult.setNode(connection.getHost())
+//			  .addMetadata(connection.getContext().getAll());
+		
 			return futureResult; 
 			
 		} catch(NoAvailableHostsException e) {
@@ -660,9 +663,13 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		private Host host2 = new Host("host2", 8080, Status.Up).setDC("localDC");
 		private Host host3 = new Host("host3", 8080, Status.Up).setDC("localDC");
 		
+		private final List<Host> hostSupplierHosts = new ArrayList<Host>();
+		
 		@Before
 		public void beforeTest() {
 
+			hostSupplierHosts.clear();
+			
 			host1 = new Host("host1", 8080, Status.Up).setDC("localDC");
 			host2 = new Host("host2", 8080, Status.Up).setDC("localDC");
 			host3 = new Host("host3", 8080, Status.Up).setDC("localDC");
@@ -673,7 +680,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				
 				@Override
 				public Collection<Host> getHosts() {
-					return new ArrayList<Host>();
+					return hostSupplierHosts;
 				}
 			});
 			
@@ -689,8 +696,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		public void testConnectionPoolNormal() throws Exception {
 
 			final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
-			pool.addHost(host1, false);
-			pool.addHost(host2, false);
+			hostSupplierHosts.add(host1);
+			hostSupplierHosts.add(host2);
 			
 			pool.start();
 			
@@ -791,8 +798,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		public void testAddingNewHosts() throws Exception {
 			
 			final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
-			pool.addHost(host1, false);
-			pool.addHost(host2, false);
+			hostSupplierHosts.add(host1);
+			hostSupplierHosts.add(host2);
 			
 			pool.start();
 			
@@ -839,9 +846,9 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		public void testRemovingHosts() throws Exception {
 			
 			final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
-			pool.addHost(host1, false);
-			pool.addHost(host2, false);
-			pool.addHost(host3, false);
+			hostSupplierHosts.add(host1);
+			hostSupplierHosts.add(host2);
+			hostSupplierHosts.add(host3);
 			
 			pool.start();
 			
@@ -889,9 +896,9 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		public void testPoolExhausted() throws Exception {
 
 			final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
-			pool.addHost(host1, false); 
-			pool.addHost(host2, false); 
-			pool.addHost(host3, false); 
+			hostSupplierHosts.add(host1);
+			hostSupplierHosts.add(host2);
+			hostSupplierHosts.add(host3);
 			
 			pool.start();
 			
@@ -968,9 +975,9 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			};
 			
 			final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(badConnectionFactory, cpConfig, cpMonitor);
-			pool.addHost(host1, false);
-			pool.addHost(host2, false);
-			pool.addHost(host3, false);
+			hostSupplierHosts.add(host1);
+			hostSupplierHosts.add(host2);
+			hostSupplierHosts.add(host3);
 			
 			pool.start();
 
@@ -1029,7 +1036,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			};
 			
 			final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(badConnectionFactory, cpConfig.setRetryPolicyFactory(rFactory), cpMonitor);
-			pool.addHost(host1, false);
+			hostSupplierHosts.add(host1);
+
 			pool.start();
 			
 			

@@ -92,6 +92,14 @@ public class ConnectionPoolHealthTracker<CL> {
 		PoolReconnectWaitMillis = poolReconnectWaitMillis;
 	}
 
+
+	public void removeHost(Host host) {
+		HostConnectionPool<CL> destPool = reconnectingPools.get(host);
+		if (destPool != null) {
+			destPool.getHost().setStatus(Status.Down);
+		}
+	}
+
 	public void start() {
 		
 		threadPool.scheduleWithFixedDelay(new Runnable() {
@@ -102,6 +110,8 @@ public class ConnectionPoolHealthTracker<CL> {
 				if(stop.get() || Thread.currentThread().isInterrupted()) {
 					return;
 				}
+				
+				Thread.currentThread().setName("DynoConnectionPoolHealthTracker");
 					
 				Logger.debug("Running, pending pools size: " + reconnectingPools.size());
 					
@@ -158,6 +168,8 @@ public class ConnectionPoolHealthTracker<CL> {
 		
 		if (e != null && e instanceof FatalConnectionException) {
 
+			Logger.error("FAIL: " + e.getMessage());
+			
 			Host host = hostPool.getHost();
 			
 			ErrorMonitor errorMonitor = errorRates.get(host);
@@ -338,4 +350,5 @@ public class ConnectionPoolHealthTracker<CL> {
 			return hostPool;
 		}
 	}
+
 }

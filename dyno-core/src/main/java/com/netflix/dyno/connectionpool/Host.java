@@ -102,7 +102,6 @@ public class Host {
 		int result = 1;
 		result = prime * result + ((name == null) ? 0 : name.hashCode());
 		result = prime * result + ((dc == null) ? 0 : dc.hashCode());
-		result = prime * result + port;
 		return result;
 	}
 
@@ -118,7 +117,6 @@ public class Host {
 		
 		equals &= (name != null) ? name.equals(other.name) : other.name == null;
 		equals &= (dc != null) ? dc.equals(other.dc) : other.dc == null;
-		equals &= (port == other.port);
 		
 		return equals;
 	}

@@ -188,7 +188,6 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     @Override
     public void incFailover(Host host, Exception reason) {
         this.operationFailoverCount.incrementAndGet();
-        trackError(host, reason);
     }
 
     @Override
