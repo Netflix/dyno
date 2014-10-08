@@ -105,10 +105,6 @@ public class HostToken implements Comparable<Long> {
 			// change host name
 			HostToken t4 = new HostToken(1L, new Host("foo1", 1234));
 			Assert.assertFalse(t1.equals(t4));
-			
-			// change host port
-			HostToken t5 = new HostToken(1L, new Host("foo", 5678));
-			Assert.assertFalse(t1.equals(t5));
 		}
 
 		@Test

@@ -103,8 +103,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 	private final AtomicReference<ConnectionPoolState<CL>> cpState = new AtomicReference<ConnectionPoolState<CL>>(cpNotInited);
 	
 	public HostConnectionPoolImpl(Host host, ConnectionFactory<CL> conFactory, 
-			                      ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor poolMonitor,
-			                      ExecutorService thPool) {
+			                      ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor poolMonitor) {
 		this.host = host;
 		this.connFactory = conFactory;
 		this.cpConfig = cpConfig;
@@ -153,10 +152,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		reconnect(cpDown);
 	
 		if (cpState.get() == cpActive) {
-			System.out.println("Done Reconnecting. Host up");
 			monitor.hostUp(host, this);
-		} else {
-			System.out.println("Host NOT up");
 		}
 	}
 
@@ -202,10 +198,15 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 			}
 		}
 		
-		if (successfullyCreated == cpConfig.getMaxConnsPerHost())
+		if (successfullyCreated == cpConfig.getMaxConnsPerHost()) {
 			if (!(cpState.compareAndSet(cpReconnecting, cpActive))) {
 				throw new IllegalStateException("something went wrong with prime connections");
 			}
+		} else {
+			if (!(cpState.compareAndSet(cpReconnecting, cpDown))) {
+				throw new IllegalStateException("something went wrong with prime connections");
+			}
+		}
 		return successfullyCreated;
 	}
 	
@@ -224,7 +225,6 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				success = true;
 				break;
 			} catch (DynoException e) {
-				Logger.error("Failed to prime connection, will retry", e);
 				retry.failure(e);
 			}
 		}
@@ -295,9 +295,21 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				
 				return connection;
 			} catch (DynoConnectException e) {
-				Logger.error("Failed to create connection", e);
+				if (Logger.isDebugEnabled()) {
+					Logger.error("Failed to create connection", e);
+				} else {
+					//Logger.error("Failed to create connection" + e.getMessage());
+				}
 				monitor.incConnectionCreateFailed(host, e);
 				throw e;
+			} catch (RuntimeException e) {
+				if (Logger.isDebugEnabled()) {
+					Logger.error("Failed to create connection", e);
+				} else {
+					//Logger.error("Failed to create connection" + e.getMessage());
+				}
+				monitor.incConnectionCreateFailed(host, e);
+				throw new DynoConnectException(e);
 			}
 		}
 
@@ -428,7 +440,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 	}
 	
 	public String toString() {
-		return "HostConnectionPool: [Host: " + host.getHostName() + ", Active: " + isActive() + "]";
+		return "HostConnectionPool: [Host: " + host + ", Pool active: " + isActive() + "]";
 	}
 	
 	public static class UnitTest { 
@@ -541,7 +553,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 			final BasicResult result = new BasicResult();
 			final TestControl control = new TestControl(4);
 			
-			pool = new HostConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor, threadPool);
+			pool = new HostConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor);
 			int numConns = pool.primeConnections();
 
 			for (int i=0; i<4; i++) {
@@ -566,7 +578,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		@Test
 		public void testPoolTimeouts() throws Exception {
 		
-			pool = new HostConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor, threadPool);
+			pool = new HostConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor);
 			int numConns = pool.primeConnections();
 
 			final BasicResult result = new BasicResult();
@@ -597,7 +609,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		@Test
 		public void testMarkHostAsDown() throws Exception {
 			
-			pool = new HostConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor, threadPool);
+			pool = new HostConnectionPoolImpl<TestClient>(TestHost, connFactory, config, cpMonitor);
 			int numConns = pool.primeConnections();
 
 			final BasicResult result = new BasicResult();

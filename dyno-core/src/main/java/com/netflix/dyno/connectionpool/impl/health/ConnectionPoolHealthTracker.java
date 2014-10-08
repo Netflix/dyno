@@ -92,6 +92,15 @@ public class ConnectionPoolHealthTracker<CL> {
 		PoolReconnectWaitMillis = poolReconnectWaitMillis;
 	}
 
+
+	public void removeHost(Host host) {
+		HostConnectionPool<CL> destPool = reconnectingPools.get(host);
+		if (destPool != null) {
+			Logger.info("Health tracker marking host as down " + host);
+			destPool.getHost().setStatus(Status.Down);
+		}
+	}
+
 	public void start() {
 		
 		threadPool.scheduleWithFixedDelay(new Runnable() {
@@ -102,13 +111,13 @@ public class ConnectionPoolHealthTracker<CL> {
 				if(stop.get() || Thread.currentThread().isInterrupted()) {
 					return;
 				}
-					
+				
 				Logger.debug("Running, pending pools size: " + reconnectingPools.size());
 					
 				for (Host host : reconnectingPools.keySet()) {
 						
 					if (!host.isUp()) {
-						Logger.info("Host: " + host + " is marked as down, will not reconnect connection pool");
+						Logger.info("Host: " + host + " is marked as down, evicting host from reconnection pool");
 						reconnectingPools.remove(host);
 						continue;
 					}
@@ -120,10 +129,10 @@ public class ConnectionPoolHealthTracker<CL> {
 						reconnectingPools.remove(host);
 					} else {
 						try {
-							Logger.info("Reconnecting pool for host: " + host);
+							Logger.info("Reconnecting pool : " + pool);
 							pool.markAsDown(null);
 							if (PoolReconnectWaitMillis > 0) {
-								Logger.info("Sleeping to allow enough time to drain connections");
+								Logger.debug("Sleeping to allow enough time to drain connections");
 								Thread.sleep(PoolReconnectWaitMillis);
 							}
 							pool.reconnect();
@@ -135,7 +144,7 @@ public class ConnectionPoolHealthTracker<CL> {
 							}
 						} catch (Exception e) {
 							// do nothing, will retry again once thread wakes up
-							Logger.warn("Failed to reconnect pool for host: " + host, e);
+							Logger.warn("Failed to reconnect pool for host: " + host + " " +  e.getMessage());
 						}
 					}
 				}
@@ -158,6 +167,8 @@ public class ConnectionPoolHealthTracker<CL> {
 		
 		if (e != null && e instanceof FatalConnectionException) {
 
+			Logger.error("FAIL: " + e.getMessage());
+			
 			Host host = hostPool.getHost();
 			
 			ErrorMonitor errorMonitor = errorRates.get(host);
@@ -179,7 +190,7 @@ public class ConnectionPoolHealthTracker<CL> {
 	
 	public void reconnectPool(HostConnectionPool<CL> hostPool) {
 		Host host = hostPool.getHost();
-		Logger.error("Dyno recycling host connection pool for host: " + host + " due to too many errors");
+		Logger.error("Enqueueing host cp for recycling due to too many errors: " + hostPool);
 		hostPool.markAsDown(null);
 		reconnectingPools.put(host, hostPool);
 	}
@@ -338,4 +349,5 @@ public class ConnectionPoolHealthTracker<CL> {
 			return hostPool;
 		}
 	}
+
 }

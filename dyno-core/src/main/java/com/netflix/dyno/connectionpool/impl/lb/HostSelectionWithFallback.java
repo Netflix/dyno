@@ -141,6 +141,7 @@ public class HostSelectionWithFallback<CL> {
 		}
 		
 		if (useFallback && cpConfig.getMaxFailoverCount() > 0) {
+			cpMonitor.incFailover(null, null);
 			// Check if we have any remotes to fallback to
 			int numRemotes = remoteDCNames.getEntireList().size();
 			if (numRemotes == 0) {

@@ -24,6 +24,7 @@ import org.junit.Test;
 
 import com.netflix.dyno.connectionpool.ConnectionPool;
 import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
@@ -161,6 +162,12 @@ public class HostStatusTracker {
 		// If anyone is remaining in the prev set then add it to the inactive set, since it has gone away
 		nextInactiveHosts.addAll(prevActiveHosts);
 		
+		for (Host host : nextActiveHosts) {
+			host.setStatus(Status.Up);
+		}
+		for (Host host : nextInactiveHosts) {
+			host.setStatus(Status.Down);
+		}
 		return new HostStatusTracker(nextActiveHosts, nextInactiveHosts);
 	}
 	

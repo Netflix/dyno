@@ -2,7 +2,6 @@ package com.netflix.dyno.contrib;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,8 +36,6 @@ public class EurekaHostsSupplier implements HostSupplier {
 	private final String applicationName;
 	private final DiscoveryClient discoveryClient;
 	
-	private final AtomicReference<List<Host>> cachedRef = new AtomicReference<List<Host>>(null);
-	
 	public EurekaHostsSupplier(String applicationName, DiscoveryClient dClient) {
 		this.applicationName = applicationName.toUpperCase();
 		this.discoveryClient = dClient;
@@ -46,15 +43,7 @@ public class EurekaHostsSupplier implements HostSupplier {
 
 	@Override
 	public List<Host> getHosts() {
-
-		if (cachedRef.get() == null) {
-			cachedRef.set(getUpdateFromEureka());
-		}
-		return cachedRef.get();
-	}
-	
-	public void processEurekaUpdate() {
-		cachedRef.set(getUpdateFromEureka());
+		return getUpdateFromEureka();
 	}
 	
 	private List<Host> getUpdateFromEureka() {
@@ -102,12 +91,7 @@ public class EurekaHostsSupplier implements HostSupplier {
 					}
 				}));
 		
-		if (hosts.size() <=10) {
-			Logger.info("Found hosts from eureka");
-			for (Host host : hosts) {
-				Logger.info("Eureka Host: " + host);
-			}
-		}
+		Logger.info("Dyno found hosts from eureka - num hosts: " + hosts.size());
 		
 		return hosts;
 	}
