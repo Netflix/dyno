@@ -104,7 +104,6 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 	
 	public HostConnectionPoolImpl(Host host, ConnectionFactory<CL> conFactory, 
 			                      ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor poolMonitor) {
-			                      //ExecutorService thPool) {
 		this.host = host;
 		this.connFactory = conFactory;
 		this.cpConfig = cpConfig;
