@@ -85,7 +85,7 @@ public class BinarySearchTokenMapper implements HashPartitioner {
 	
 	public void addHostToken(HostToken hostToken) {
 
-		HostToken prevToken = tokenMap.put(hostToken.getToken(), hostToken);
+		HostToken prevToken = tokenMap.putIfAbsent(hostToken.getToken(), hostToken);
 		if (prevToken == null) {
 			initBinarySearch();
 		}

@@ -29,7 +29,6 @@ public class HostsUpdator {
 			return null;
 		}
 		
-		Thread.currentThread().setName("DynoHostsUpdator");
 		Collection<Host> allHosts = hostSupplier.getHosts();
 		if (allHosts == null || allHosts.isEmpty()) {
 			throw new NoAvailableHostsException("No available hosts when starting host updator");

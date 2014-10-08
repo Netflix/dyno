@@ -153,7 +153,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	public HostSelectionWithFallback<CL> getTokenSelection() {
 		return selectionStrategy;
 	}
-	
+
 	@Override
 	public boolean addHost(Host host) {
 		return addHost(host, true);
@@ -475,7 +475,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 					updateHosts(hostStatus.getActiveHosts(), hostStatus.getInactiveHosts());
 				}
 				
-			}, 30*1000, 30*1000, TimeUnit.MILLISECONDS);
+			}, 15*1000, 30*1000, TimeUnit.MILLISECONDS);
 		}
 		
 		return getEmptyFutureTask(true);

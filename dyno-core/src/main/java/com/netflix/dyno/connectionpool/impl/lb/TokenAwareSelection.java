@@ -129,10 +129,9 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 
 	@Override
 	public boolean removeHostPool(HostToken hostToken) {
-		
+
 		HostConnectionPool<CL> prev = tokenPools.get(hostToken.getToken());
 		if (prev != null) {
-			tokenMapper.remoteHostToken(hostToken);
 			tokenPools.remove(hostToken.getToken());
 			return true;
 		} else {

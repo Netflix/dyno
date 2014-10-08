@@ -153,10 +153,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		reconnect(cpDown);
 	
 		if (cpState.get() == cpActive) {
-			System.out.println("Done Reconnecting. Host up");
 			monitor.hostUp(host, this);
-		} else {
-			System.out.println("Host NOT up");
 		}
 	}
 
@@ -202,10 +199,15 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 			}
 		}
 		
-		if (successfullyCreated == cpConfig.getMaxConnsPerHost())
+		if (successfullyCreated == cpConfig.getMaxConnsPerHost()) {
 			if (!(cpState.compareAndSet(cpReconnecting, cpActive))) {
 				throw new IllegalStateException("something went wrong with prime connections");
 			}
+		} else {
+			if (!(cpState.compareAndSet(cpReconnecting, cpDown))) {
+				throw new IllegalStateException("something went wrong with prime connections");
+			}
+		}
 		return successfullyCreated;
 	}
 	
@@ -224,7 +226,6 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				success = true;
 				break;
 			} catch (DynoException e) {
-				Logger.error("Failed to prime connection, will retry", e);
 				retry.failure(e);
 			}
 		}
@@ -295,9 +296,21 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				
 				return connection;
 			} catch (DynoConnectException e) {
-				Logger.error("Failed to create connection", e);
+				if (Logger.isDebugEnabled()) {
+					Logger.error("Failed to create connection", e);
+				} else {
+					//Logger.error("Failed to create connection" + e.getMessage());
+				}
 				monitor.incConnectionCreateFailed(host, e);
 				throw e;
+			} catch (RuntimeException e) {
+				if (Logger.isDebugEnabled()) {
+					Logger.error("Failed to create connection", e);
+				} else {
+					//Logger.error("Failed to create connection" + e.getMessage());
+				}
+				monitor.incConnectionCreateFailed(host, e);
+				throw new DynoConnectException(e);
 			}
 		}
 
@@ -428,7 +441,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 	}
 	
 	public String toString() {
-		return "HostConnectionPool: [Host: " + host.getHostName() + ", Active: " + isActive() + "]";
+		return "HostConnectionPool: [Host: " + host + ", Pool active: " + isActive() + "]";
 	}
 	
 	public static class UnitTest { 
