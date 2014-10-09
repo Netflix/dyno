@@ -659,9 +659,9 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			}
 		};
 		
-		private Host host1 = new Host("host1", 8080, Status.Up).setDC("localDC");
-		private Host host2 = new Host("host2", 8080, Status.Up).setDC("localDC");
-		private Host host3 = new Host("host3", 8080, Status.Up).setDC("localDC");
+		private Host host1 = new Host("host1", 8080, Status.Up).setRack("localDC");
+		private Host host2 = new Host("host2", 8080, Status.Up).setRack("localDC");
+		private Host host3 = new Host("host3", 8080, Status.Up).setRack("localDC");
 		
 		private final List<Host> hostSupplierHosts = new ArrayList<Host>();
 		
@@ -670,9 +670,9 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 			hostSupplierHosts.clear();
 			
-			host1 = new Host("host1", 8080, Status.Up).setDC("localDC");
-			host2 = new Host("host2", 8080, Status.Up).setDC("localDC");
-			host3 = new Host("host3", 8080, Status.Up).setDC("localDC");
+			host1 = new Host("host1", 8080, Status.Up).setRack("localDC");
+			host2 = new Host("host2", 8080, Status.Up).setRack("localDC");
+			host3 = new Host("host3", 8080, Status.Up).setRack("localDC");
 
 			client = new TestClient();
 			cpConfig = new ConnectionPoolConfigurationImpl("TestClient").setLoadBalancingStrategy(LoadBalancingStrategy.RoundRobin);

@@ -29,7 +29,7 @@ public class Host {
 	private Status status = Status.Down;
 	private InetSocketAddress socketAddress = null;
 	
-	private String dc; 
+	private String rack; 
 	
 	public static enum Status {
 		Up, Down;
@@ -72,12 +72,12 @@ public class Host {
 		return status;
 	}
 
-	public String getDC() {
-		return dc;
+	public String getRack() {
+		return rack;
 	}
 	
-	public Host setDC(String datacenter) {
-		this.dc = datacenter;
+	public Host setRack(String datacenter) {
+		this.rack = datacenter;
 		return this;
 	}
 	
@@ -101,7 +101,7 @@ public class Host {
 		final int prime = 31;
 		int result = 1;
 		result = prime * result + ((name == null) ? 0 : name.hashCode());
-		result = prime * result + ((dc == null) ? 0 : dc.hashCode());
+		result = prime * result + ((rack == null) ? 0 : rack.hashCode());
 		return result;
 	}
 
@@ -116,13 +116,13 @@ public class Host {
 		boolean equals = true;
 		
 		equals &= (name != null) ? name.equals(other.name) : other.name == null;
-		equals &= (dc != null) ? dc.equals(other.dc) : other.dc == null;
+		equals &= (rack != null) ? rack.equals(other.rack) : other.rack == null;
 		
 		return equals;
 	}
 
 	@Override
 	public String toString() {
-		return "Host [name=" + name + ", port=" + port + ", dc: " + dc + ", status: " + status.name() + "]";
+		return "Host [name=" + name + ", port=" + port + ", dc: " + rack + ", status: " + status.name() + "]";
 	}
 }

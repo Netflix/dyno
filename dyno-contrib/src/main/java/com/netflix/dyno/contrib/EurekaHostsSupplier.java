@@ -80,7 +80,7 @@ public class EurekaHostsSupplier implements HostSupplier {
 						try {
 							if (info.getDataCenterInfo() instanceof AmazonInfo) {
 								AmazonInfo amazonInfo = (AmazonInfo)info.getDataCenterInfo();
-								host.setDC(amazonInfo.get(MetaDataKey.availabilityZone));
+								host.setRack(amazonInfo.get(MetaDataKey.availabilityZone));
 							}
 						}
 						catch (Throwable t) {

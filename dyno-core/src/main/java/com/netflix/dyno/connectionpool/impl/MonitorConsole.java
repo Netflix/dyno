@@ -86,7 +86,7 @@ public class MonitorConsole {
 			 }
 			 
 			 HostConnectionStats hStats = hostStats.get(host);
-			 sb.append("\nHost: " + host.getHostName() + ":" + host.getPort() + ":" + host.getDC() + "\t");
+			 sb.append("\nHost: " + host.getHostName() + ":" + host.getPort() + ":" + host.getRack() + "\t");
 			 sb.append(" borrowed: " + hStats.getConnectionsBorrowed());
 			 sb.append(" returned: " + hStats.getConnectionsReturned());
 			 sb.append(" created: " + hStats.getConnectionsCreated());
