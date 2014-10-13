@@ -48,7 +48,7 @@ public class TokenAwareLocator extends InstrumentedLocator {
 			for (HostToken hToken : allHostTokens) {
 				
 				Host host = hToken.getHost();
-				String dc = host.getDC();
+				String dc = host.getRack();
 				
 				if (isLocalZoneHost(localZone, dc)) {
 					localHostTokens.add(hToken);

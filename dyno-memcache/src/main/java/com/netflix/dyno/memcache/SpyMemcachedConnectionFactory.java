@@ -227,7 +227,7 @@ public class SpyMemcachedConnectionFactory extends DefaultConnectionFactory {
 				}
 				
 				if (cpConfig.localDcAffinity()) {
-					if (host.getDC().equalsIgnoreCase(localDC)) {
+					if (host.getRack().equalsIgnoreCase(localDC)) {
 						localZoneMCNodes.add(node);
 					} else {
 						// This is a remote zone host

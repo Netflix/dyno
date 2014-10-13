@@ -48,6 +48,7 @@ import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
+import com.netflix.dyno.connectionpool.TokenPoolTopology;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
@@ -81,7 +82,7 @@ public class HostSelectionWithFallback<CL> {
 	private static final Logger Logger = LoggerFactory.getLogger(HostSelectionWithFallback.class);
 
 	// tracks the local zone
-	private final String localDC;
+	private final String localRack;
 	// The selector for the local zone
 	private final HostSelectionStrategy<CL> localSelector;
 	// Track selectors for each remote DC
@@ -102,7 +103,7 @@ public class HostSelectionWithFallback<CL> {
 
 		cpMonitor = monitor;
 		cpConfig = config;
-		localDC = cpConfig.getLocalDC();
+		localRack = cpConfig.getLocalDC();
 		tokenSupplier = cpConfig.getTokenSupplier();
 
 		selectorFactory = new DefaultSelectionFactory(cpConfig);
@@ -206,7 +207,7 @@ public class HostSelectionWithFallback<CL> {
 		final Collection<HostToken> localZoneTokens = CollectionUtils.filter(hostTokens.values(), new Predicate<HostToken>() {
 			@Override
 			public boolean apply(HostToken x) {
-				return localDC != null ? localDC.equalsIgnoreCase(x.getHost().getDC()) : true; 
+				return localRack != null ? localRack.equalsIgnoreCase(x.getHost().getRack()) : true; 
 			}
 		});
 		
@@ -249,12 +250,12 @@ public class HostSelectionWithFallback<CL> {
 
 
 	private HostSelectionStrategy<CL> findSelector(Host host) {
-		String dc = host.getDC();
-		if (localDC == null) {
+		String dc = host.getRack();
+		if (localRack == null) {
 			return localSelector;
 		}
 
-		if (localDC.equals(dc)) {
+		if (localRack.equals(dc)) {
 			return localSelector;
 		}
 
@@ -282,10 +283,10 @@ public class HostSelectionWithFallback<CL> {
 
 					@Override
 					public boolean apply(HostToken x) {
-						if (localDC == null) {
+						if (localRack == null) {
 							return true;
 						}
-						return dc.equals(x.getHost().getDC());
+						return dc.equals(x.getHost().getRack());
 					}
 				});
 		return dcPools;
@@ -309,13 +310,13 @@ public class HostSelectionWithFallback<CL> {
 		Set<String> remoteDCs = new HashSet<String>();
 
 		for (Host host : hPools.keySet()) {
-			String dc = host.getDC();
-			if (localDC != null && !localDC.isEmpty() && dc != null && !dc.isEmpty() && !localDC.equals(dc)) {
+			String dc = host.getRack();
+			if (localRack != null && !localRack.isEmpty() && dc != null && !dc.isEmpty() && !localRack.equals(dc)) {
 				remoteDCs.add(dc);
 			}
 		}
 
-		Map<HostToken, HostConnectionPool<CL>> localPools = getHostPoolsForDC(tokenPoolMap, localDC);
+		Map<HostToken, HostConnectionPool<CL>> localPools = getHostPoolsForDC(tokenPoolMap, localRack);
 		localSelector.initWithHosts(localPools);
 
 		for (String dc : remoteDCs) {
@@ -376,9 +377,33 @@ public class HostSelectionWithFallback<CL> {
 				throw new RuntimeException("LoadBalancing strategy not supported! " + cpConfig.getLoadBalancingStrategy().name());
 			}
 		}
-		
 	}
 
+	public TokenPoolTopology getTokenPoolTopology() {
+		
+		TokenPoolTopology topology = new TokenPoolTopology();
+		addTokens(topology, localRack, localSelector);
+		for (String remoteRack : remoteDCSelectors.keySet()) {
+			addTokens(topology, remoteRack, remoteDCSelectors.get(remoteRack));
+		}
+		return topology;
+	}
+	
+	private void addTokens(TokenPoolTopology topology, String rack, HostSelectionStrategy<CL> selectionStrategy) {
+		
+		Collection<HostConnectionPool<CL>> pools = selectionStrategy.getOrderedHostPools();
+		for (HostConnectionPool<CL> pool : pools) { 
+			if (pool == null) {
+				continue;
+			}
+			HostToken hToken = hostTokens.get(pool.getHost());
+			if (hToken == null) {
+				continue;
+			}
+			topology.addToken(rack, hToken.getToken(), pool);
+		}
+	}
+	
 	public static class UnitTest {
 		
 		private Map<Host, AtomicBoolean> poolStatus = new HashMap<Host, AtomicBoolean>();
@@ -399,12 +424,12 @@ public class HostSelectionWithFallback<CL> {
 		private final ConnectionPoolConfigurationImpl cpConfig = new ConnectionPoolConfigurationImpl("test");
 		private final ConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
 
-		Host h1 = new Host("h1", Status.Up).setDC("localTestDC");
-		Host h2 = new Host("h2", Status.Up).setDC("localTestDC");
-		Host h3 = new Host("h3", Status.Up).setDC("remoteDC1");
-		Host h4 = new Host("h4", Status.Up).setDC("remoteDC1");
-		Host h5 = new Host("h5", Status.Up).setDC("remoteDC2");
-		Host h6 = new Host("h6", Status.Up).setDC("remoteDC2");
+		Host h1 = new Host("h1", Status.Up).setRack("localTestDC");
+		Host h2 = new Host("h2", Status.Up).setRack("localTestDC");
+		Host h3 = new Host("h3", Status.Up).setRack("remoteDC1");
+		Host h4 = new Host("h4", Status.Up).setRack("remoteDC1");
+		Host h5 = new Host("h5", Status.Up).setRack("remoteDC2");
+		Host h6 = new Host("h6", Status.Up).setRack("remoteDC2");
 		
 		Host[] arr = {h1, h2, h3, h4, h5, h6};
 		List<Host> hosts = Arrays.asList(arr);

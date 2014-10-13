@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -22,6 +23,7 @@ import com.netflix.dyno.connectionpool.ConnectionPool;
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionStats;
+import com.netflix.dyno.connectionpool.TokenPoolTopology;
 
 /**
  * Console that gives the admin insight into the current status of the Dyno {@link ConnectionPool}
@@ -37,23 +39,29 @@ public class MonitorConsole {
 		return Instance;
 	}
 
-	private final ConcurrentHashMap<String, ConnectionPoolMonitor> cpMonitorConsole = new ConcurrentHashMap<String, ConnectionPoolMonitor>();
+	private final ConcurrentHashMap<String, ConnectionPoolMonitor> cpMonitors = new ConcurrentHashMap<String, ConnectionPoolMonitor>();
+	private final ConcurrentHashMap<String, ConnectionPoolImpl<?>> connectionPools = new ConcurrentHashMap<String, ConnectionPoolImpl<?>>();
 	
 	private MonitorConsole() {
 		
 	}
 	
 	public String getMonitorNames() {
-		return cpMonitorConsole.keySet().toString();
+		return cpMonitors.keySet().toString();
 	}
 	
 	public void addMonitorConsole(String name, ConnectionPoolMonitor monitor) {
-		cpMonitorConsole.put(name, monitor);
+		cpMonitors.put(name, monitor);
 	}
 	
+	public void registerConnectionPool(ConnectionPoolImpl<?> cp) {
+		connectionPools.put(cp.getName(), cp);
+		addMonitorConsole(cp.getName(), cp.getMonitor());
+	}
+
 	public String getMonitorStats(String name) {
 		
-		ConnectionPoolMonitor cpMonitor = cpMonitorConsole.get(name);
+		ConnectionPoolMonitor cpMonitor = cpMonitors.get(name);
 		if (cpMonitor == null) {
 			return name + " NOT FOUND";
 		}
@@ -86,7 +94,7 @@ public class MonitorConsole {
 			 }
 			 
 			 HostConnectionStats hStats = hostStats.get(host);
-			 sb.append("\nHost: " + host.getHostName() + ":" + host.getPort() + ":" + host.getDC() + "\t");
+			 sb.append("\nHost: " + host.getHostName() + ":" + host.getPort() + ":" + host.getRack() + "\t");
 			 sb.append(" borrowed: " + hStats.getConnectionsBorrowed());
 			 sb.append(" returned: " + hStats.getConnectionsReturned());
 			 sb.append(" created: " + hStats.getConnectionsCreated());
@@ -96,5 +104,14 @@ public class MonitorConsole {
 		 sb.append("\n");
 		 
 		 return sb.toString();
+	}
+	
+	public Collection<String> getConnectionPoolNames() {
+		return connectionPools.keySet();
+	}
+	
+	public TokenPoolTopology getTopology(String cpName) {
+		ConnectionPoolImpl<?> pool = connectionPools.get(cpName);
+		return (pool != null) ? pool.getTopology() : null;
 	}
 }

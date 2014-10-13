@@ -199,7 +199,7 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 		if (localZone == null || localZone.isEmpty()) {
 			return true; // consider everything
 		}
-		return localZone.equalsIgnoreCase(host.getDC());
+		return localZone.equalsIgnoreCase(host.getRack());
 	}
 
 
@@ -224,7 +224,7 @@ public class TokenMapSupplierImpl implements TokenMapSupplier {
 				String hostname = (String)jItem.get("hostname");
 				String zone = (String)jItem.get("zone");
 				
-				Host host = new Host(hostname, port, Status.Up).setDC(zone);
+				Host host = new Host(hostname, port, Status.Up).setRack(zone);
 				HostToken hostToken = new HostToken(token, host);
 				hostTokens.add(hostToken);
 			}
