@@ -60,6 +60,7 @@ import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.RetryPolicy;
 import com.netflix.dyno.connectionpool.RetryPolicy.RetryPolicyFactory;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
+import com.netflix.dyno.connectionpool.TokenPoolTopology;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
@@ -146,14 +147,20 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		};
 	
 		this.hostsUpdator = new HostsUpdator(cpConfiguration.getHostSupplier());
-		
-		MonitorConsole.getInstance().addMonitorConsole(cpConfig.getName(), cpMon);
 	}
 	
 	public HostSelectionWithFallback<CL> getTokenSelection() {
 		return selectionStrategy;
 	}
 
+	public String getName() {
+		return cpConfiguration.getName();
+	}
+	
+	public ConnectionPoolMonitor getMonitor() {
+		return cpMonitor;
+	}
+	
 	@Override
 	public boolean addHost(Host host) {
 		return addHost(host, true);
@@ -476,6 +483,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				}
 				
 			}, 15*1000, 30*1000, TimeUnit.MILLISECONDS);
+			
+			MonitorConsole.getInstance().registerConnectionPool(this);
 		}
 		
 		return getEmptyFutureTask(true);
@@ -573,6 +582,10 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		return null;
 	}
 
+	public TokenPoolTopology  getTopology() {
+		return selectionStrategy.getTokenPoolTopology();
+	}
+	
 	public static class UnitTest {
 		
 		private static class TestClient {

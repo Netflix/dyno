@@ -48,6 +48,7 @@ import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
+import com.netflix.dyno.connectionpool.TokenPoolTopology;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
@@ -376,9 +377,33 @@ public class HostSelectionWithFallback<CL> {
 				throw new RuntimeException("LoadBalancing strategy not supported! " + cpConfig.getLoadBalancingStrategy().name());
 			}
 		}
-		
 	}
 
+	public TokenPoolTopology getTokenPoolTopology() {
+		
+		TokenPoolTopology topology = new TokenPoolTopology();
+		addTokens(topology, localRack, localSelector);
+		for (String remoteRack : remoteDCSelectors.keySet()) {
+			addTokens(topology, remoteRack, remoteDCSelectors.get(remoteRack));
+		}
+		return topology;
+	}
+	
+	private void addTokens(TokenPoolTopology topology, String rack, HostSelectionStrategy<CL> selectionStrategy) {
+		
+		Collection<HostConnectionPool<CL>> pools = selectionStrategy.getOrderedHostPools();
+		for (HostConnectionPool<CL> pool : pools) { 
+			if (pool == null) {
+				continue;
+			}
+			HostToken hToken = hostTokens.get(pool.getHost());
+			if (hToken == null) {
+				continue;
+			}
+			topology.addToken(rack, hToken.getToken(), pool);
+		}
+	}
+	
 	public static class UnitTest {
 		
 		private Map<Host, AtomicBoolean> poolStatus = new HashMap<Host, AtomicBoolean>();
