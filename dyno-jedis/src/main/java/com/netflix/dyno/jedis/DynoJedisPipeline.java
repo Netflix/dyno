@@ -50,7 +50,7 @@ public class DynoJedisPipeline implements RedisPipeline {
 		} else {
 
 			theKey = key;
-			Connection<Jedis> connection = connPool.getConnectionForOperation(new BaseOperation<Jedis, String>() {
+			connection = connPool.getConnectionForOperation(new BaseOperation<Jedis, String>() {
 
 				@Override
 				public String getName() {
