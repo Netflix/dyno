@@ -10,6 +10,8 @@ import org.slf4j.LoggerFactory;
 import com.lambdaworks.redis.RedisAsyncConnection;
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.ConnectionPool;
+import com.netflix.dyno.connectionpool.DecoratingListenableFuture;
+import com.netflix.dyno.connectionpool.ListenableFuture;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
@@ -48,8 +50,8 @@ public class DynoRedissonClient {
 			}
 
 			@Override
-			public Future<String> executeAsync(RedisAsyncConnection<String, String> client) throws DynoException {
-				return client.get(key);
+			public ListenableFuture<String> executeAsync(RedisAsyncConnection<String, String> client) throws DynoException {
+				return new DecoratingListenableFuture<String>((client.get(key)));
 			}
 		});
 	}
@@ -69,8 +71,8 @@ public class DynoRedissonClient {
 			}
 
 			@Override
-			public Future<String> executeAsync(RedisAsyncConnection<String, String> client) throws DynoException {
-				return client.set(key, value);
+			public ListenableFuture<String> executeAsync(RedisAsyncConnection<String, String> client) throws DynoException {
+				return new DecoratingListenableFuture<String>((client.set(key, value)));
 			}
 		});
 	}

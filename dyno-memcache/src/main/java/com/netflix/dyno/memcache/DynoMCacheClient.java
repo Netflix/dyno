@@ -1,32 +1,31 @@
 package com.netflix.dyno.memcache;
 
-import java.util.ArrayList;
+import java.net.SocketAddress;
 import java.util.Collection;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
-import javax.annotation.Nullable;
-
+import net.spy.memcached.CASResponse;
 import net.spy.memcached.CASValue;
+import net.spy.memcached.ConnectionObserver;
 import net.spy.memcached.MemcachedClient;
+import net.spy.memcached.MemcachedClientIF;
+import net.spy.memcached.NodeLocator;
+import net.spy.memcached.internal.BulkFuture;
 import net.spy.memcached.transcoders.Transcoder;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.base.Function;
-import com.google.common.collect.Collections2;
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionPool;
+import com.netflix.dyno.connectionpool.DecoratingFuture;
+import com.netflix.dyno.connectionpool.DecoratingListenableFuture;
+import com.netflix.dyno.connectionpool.ListenableFuture;
 import com.netflix.dyno.connectionpool.Operation;
-import com.netflix.dyno.connectionpool.OperationResult;
-import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
-import com.netflix.dyno.contrib.DynoCPMonitor;
-import com.netflix.dyno.contrib.DynoOPMonitor;
 
 /**
  * Dyno client for Memcached that uses the {@link RollingMemcachedConnectionPoolImpl} for managing connections to {@link MemcachedClient}s
@@ -35,324 +34,61 @@ import com.netflix.dyno.contrib.DynoOPMonitor;
  * @author poberai
  *
  */
-public class DynoMCacheClient {
+public class DynoMCacheClient implements MemcachedClientIF {
 
-	private static final Logger Logger = LoggerFactory.getLogger(DynoMCacheClient.class);
-
-	private static final String SEPARATOR = ":";
 	private final String cacheName;
-	private final String cacheNamePrefix;
-
-	private final int defaultTTL = 0;
 
 	private final ConnectionPool<MemcachedClient> connPool;
 
 	public DynoMCacheClient(String name, ConnectionPool<MemcachedClient> pool) {
 		this.cacheName = name;
-		this.cacheNamePrefix = name + SEPARATOR;
 		this.connPool = pool;
 	}
 
 	private enum OpName { 
-		Set, Delete, Get, GetAndTouch, GetBulk, GetAsync;
+		Add, Append, AsyncCas, AsyncDecr, AsyncGet, AsyncGetAndTouch, AsyncGets, AsyncIncr, Cas, Decr, Delete, 
+		Get, GetAndTouch, GetAsync, GetBulk, Gets, Incr, Prepend, Set, Touch
 	}
 
-	public <T> Future<OperationResult<Boolean>> set(final String key, final T value) throws DynoException {
-		return set(key, value, defaultTTL);
-	}
-
-	public <T> Future<OperationResult<Boolean>> set(final String key, final T value, final int exp) throws DynoException {
-
-		return connPool.executeAsync(new AsyncOperation<MemcachedClient, Boolean>() {
-
-			@Override
-			public Future<Boolean> executeAsync(MemcachedClient client) throws DynoException {
-				return client.set(getCanonicalizedKey(key), exp, value);
-			}
-
-			@Override
-			public String getName() {
-				return OpName.Set.name();
-			}
-
-			@Override
-			public String getKey() {
-				return key;
-			}
-		});
-	}
-
-	public <T> Future<OperationResult<Boolean>> set(final String key, final T value, final Transcoder<T> tc) throws DynoException {
-		return set(key, value, tc, defaultTTL);
-	}
-
-	public <T> Future<OperationResult<Boolean>> set(final String key, final T value, final Transcoder<T> tc, final int timeToLive) throws DynoException {
-
-		return connPool.executeAsync(new AsyncOperation<MemcachedClient, Boolean>() {
-
-			@Override
-			public Future<Boolean> executeAsync(MemcachedClient client) throws DynoException {
-				return client.set(getCanonicalizedKey(key), timeToLive, value, tc);
-			}
-
-			@Override
-			public String getName() {
-				return OpName.Set.name();
-			}
-
-			@Override
-			public String getKey() {
-				return key;
-			}
-		});
-
-	}
-
-	public Future<OperationResult<Boolean>> delete(final String key) throws DynoException {
-
-		return connPool.executeAsync(new AsyncOperation<MemcachedClient, Boolean>() {
-
-			@Override
-			public Future<Boolean> executeAsync(MemcachedClient client) throws DynoException {
-				return client.delete(getCanonicalizedKey(key));
-			}
-
-			@Override
-			public String getName() {
-				return OpName.Delete.name();
-			}
-
-			@Override
-			public String getKey() {
-				return key;
-			}
-		});
-	}
-
-	public <T> OperationResult<T> get(final String key) {
-
-		return connPool.executeWithFailover(new Operation<MemcachedClient, T>() {
-
-			@Override
-			public T execute(MemcachedClient client, ConnectionContext state) throws DynoException {
-				try { 
-					return (T) client.get(key);
-				} catch(Exception e) {
-					Logger.warn("Throwing dyno connect ex after receiving ex from mc client " + e.getMessage());
-					throw new DynoConnectException(e);
-				}
-			}
-
-			@Override
-			public String getName() {
-				return OpName.Get.name();
-			}
-
-			@Override
-			public String getKey() {
-				return key;
-			}
-		});
-	}
-
-	<T> OperationResult<T> getAndTouch(final String key, final int timeToLive) throws DynoException {
-
-		return connPool.executeWithFailover(new Operation<MemcachedClient, T>() {
-
-			@Override
-			public T execute(MemcachedClient client, ConnectionContext state) throws DynoException {
-				return (T) client.getAndTouch(getCanonicalizedKey(key), timeToLive).getValue();
-			}
-
-			@Override
-			public String getName() {
-				return OpName.GetAndTouch.name();
-			}
-
-			@Override
-			public String getKey() {
-				return key;
-			}
-		});
-	}
-
-	public <T> OperationResult<T> getAndTouch(final String key, final int timeToLive, final Transcoder<T> tc) {
-
-		return connPool.executeWithFailover(new Operation<MemcachedClient, T>() {
-
-			@Override
-			public T execute(MemcachedClient client, ConnectionContext state) throws DynoException {
-
-				CASValue<T> casValue = client.getAndTouch(getCanonicalizedKey(key), timeToLive, tc);
-				return casValue.getValue();
-			}
-
-			@Override
-			public String getName() {
-				return OpName.GetAndTouch.name();
-			}
-
-			@Override
-			public String getKey() {
-				return key;
-			}
-		});
-	}
-
-	public <T> OperationResult<Map<String, T>> getBulk(final String... keys) throws DynoException {
-
-		return connPool.executeWithFailover(new Operation<MemcachedClient, Map<String, T>>() {
-
-			@Override
-			public Map<String, T> execute(MemcachedClient client, ConnectionContext state) throws DynoException {
-				return (Map<String, T>) client.getBulk(getCanonicalizedKeys(keys));
-			}
-
-			@Override
-			public String getName() {
-				return OpName.GetBulk.name();
-			}
-
-			@Override
-			public String getKey() {
-				return null;
-			}
-		});
-	}
-
-	public <T> OperationResult<Map<String, T>> getBulk(final Transcoder<T> tc, final String... keys) throws DynoException {
-
-		return connPool.executeWithFailover(new Operation<MemcachedClient, Map<String, T>>() {
-
-			@Override
-			public Map<String, T> execute(MemcachedClient client, ConnectionContext state) throws DynoException {
-				return client.getBulk(getCanonicalizedKeys(keys), tc);
-			}
-
-			@Override
-			public String getName() {
-				return OpName.GetBulk.name();
-			}
-
-			@Override
-			public String getKey() {
-				return null;
-			}
-		});
-	}
-
-	public <T> OperationResult<Map<String, T>> getBulk(final Collection<String> keys) throws DynoException {
-
-		return connPool.executeWithFailover(new Operation<MemcachedClient, Map<String, T>>() {
-
-			@Override
-			public Map<String, T> execute(MemcachedClient client, ConnectionContext state) throws DynoException {
-				return (Map<String, T>) client.getBulk(getCanonicalizedKeys(keys));
-			}
-
-			@Override
-			public String getName() {
-				return OpName.GetBulk.name();
-			}
-
-			@Override
-			public String getKey() {
-				return null;
-			}
-		});
-	}
-
-	public <T> OperationResult<Map<String, T>> getBulk(final Collection<String> keys, final Transcoder<T> tc) throws DynoException {
-
-		return connPool.executeWithFailover(new Operation<MemcachedClient, Map<String, T>>() {
-
-			@Override
-			public Map<String, T> execute(MemcachedClient client, ConnectionContext state) throws DynoException {
-				return client.getBulk(keys, tc);
-			}
-
-			@Override
-			public String getName() {
-				return OpName.GetBulk.name();
-			}
-
-			@Override
-			public String getKey() {
-				return null;
-			}
-		});
-	}
-
-
-	public <T> Future<OperationResult<T>> getAsync(final String key) throws DynoException {
-
-		return connPool.executeAsync(new AsyncOperation<MemcachedClient, T>() {
-
-			@Override
-			public Future<T> executeAsync(MemcachedClient client) throws DynoException {
-				return (Future<T>) client.asyncGet(getCanonicalizedKey(key));
-			}
-
-			@Override
-			public String getName() {
-				return OpName.GetAsync.name();
-			}
-
-			@Override
-			public String getKey() {
-				return key;
-			}
-		});
-	}
-
-	public <T> Future<OperationResult<T>> getAsync(final String key, final Transcoder<T> tc) throws DynoException {
-
-		return connPool.executeAsync(new AsyncOperation<MemcachedClient, T>() {
-
-			@Override
-			public Future<T> executeAsync(MemcachedClient client) throws DynoException {
-				return (Future<T>) client.asyncGet(getCanonicalizedKey(key), tc);
-			}
-
-			@Override
-			public String getName() {
-				return OpName.GetAsync.name();
-			}
-
-			@Override
-			public String getKey() {
-				return key;
-			}
-		});
-	}
-
-
-	protected String getCanonicalizedKey(String key) {
-		//return cacheNamePrefix + key;
-		return key;
-	}
-
-	protected Collection<String> getCanonicalizedKeys(final Collection<String> keys) {
-
-		return Collections2.transform(keys, new Function<String, String>() {
-
-			@Override
-			@Nullable
-			public String apply(@Nullable String input) {
-				return cacheNamePrefix + input;
-			}
-		});
-	}
-
-	protected Collection<String> getCanonicalizedKeys(final String ... keys) {
-
-		List<String> cKeys = new ArrayList<String>();
-		for (String key : keys) {
-			cKeys.add(cacheNamePrefix + key);
+	
+	private abstract class BaseKeyOperation<T> implements Operation<MemcachedClient, T> {
+		
+		private final String key;
+		private final OpName op;
+		private BaseKeyOperation(final String k, final OpName o) {
+			this.key = k;
+			this.op = o;
 		}
-		return cKeys;
-	}
+		@Override
+		public String getName() {
+			return op.name();
+		}
 
+		@Override
+		public String getKey() {
+			return key;
+		}
+	}
+	
+	private abstract class BaseAsyncKeyOperation<T> implements AsyncOperation<MemcachedClient, T> {
+		
+		private final String key;
+		private final OpName op;
+		private BaseAsyncKeyOperation(final String k, final OpName o) {
+			this.key = k;
+			this.op = o;
+		}
+		@Override
+		public String getName() {
+			return op.name();
+		}
+
+		@Override
+		public String getKey() {
+			return key;
+		}
+	}
+	
 	public String toString() {
 		return this.cacheName;
 	}
@@ -383,29 +119,736 @@ public class DynoMCacheClient {
 			assert(clusterName != null);
 			assert(cpConfig != null);
 
-			//			CountingConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
-			//			OperationMonitor opMonitor = new LastOperationMonitor();
-			DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);
-			DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
-
-			MemcachedConnectionFactory connFactory = new MemcachedConnectionFactory(cpConfig, cpMonitor);
-
-			RollingMemcachedConnectionPoolImpl<MemcachedClient> pool = 
-					new RollingMemcachedConnectionPoolImpl<MemcachedClient>(appName, connFactory, cpConfig, cpMonitor, opMonitor);
-
-			try {
-				pool.start().get();
-			} catch (Exception e) {
-				throw new RuntimeException(e);
-			}
-
-			final DynoMCacheClient client = new DynoMCacheClient(appName, pool);
-
-			return client;
+			// TODO: Add conn pool impl for MemcachedClient
+			throw new RuntimeException("Dyno conn pool for Memcached Client NOT implemented. Coming soon.");
 		}
 
 		public static Builder withName(String name) {
 			return new Builder(name);
 		}
+	}
+
+	@Override
+	public Collection<SocketAddress> getAvailableServers() {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public Collection<SocketAddress> getUnavailableServers() {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public Transcoder<Object> getTranscoder() {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public NodeLocator getNodeLocator() {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public Future<Boolean> append(final long cas, final String key, final Object val) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Append) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<Boolean>(client.append(cas,  key, val));
+			}
+		}));
+	}
+
+	@Override
+	public Future<Boolean> append(final String key, final Object val) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Append) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<Boolean>(client.append(key, val));
+			}
+		}));
+	}
+
+	@Override
+	public <T> Future<Boolean> append(final long cas, final String key, final T val, final Transcoder<T> tc) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Append) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+				return new DecoratingListenableFuture<Boolean>(client.append(cas,  key, val));
+			}
+		}));
+	}
+
+	@Override
+	public <T> Future<Boolean> append(final String key, final T val, final Transcoder<T> tc) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Append) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+				return new DecoratingListenableFuture<Boolean>(client.append(key, val));
+			}
+		}));
+	}
+
+	@Override
+	public Future<Boolean> prepend(final long cas, final String key, final Object val) {
+		
+	    return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Prepend) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+				return new DecoratingListenableFuture<Boolean>(client.prepend(cas,  key, val));
+			}
+		}));
+	}
+
+	@Override
+	public Future<Boolean> prepend(final String key, final Object val) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Prepend) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<Boolean>(client.prepend(key, val));
+			}
+		}));
+	}
+
+	@Override
+	public <T> Future<Boolean> prepend(final long cas, final String key, final T val, final Transcoder<T> tc) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Prepend) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+				return new DecoratingListenableFuture<Boolean>(client.prepend(cas,  key, val));
+			}
+		}));
+	}
+
+	@Override
+	public <T> Future<Boolean> prepend(final String key, final T val, final Transcoder<T> tc) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Prepend) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<Boolean>(client.prepend(key, val, tc));
+			}
+		}));
+	}
+
+	@Override
+	public <T> Future<CASResponse> asyncCAS(final String key, final long casId, final T value, final Transcoder<T> tc) {
+		
+		return new DecoratingFuture<CASResponse>(connPool.executeAsync(new BaseAsyncKeyOperation<CASResponse>(key, OpName.AsyncCas) {
+			@Override
+			public ListenableFuture<CASResponse> executeAsync(MemcachedClient client) throws DynoException {
+				return new DecoratingListenableFuture<CASResponse>(client.asyncCAS(key, casId, value, tc));
+			}
+		}));
+	}
+
+	@Override
+	public Future<CASResponse> asyncCAS(final String key, final long casId, final Object value) {
+		
+	    return new DecoratingFuture<CASResponse>(connPool.executeAsync(new BaseAsyncKeyOperation<CASResponse>(key, OpName.AsyncCas) {
+			@Override
+			public ListenableFuture<CASResponse> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<CASResponse>(client.asyncCAS(key, casId, value));
+			}
+		}));
+	}
+
+	@Override
+	public Future<CASResponse> asyncCAS(final String key, final long casId, final int exp, final Object value) {
+		
+		return new DecoratingFuture<CASResponse>(connPool.executeAsync(new BaseAsyncKeyOperation<CASResponse>(key, OpName.Cas) {
+			@Override
+			public ListenableFuture<CASResponse> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<CASResponse>(client.asyncCAS(key, casId, exp, value));
+			}
+		}));
+	}
+
+	@Override
+	public <T> CASResponse cas(final String key, final long casId, final int exp, final T value, final Transcoder<T> tc) {
+		
+		return connPool.executeWithFailover(new BaseKeyOperation<CASResponse>(key, OpName.Cas) {
+			@Override
+			public CASResponse execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.cas(key, casId, exp, value, tc);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public CASResponse cas(final String key, final long casId, final Object value) {
+		
+		return connPool.executeWithFailover(new BaseKeyOperation<CASResponse>(key, OpName.Cas) {
+			@Override
+			public CASResponse execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.cas(key, casId, value);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public CASResponse cas(final String key, final long casId, final int exp, final Object value) {
+
+		return connPool.executeWithFailover(new BaseKeyOperation<CASResponse>(key, OpName.Cas) {
+			@Override
+			public CASResponse execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.cas(key, casId, exp, value);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public <T> Future<Boolean> add(final String key, final int exp, final T o, final Transcoder<T> tc) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Add) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+				return new DecoratingListenableFuture<Boolean>(client.add(key, exp, o));
+			}
+		}));
+	}
+
+	@Override
+	public Future<Boolean> add(final String key, final int exp, final Object o) {
+		
+	    return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Add) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<Boolean>(client.add(key, exp, o));
+			}
+		}));
+	}
+
+	@Override
+	public <T> Future<Boolean> set(final String key, final int exp, final T o, final Transcoder<T> tc) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Set) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+				return new DecoratingListenableFuture<Boolean>(client.set(key, exp, o, tc));
+			}
+		}));
+	}
+
+	@Override
+	public Future<Boolean> set(final String key, final int exp, final Object o) {
+		
+	    return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Set) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+				return new DecoratingListenableFuture<Boolean>(client.set(key, exp, o));
+			}
+		}));
+	}
+
+	@Override
+	public <T> Future<Boolean> replace(final String key, final int exp, final T o, final Transcoder<T> tc) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Append) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+				return new DecoratingListenableFuture<Boolean>(client.replace(key, exp, o, tc));
+			}
+		}));
+	}
+
+	@Override
+	public Future<Boolean> replace(final String key, final int exp, final Object o) {
+		
+	    return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Append) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<Boolean>(client.replace(key, exp, o));
+			}
+		}));
+	}
+
+	@Override
+	public <T> Future<T> asyncGet(final String key, final Transcoder<T> tc) {
+		
+		return new DecoratingFuture<T>(connPool.executeAsync(new BaseAsyncKeyOperation<T>(key, OpName.AsyncGet) {
+			@Override
+			public ListenableFuture<T> executeAsync(MemcachedClient client) throws DynoException {
+				return new DecoratingListenableFuture<T>(client.asyncGet(key, tc));
+			}
+		}));
+	}
+
+	@Override
+	public Future<Object> asyncGet(final String key) {
+		
+		return new DecoratingFuture<Object>(connPool.executeAsync(new BaseAsyncKeyOperation<Object>(key, OpName.AsyncGet) {
+			@Override
+			public ListenableFuture<Object> executeAsync(MemcachedClient client) throws DynoException {
+				return new DecoratingListenableFuture<Object>(client.asyncGet(key));
+			}
+		}));
+	}
+
+	@Override
+	public Future<CASValue<Object>> asyncGetAndTouch(final String key, final int exp) {
+		
+		return new DecoratingFuture<CASValue<Object>>(connPool.executeAsync(new BaseAsyncKeyOperation<CASValue<Object>>(key, OpName.AsyncGetAndTouch) {
+			@Override
+			public ListenableFuture<CASValue<Object>> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<CASValue<Object>>(client.asyncGets(key));
+			}
+		}));
+	}
+
+	@Override
+	public <T> Future<CASValue<T>> asyncGetAndTouch(final String key, final int exp, final Transcoder<T> tc) {
+		
+		return new DecoratingFuture<CASValue<T>>(connPool.executeAsync(new BaseAsyncKeyOperation<CASValue<T>>(key, OpName.AsyncGetAndTouch) {
+			@Override
+			public ListenableFuture<CASValue<T>> executeAsync(MemcachedClient client) throws DynoException {
+				return new DecoratingListenableFuture<CASValue<T>>(client.asyncGetAndTouch(key, exp, tc));
+			}
+		}));
+	}
+
+	@Override
+	public <T> Future<CASValue<T>> asyncGets(final String key, final Transcoder<T> tc) {
+		
+		return new DecoratingFuture<CASValue<T>>(connPool.executeAsync(new BaseAsyncKeyOperation<CASValue<T>>(key, OpName.AsyncGets) {
+			@Override
+			public ListenableFuture<CASValue<T>> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<CASValue<T>>(client.asyncGets(key, tc));
+			}
+		}));
+	}
+
+	@Override
+	public Future<CASValue<Object>> asyncGets(final String key) {
+		
+		return new DecoratingFuture<CASValue<Object>>(connPool.executeAsync(new BaseAsyncKeyOperation<CASValue<Object>>(key, OpName.AsyncGets) {
+			@Override
+			public ListenableFuture<CASValue<Object>> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<CASValue<Object>>(client.asyncGets(key));
+			}
+		}));
+	}
+
+	@Override
+	public <T> CASValue<T> gets(final String key, final Transcoder<T> tc) {
+
+		return connPool.executeWithFailover(new BaseKeyOperation<CASValue<T>>(key, OpName.Gets) {
+			@Override
+			public CASValue<T> execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.gets(key, tc);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public CASValue<Object> gets(final String key) {
+
+		return connPool.executeWithFailover(new BaseKeyOperation<CASValue<Object>>(key, OpName.Gets) {
+			@Override
+			public CASValue<Object> execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.gets(key);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public <T> T get(final String key, final Transcoder<T> tc) {
+
+		return connPool.executeWithFailover(new BaseKeyOperation<T>(key, OpName.Get) {
+			@Override
+			public T execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.get(key, tc);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public <T> BulkFuture<Map<String, T>> asyncGetBulk(Iterator<String> keys, Iterator<Transcoder<T>> tcs) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public <T> BulkFuture<Map<String, T>> asyncGetBulk(Collection<String> keys, Iterator<Transcoder<T>> tcs) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public <T> BulkFuture<Map<String, T>> asyncGetBulk(Iterator<String> keys, Transcoder<T> tc) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public <T> BulkFuture<Map<String, T>> asyncGetBulk(Collection<String> keys, Transcoder<T> tc) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public BulkFuture<Map<String, Object>> asyncGetBulk(Iterator<String> keys) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public BulkFuture<Map<String, Object>> asyncGetBulk(Collection<String> keys) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public <T> BulkFuture<Map<String, T>> asyncGetBulk(Transcoder<T> tc, String... keys) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public BulkFuture<Map<String, Object>> asyncGetBulk(String... keys) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public <T> Map<String, T> getBulk(Iterator<String> keys, Transcoder<T> tc) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public Map<String, Object> getBulk(Iterator<String> keys) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public <T> Future<Boolean> touch(final String key, final int exp, final Transcoder<T> tc) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Touch) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+				return new DecoratingListenableFuture<Boolean>(client.touch(key, exp, tc));
+			}
+		}));
+	}
+
+	@Override
+	public <T> Future<Boolean> touch(final String key, final int exp) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Append) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<Boolean>(client.touch(key, exp));
+			}
+		}));
+	}
+
+	@Override
+	public Map<SocketAddress, String> getVersions() {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public Map<SocketAddress, Map<String, String>> getStats() {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public Map<SocketAddress, Map<String, String>> getStats(String prefix) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public long incr(final String key, final long by) {
+		
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.Incr) {
+			@Override
+			public Long execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.incr(key, by);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public long incr(final String key, final int by) {
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.Incr) {
+			@Override
+			public Long execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.incr(key, by);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public long decr(final String key, final long by) {
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.Decr) {
+			@Override
+			public Long execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.decr(key, by);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public long decr(final String key, final int by) {
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.Decr) {
+			@Override
+			public Long execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.decr(key, by);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public long incr(final String key, final long by, final long def, final int exp) {
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.Incr) {
+			@Override
+			public Long execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.incr(key, by, def, exp);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public long incr(final String key, final int by, final long def, final int exp) {
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.Incr) {
+			@Override
+			public Long execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.incr(key, by, def, exp);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public long decr(final String key, final long by, final long def, final int exp) {
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.Decr) {
+			@Override
+			public Long execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.incr(key, by, def, exp);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public long decr(final String key, final int by, final long def, final int exp) {
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.Decr) {
+			@Override
+			public Long execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.incr(key, by, def, exp);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public Future<Long> asyncIncr(final String key, final long by) {
+		
+		return new DecoratingFuture<Long>(connPool.executeAsync(new BaseAsyncKeyOperation<Long>(key, OpName.AsyncIncr) {
+			@Override
+			public ListenableFuture<Long> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<Long>(client.asyncIncr(key, by));
+			}
+		}));
+	}
+
+	@Override
+	public Future<Long> asyncIncr(final String key, final int by) {
+		
+		return new DecoratingFuture<Long>(connPool.executeAsync(new BaseAsyncKeyOperation<Long>(key, OpName.AsyncIncr) {
+			@Override
+			public ListenableFuture<Long> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<Long>(client.asyncIncr(key, by));
+			}
+		}));
+	}
+
+	@Override
+	public Future<Long> asyncDecr(final String key, final long by) {
+		
+		return new DecoratingFuture<Long>(connPool.executeAsync(new BaseAsyncKeyOperation<Long>(key, OpName.AsyncDecr) {
+			@Override
+			public ListenableFuture<Long> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<Long>(client.asyncDecr(key, by));
+			}
+		}));
+	}
+
+	@Override
+	public Future<Long> asyncDecr(final String key, final int by) {
+		
+		return new DecoratingFuture<Long>(connPool.executeAsync(new BaseAsyncKeyOperation<Long>(key, OpName.AsyncDecr) {
+			@Override
+			public ListenableFuture<Long> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<Long>(client.asyncDecr(key, by));
+			}
+		}));
+	}
+
+	@Override
+	public long incr(final String key, final long by, final long def) {
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.Incr) {
+			@Override
+			public Long execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.incr(key, by, def);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public long incr(final String key, final int by, final long def) {
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.Incr) {
+			@Override
+			public Long execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.incr(key, by, def);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public long decr(final String key, final long by, final long def) {
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.Decr) {
+			@Override
+			public Long execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.decr(key, by, def);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public long decr(final String key, final int by, final long def) {
+		return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.Decr) {
+			@Override
+			public Long execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.decr(key, by, def);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public Future<Boolean> delete(final String key, final long cas) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Delete) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<Boolean>(client.delete(key, cas));
+			}
+		}));
+	}
+
+	@Override
+	public Future<Boolean> flush(int delay) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public Future<Boolean> flush() {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public void shutdown() {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public boolean shutdown(long timeout, TimeUnit unit) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public boolean waitForQueues(long timeout, TimeUnit unit) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public boolean addObserver(ConnectionObserver obs) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public boolean removeObserver(ConnectionObserver obs) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public Set<String> listSaslMechanisms() {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public CASValue<Object> getAndTouch(final String key, final int exp) {
+		return connPool.executeWithFailover(new BaseKeyOperation<CASValue<Object>>(key, OpName.GetAndTouch) {
+			@Override
+			public CASValue<Object> execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.getAndTouch(key, exp);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public <T> CASValue<T> getAndTouch(final String key, final int exp, final Transcoder<T> tc) {
+		return connPool.executeWithFailover(new BaseKeyOperation<CASValue<T>>(key, OpName.GetAndTouch) {
+			@Override
+			public CASValue<T> execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.getAndTouch(key, exp ,tc);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public Object get(final String key) {
+		return connPool.executeWithFailover(new BaseKeyOperation<Object>(key, OpName.Get) {
+			@Override
+			public Object execute(final MemcachedClient client, ConnectionContext state) throws DynoException {
+				return client.get(key);
+			}
+			
+		}).getResult();
+	}
+
+	@Override
+	public <T> Map<String, T> getBulk(Collection<String> keys, Transcoder<T> tc) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public Map<String, Object> getBulk(Collection<String> keys) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public <T> Map<String, T> getBulk(Transcoder<T> tc, String... keys) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public Map<String, Object> getBulk(String... keys) {
+		throw new RuntimeException("Not Implemented");
+	}
+
+	@Override
+	public Future<Boolean> delete(final String key) {
+		
+		return new DecoratingFuture<Boolean>(connPool.executeAsync(new BaseAsyncKeyOperation<Boolean>(key, OpName.Delete) {
+			@Override
+			public ListenableFuture<Boolean> executeAsync(MemcachedClient client) throws DynoException {
+			    return new DecoratingListenableFuture<Boolean>(client.delete(key));
+			}
+		}));
 	}
 }

@@ -55,6 +55,7 @@ import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostConnectionStats;
 import com.netflix.dyno.connectionpool.HostSupplier;
+import com.netflix.dyno.connectionpool.ListenableFuture;
 import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.RetryPolicy;
@@ -540,7 +541,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	}
 	
 	@Override
-	public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException {
+	public <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException {
 		
 		DynoException lastException = null;
 		Connection<CL> connection = null;
@@ -550,12 +551,9 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			connection = 
 					selectionStrategy.getConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
 			
-			Future<OperationResult<R>> futureResult = connection.executeAsync(op);
+			ListenableFuture<OperationResult<R>> futureResult = connection.executeAsync(op);
 			
 			cpMonitor.incOperationSuccess(connection.getHost(), System.currentTimeMillis()-startTime);
-			
-//			futureResult.setNode(connection.getHost())
-//			  .addMetadata(connection.getContext().getAll());
 		
 			return futureResult; 
 			
@@ -650,7 +648,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			}
 
 			@Override
-			public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<TestClient, R> op) throws DynoException {
+			public <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<TestClient, R> op) throws DynoException {
 				throw new RuntimeException("Not Implemented");
 			}
 

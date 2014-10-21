@@ -15,6 +15,7 @@ import com.netflix.dyno.connectionpool.ConnectionFactory;
 import com.netflix.dyno.connectionpool.ConnectionObservor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
+import com.netflix.dyno.connectionpool.ListenableFuture;
 import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.OperationMonitor;
 import com.netflix.dyno.connectionpool.OperationResult;
@@ -73,7 +74,7 @@ public class RedissonConnectionFactory implements ConnectionFactory<RedisAsyncCo
 		}
 
 		@Override
-		public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<RedisAsyncConnection<String, String>, R> op) throws DynoException {
+		public <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<RedisAsyncConnection<String, String>, R> op) throws DynoException {
 			final long start = System.currentTimeMillis();
 			try { 
 				Future<R> future = op.executeAsync(rConn);

@@ -17,6 +17,7 @@ package com.netflix.dyno.connectionpool.impl;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -29,6 +30,7 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.ListenableFuture;
 import com.netflix.dyno.connectionpool.OperationMonitor;
 import com.netflix.dyno.connectionpool.OperationResult;
 
@@ -44,7 +46,7 @@ import com.netflix.dyno.connectionpool.OperationResult;
  *
  * @param <R>
  */
-public class FutureOperationalResultImpl<R> implements Future<OperationResult<R>> {
+public class FutureOperationalResultImpl<R> implements ListenableFuture<OperationResult<R>> {
 	
 	private final Future<R> future; 
 	private final OperationResultImpl<R> opResult; 
@@ -109,6 +111,13 @@ public class FutureOperationalResultImpl<R> implements Future<OperationResult<R>
 	public OperationResultImpl<R> getOpResult() {
 		return opResult;
 	}
+	
+
+	@Override
+	public void addListener(Runnable listener, Executor executor) {
+		throw new RuntimeException("Not Implemented");
+	}
+
 	
 	public static class UnitTest {
 		
