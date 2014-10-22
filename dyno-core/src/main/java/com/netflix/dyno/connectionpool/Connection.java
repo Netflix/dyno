@@ -15,8 +15,6 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool;
 
-import java.util.concurrent.Future;
-
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 
@@ -38,7 +36,7 @@ public interface Connection<CL> {
      */
     public <R> OperationResult<R> execute(Operation<CL, R> op) throws DynoException;
     
-    public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException;
+    public <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException;
 
     /**
      * Shut down the connection. isOpen() will now return false.

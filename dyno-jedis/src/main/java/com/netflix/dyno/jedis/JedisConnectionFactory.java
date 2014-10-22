@@ -1,6 +1,5 @@
 package com.netflix.dyno.jedis;
 
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang.NotImplementedException;
@@ -15,6 +14,7 @@ import com.netflix.dyno.connectionpool.ConnectionFactory;
 import com.netflix.dyno.connectionpool.ConnectionObservor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
+import com.netflix.dyno.connectionpool.ListenableFuture;
 import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.OperationMonitor;
 import com.netflix.dyno.connectionpool.OperationResult;
@@ -87,7 +87,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 		}
 
 		@Override
-		public <R> Future<OperationResult<R>> executeAsync(AsyncOperation<Jedis, R> op) throws DynoException {
+		public <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<Jedis, R> op) throws DynoException {
 			throw new NotImplementedException();
 		}
 

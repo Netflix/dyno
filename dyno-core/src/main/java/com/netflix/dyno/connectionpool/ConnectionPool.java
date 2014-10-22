@@ -37,7 +37,7 @@ public interface ConnectionPool<CL> {
      * @returns True if host was added or false if host already exists
      * @throws DynoException
      */
-    boolean addHost(Host host);
+    public boolean addHost(Host host);
 
 	/**
      * Remove a host from the connection pool.
@@ -46,41 +46,41 @@ public interface ConnectionPool<CL> {
      * @returns True if host was added or false if host already exists
      * @throws DynoException
      */
-    boolean removeHost(Host host);
+    public boolean removeHost(Host host);
 
     /**
      * @return Return true if the host is up
      * @param host
      */
-    boolean isHostUp(Host host);
+    public boolean isHostUp(Host host);
 
     /**
      * @return Return true if host is contained within the connection pool
      * @param host
      */
-    boolean hasHost(Host host);
+    public boolean hasHost(Host host);
 
     /**
      * @return Return list of active hosts on which connections can be created
      */
-    List<HostConnectionPool<CL>> getActivePools();
+    public List<HostConnectionPool<CL>> getActivePools();
 
     /**
      * @return Get all pools
      */
-    List<HostConnectionPool<CL>> getPools();
+    public List<HostConnectionPool<CL>> getPools();
     
     /**
      * Set the complete set of hosts in the ring
      * @param hosts
      */
-    Future<Boolean> updateHosts(Collection<Host> activeHosts, Collection<Host> inactiveHosts);
+    public Future<Boolean> updateHosts(Collection<Host> activeHosts, Collection<Host> inactiveHosts);
 
     /**
      * @return Return an immutable connection pool for this host
      * @param host
      */
-    HostConnectionPool<CL> getHostPool(Host host);
+    public HostConnectionPool<CL> getHostPool(Host host);
 
     /**
      * Execute an operation with failover within the context of the connection
@@ -97,20 +97,26 @@ public interface ConnectionPool<CL> {
     /**
      * Scatter gather style operation
      * @param op
-     * @return
+     * @return Collection<OperationResult<R>>
      * @throws DynoException
      */
-    <R> Collection<OperationResult<R>> executeWithRing(Operation<CL, R> op) throws DynoException;
+    public <R> Collection<OperationResult<R>> executeWithRing(Operation<CL, R> op) throws DynoException;
 
-    <R> Future<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException;
+    /**
+     * Execute an operation asynchronously.
+     * @param op
+     * @return ListenableFuture<OperationResult<R>>
+     * @throws DynoException
+     */
+    public <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException;
 
     /**
      * Shut down the connection pool and terminate all existing connections
      */
-    void shutdown();
+    public void shutdown();
 
     /**
      * Setup the connection pool and start any maintenance threads
      */
-    Future<Boolean> start();
+    public Future<Boolean> start();
 }
