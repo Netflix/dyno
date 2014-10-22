@@ -605,7 +605,7 @@ public class DynoJedisPipeline implements RedisPipeline {
 		
 		try { 
 			if (jedisPipeline != null) {
-				jedisPipeline.discard();
+				jedisPipeline.sync();
 			}
 		} catch (Exception e) {
 			Logger.warn("Failed to discard jedis pipeline", e);
