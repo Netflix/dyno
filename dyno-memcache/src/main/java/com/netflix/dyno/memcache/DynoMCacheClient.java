@@ -1,31 +1,5 @@
 package com.netflix.dyno.memcache;
 
-import java.net.SocketAddress;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-
-import net.spy.memcached.CASResponse;
-import net.spy.memcached.CASValue;
-import net.spy.memcached.ConnectionObserver;
-import net.spy.memcached.MemcachedClient;
-import net.spy.memcached.MemcachedClientIF;
-import net.spy.memcached.NodeLocator;
-import net.spy.memcached.internal.BulkFuture;
-import net.spy.memcached.transcoders.Transcoder;
-
-import com.netflix.dyno.connectionpool.AsyncOperation;
-import com.netflix.dyno.connectionpool.ConnectionContext;
-import com.netflix.dyno.connectionpool.ConnectionPool;
-import com.netflix.dyno.connectionpool.DecoratingFuture;
-import com.netflix.dyno.connectionpool.DecoratingListenableFuture;
-import com.netflix.dyno.connectionpool.ListenableFuture;
-import com.netflix.dyno.connectionpool.Operation;
-import com.netflix.dyno.connectionpool.exception.DynoException;
-import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 
 /**
  * Dyno client for Memcached that uses the {@link RollingMemcachedConnectionPoolImpl} for managing connections to {@link MemcachedClient}s
@@ -34,7 +8,7 @@ import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
  * @author poberai
  *
  */
-public class DynoMCacheClient implements MemcachedClientIF {
+public class DynoMCacheClient { /**implements MemcachedClientIF {
 
 	private final String cacheName;
 
@@ -851,4 +825,5 @@ public class DynoMCacheClient implements MemcachedClientIF {
 			}
 		}));
 	}
+	*/
 }

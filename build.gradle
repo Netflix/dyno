@@ -85,7 +85,7 @@ project(':dyno-memcache') {
     dependencies {
         compile  project(':dyno-core')
         compile  project(':dyno-contrib')
-        compile "net.spy:spymemcached:2.10.2+"
+//        compile "net.spy:spymemcached:2.10.2+"
     }
 }
 
