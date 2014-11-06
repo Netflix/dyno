@@ -15,7 +15,6 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisCommands;
 import redis.clients.jedis.JedisPubSub;
 import redis.clients.jedis.MultiKeyCommands;
-import redis.clients.jedis.RedisPipeline;
 import redis.clients.jedis.SortingParams;
 import redis.clients.jedis.Tuple;
 import redis.clients.jedis.ZParams;
@@ -30,7 +29,7 @@ import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
-import com.netflix.dyno.connectionpool.impl.lb.TokenMapSupplierImpl;
+import com.netflix.dyno.connectionpool.impl.lb.HttpEndpointBasedTokenMapSupplier;
 import com.netflix.dyno.contrib.ArchaiusConnectionPoolConfiguration;
 import com.netflix.dyno.contrib.DynoCPMonitor;
 import com.netflix.dyno.contrib.DynoOPMonitor;
@@ -2156,8 +2155,8 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 			cpConfig.withHostSupplier(hostSupplier);
 			
 			if (cpConfig.getTokenSupplier() == null) {
-				Logger.info("TOKEN AWARE selected and no token supplier found, using default TokenMapSupplierImpl()");
-				cpConfig.withTokenSupplier(new TokenMapSupplierImpl());
+				Logger.info("TOKEN AWARE selected and no token supplier found, using default HttpEndpointBasedTokenMapSupplier()");
+				cpConfig.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier());
 			}
 			
 			DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);
