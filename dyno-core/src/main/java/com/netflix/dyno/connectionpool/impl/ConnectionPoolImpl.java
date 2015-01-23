@@ -162,6 +162,10 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		return cpMonitor;
 	}
 	
+	public ConnectionPoolHealthTracker<CL> getCPHealthTracker() {
+		return cpHealthTracker;
+	}
+
 	@Override
 	public boolean addHost(Host host) {
 		return addHost(host, true);
