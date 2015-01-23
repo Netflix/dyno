@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -162,6 +163,10 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		return cpMonitor;
 	}
 	
+	public ConnectionPoolHealthTracker<CL> getCPHealthTracker() {
+		return cpHealthTracker;
+	}
+
 	@Override
 	public boolean addHost(Host host) {
 		return addHost(host, true);
@@ -464,11 +469,36 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			throw new NoAvailableHostsException("No available hosts when starting connection pool");
 		}
 
-		for (Host host : hostsUp) {
+		final ExecutorService threadPool = Executors.newFixedThreadPool(Math.max(10, hostsUp.size()));
+		final List<Future<Void>> futures = new ArrayList<Future<Void>>();
+		
+		for (final Host host : hostsUp) {
+			
 			// Add host connection pool, but don't init the load balancer yet
-			addHost(host, false);  
+			futures.add(threadPool.submit(new Callable<Void>() {
+
+				@Override
+				public Void call() throws Exception {
+					addHost(host, false);  
+					return null;
+				}
+			}));
 		}
 
+		try {
+			for (Future<Void> future : futures) {
+				try {
+					future.get();
+				} catch (InterruptedException e) {
+					// do nothing
+				} catch (ExecutionException e) {
+					throw new RuntimeException(e);
+				}
+			}
+		} finally {
+			threadPool.shutdownNow();
+		}
+		
 		boolean success = started.compareAndSet(false, true);
 		if (success) {
 			selectionStrategy = initSelectionStrategy();
