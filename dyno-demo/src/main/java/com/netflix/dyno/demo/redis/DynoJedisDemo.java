@@ -2,7 +2,6 @@ package com.netflix.dyno.demo.redis;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -24,6 +23,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
@@ -106,34 +109,15 @@ public class DynoJedisDemo {
 
 	public void init(HostSupplier hostSupplier, int port, TokenMapSupplier tokenSupplier) throws Exception {
 		
-		
 		client = new DynoJedisClient.Builder()
 		.withApplicationName("demo")
 		.withDynomiteClusterName("dyno_demo")
 		.withHostSupplier(hostSupplier)
 		.withCPConfig(new ConnectionPoolConfigurationImpl("demo")
 		.setLocalDC("us-east-1e")
-		//.withTokenSupplier(tokenSupplier)
 				)
 		.withPort(port)
 		.build();
-
-//		final String applicationName = "Demo";
-//		final String clusterName = "dynomite_redis_puneet";
-//
-//		client = new DynoJedisClient.Builder()
-//        .withApplicationName(applicationName)
-//        .withDynomiteClusterName(clusterName)
-//        //.withDiscoveryClient(client)
-//        .withHostSupplier(hostSupplier)
-//        .withPort(port)
-//        .withCPConfig(
-//            new ConnectionPoolConfigurationImpl(clusterName)
-//                .setMaxConnsPerHost(5)
-//                .setLoadBalancingStrategy(LoadBalancingStrategy.RoundRobin)
-//                .setRetryPolicyFactory(new RetryNTimes.RetryFactory(3, true)
-//            )
-//        ).build();
 	}
 
 	public void runSimpleTest() throws Exception {
@@ -154,25 +138,24 @@ public class DynoJedisDemo {
 
 	public void runKeysTest() throws Exception {
 
-//		for (int i=0; i<10; i++) {
-//			client.set("foo"+i, "bar"+i);
-//		}
+		for (int i=0; i<10; i++) {
+			client.set("keys"+i, "bar"+i);
+		}
 
-//		System.out.println(client.get("foo"));
-//		System.out.println(client.get("foo1"));
-//		System.out.println(client.get("foo2"));
+		System.out.println(client.get("keys"));
+		System.out.println(client.get("keys1"));
+		System.out.println(client.get("keys2"));
 		
 		Set<String> result = client.keys("PuneetTest*");
 		System.out.println("Result: " + result);
 	}
 	
-	public void cleanup() throws Exception {
+	public void cleanup(int nKeys) throws Exception {
 
-		final int nKeys = 1000;
 		// writes for initial seeding
 		for (int i=0; i<nKeys; i++) {
 			System.out.println("Deleting : " + i);
-			client.del("PuneetTest" + i);
+			client.del("DynoDemoTest" + i);
 		}
 	}
 	
@@ -182,7 +165,7 @@ public class DynoJedisDemo {
 		// writes for initial seeding
 		for (int i=0; i<nKeys; i++) {
 			System.out.println("Writing : " + i);
-			client.set("PuneetTest" + i, "" + i);
+			client.set("DynoDemoTest" + i, "" + i);
 		}
 
 		final int numReaders = 2;
@@ -220,6 +203,8 @@ public class DynoJedisDemo {
 		stop.set(true);
 		latch.await();
 		threadPool.shutdownNow();
+		System.out.println("Cleaning up keys");
+		cleanup(nKeys);
 
 		System.out.println("FINAL RESULT \nSuccess: " + success.get() + ", failure: " + failure.get() + ", emptyReads: " + emptyReads.get());
 		
@@ -243,7 +228,7 @@ public class DynoJedisDemo {
 						int value = random.nextInt(nKeys);
 
 						try { 
-							client.set(""+key, ""+value);
+							client.set("DynoDemoTest"+key, ""+value);
 							success.incrementAndGet();
 						} catch (Exception e) {
 							System.out.println("WRITE FAILURE: " + e.getMessage());
@@ -277,7 +262,7 @@ public class DynoJedisDemo {
 						int key = random.nextInt(nKeys);
 
 						try { 
-							String value = client.get(""+key);
+							String value = client.get("DynoDemoTest"+key);
 							success.incrementAndGet();
 							if (value == null || value.isEmpty()) {
 								emptyReads.incrementAndGet();
@@ -393,12 +378,12 @@ public class DynoJedisDemo {
 		
 		String url = "http://discovery.cloudqa.netflix.net:7001/discovery/v2/apps/" + clusterName;
 		
-		//HttpClient client = new DefaultHttpClient();
+		HttpClient client = new DefaultHttpClient();
 		try {
-			//HttpResponse response = client.execute(new HttpGet(url));
-			//InputStream in = response.getEntity().getContent();
+			HttpResponse response = client.execute(new HttpGet(url));
+			InputStream in = response.getEntity().getContent();
 			
-			InputStream in = new FileInputStream(new File("/tmp/aa"));
+			//InputStream in = new FileInputStream(new File("/tmp/aa"));
 			
 			SAXParserFactory parserFactor = SAXParserFactory.newInstance();
 			
@@ -538,13 +523,10 @@ public class DynoJedisDemo {
 
 		try {
 			
-			//demo.getHostsFromDiscovery("dyno_perfload2");
-//			demo.initWithRemoteCluster("src/main/java/dyno_igor.hosts", 8102);
-			
 			demo.initWithRemoteClusterFromEurekaUrl("dyno_perfload2", 8102);
 			System.out.println("Connected");
 
-			demo.runSimpleTest();
+			//demo.runSimpleTest();
 			//demo.runKeysTest();
 			//demo.runMultiThreaded();
 			//demo.runSinglePipeline();
