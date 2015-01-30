@@ -15,19 +15,12 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import org.junit.Assert;
-import org.junit.Test;
 
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.ListenableFuture;
@@ -116,46 +109,5 @@ public class FutureOperationalResultImpl<R> implements ListenableFuture<Operatio
 	@Override
 	public void addListener(Runnable listener, Executor executor) {
 		throw new RuntimeException("Not Implemented");
-	}
-
-	
-	public static class UnitTest {
-		
-		@Test
-		public void testFutureResult() throws Exception {
-			
-			final FutureTask<Integer> futureTask = new FutureTask<Integer>(new Callable<Integer>() {
-				@Override
-				public Integer call() throws Exception {
-					return 11;
-				}
-			});
-			
-			LastOperationMonitor opMonitor = new LastOperationMonitor();
-			FutureOperationalResultImpl<Integer> futureResult = 
-					new FutureOperationalResultImpl<Integer>("test", futureTask, System.currentTimeMillis(), opMonitor);
-			
-			ExecutorService threadPool = Executors.newSingleThreadExecutor();
-			
-			threadPool.submit(new Callable<Void>() {
-
-				@Override
-				public Void call() throws Exception {
-					Thread.sleep(400);
-					futureTask.run();
-					return null;
-				}
-			});
-			
-			OperationResult<Integer> opResult = futureResult.get();
-			int integerResult = opResult.getResult();
-			long latency = opResult.getLatency();
-			
-			Assert.assertEquals(11, integerResult);
-			Assert.assertTrue(latency >= 400);
-			
-			threadPool.shutdownNow();
-		}
-		
 	}
 }

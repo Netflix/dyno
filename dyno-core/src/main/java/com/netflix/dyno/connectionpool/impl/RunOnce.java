@@ -17,9 +17,6 @@ package com.netflix.dyno.connectionpool.impl;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.junit.Assert;
-import org.junit.Test;
-
 import com.netflix.dyno.connectionpool.RetryPolicy;
 
 /**
@@ -68,26 +65,4 @@ public class RunOnce implements RetryPolicy {
 	public boolean allowRemoteDCFallback() {
 		return false;
 	}
-
-	public static class UnitTest {
-		
-		@Test
-		public void testRetry() throws Exception {
-			
-			RunOnce retry = new RunOnce();
-			
-			RuntimeException e = new RuntimeException("failure");
-			retry.begin();
-			
-			Assert.assertTrue(retry.allowRetry());
-			
-			retry.failure(e);
-			Assert.assertFalse(retry.allowRetry());
-			retry.failure(e);
-			Assert.assertFalse(retry.allowRetry());
-			
-			Assert.assertEquals(1, retry.getAttemptCount());
-		}
-	}
-
 }
