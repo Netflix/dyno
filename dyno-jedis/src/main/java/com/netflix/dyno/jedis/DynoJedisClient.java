@@ -40,25 +40,15 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 	private static final Logger Logger = org.slf4j.LoggerFactory.getLogger(DynoJedisClient.class);
 	
 	private final ConnectionPool<Jedis> connPool;
+	private final DynoOPMonitor opMonitor;
 	
-	public DynoJedisClient(String name, ConnectionPool<Jedis> pool) {
+	public DynoJedisClient(String name, ConnectionPool<Jedis> pool, DynoOPMonitor operationMonitor) {
 		this.connPool = pool;
+		this.opMonitor = operationMonitor;
 	}
 	
 	public ConnectionPoolImpl<Jedis> getConnPool() {
 		return (ConnectionPoolImpl<Jedis>) connPool;
-	}
-	
-	private enum OpName {
-		 APPEND, BITCOUNT, BLPOP, BRPOP, DECR, DECRBY, DEL, DUMP, ECHO, EXISTS, EXPIRE, EXPIREAT, GET, GETBIT, GETRANGE, GETSET, 
-		 HDEL, HEXISTS,  HGET, HGETALL, HINCRBY, HINCRBYFLOAT, HKEYS, HLEN, HMGET, HMSET, HSET, HSETNX, HVALS, 
-		 INCR, INCRBY, INCRBYFLOAT, KEYS, LINDEX, LINSERT, LLEN, LPOP, LPUSH, LPUSHX, LRANGE, LREM, LSET, LTRIM, 
-		 MOVE, PERSIST, PEXPIRE, PEXPIREAT, PSETEX, PTTL, RESTORE, RPOP, RPOPLPUSH, RPUSH, RPUSHX, 
-		 SADD, SCARD, SDIFF, SDIFFSTORE, SET, SETBIT, SETEX, SETNX, SETRANGE, SINTER, SINTERSTORE, SISMEMBER, SMEMBERS, 
-		 SMOVE, SORT, SPOP, SRANDMEMBER, SREM, STRLEN, SUBSTR, SUNION, SUNIONSTORE, TTL, TYPE, 
-		 ZADD, ZCARD, ZCOUNT, ZINCRBY, ZRANGE, ZRANGEWITHSCORES, ZRANK, ZRANGEBYSCORE, ZRANGEBYSCOREWITHSCORES, ZREM, ZREMRANGEBYRANK, 
-		 ZREMRANGEBYSCORE, ZREVRANGE, ZREVRANGEBYSCORE, ZREVRANGEBYSCOREWITHSCORES, ZREVRANGEWITHSCORES, ZREVRANK, ZSCORE
-		 ;
 	}
 	
 	private abstract class BaseKeyOperation<T> implements Operation<Jedis, T> {
@@ -2086,7 +2076,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 	}
 	
 	public DynoJedisPipeline pipelined() {
-		return new DynoJedisPipeline(getConnPool());
+		return new DynoJedisPipeline(getConnPool(), opMonitor);
 	}
 
 	public static class Builder {
@@ -2172,7 +2162,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 				throw new RuntimeException(e);
 			}
 			
-			final DynoJedisClient client = new DynoJedisClient(appName, pool);
+			final DynoJedisClient client = new DynoJedisClient(appName, pool, opMonitor);
 			return client;
 		}
 	}
