@@ -18,9 +18,6 @@ package com.netflix.dyno.connectionpool.impl;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.junit.Assert;
-import org.junit.Test;
-
 import com.netflix.dyno.connectionpool.ConnectionContext;
 
 public class ConnectionContextImpl implements ConnectionContext {
