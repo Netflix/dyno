@@ -129,12 +129,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 		
 		@Override
 		public void set(Object data) {
-			try {
-				innerResponse.set(data);
-			} finally {
-				long endMillis = System.currentTimeMillis();
-				opMonitor.recordLatency(opName.name(), endMillis-startMillis, TimeUnit.MILLISECONDS);
-			}
+			innerResponse.set(data);
 		}
 
 		@Override
@@ -146,6 +141,9 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 			} catch (JedisDataException e) {
 				opMonitor.recordFailure(opName.name(), e.getMessage());
 				throw e;
+			} finally {
+				long endMillis = System.currentTimeMillis();
+				opMonitor.recordLatency(opName.name(), endMillis-startMillis, TimeUnit.MILLISECONDS);
 			}
 		}
 
