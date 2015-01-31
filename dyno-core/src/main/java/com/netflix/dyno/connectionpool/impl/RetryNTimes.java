@@ -17,10 +17,6 @@ package com.netflix.dyno.connectionpool.impl;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.junit.Assert;
-
-import org.junit.Test;
-
 import com.netflix.dyno.connectionpool.RetryPolicy;
 
 /**
@@ -88,32 +84,6 @@ public class RetryNTimes implements RetryPolicy {
 		@Override
 		public RetryPolicy getRetryPolicy() {
 			return new RetryNTimes(n, allowDCFallback);
-		}
-	}
-	
-	public static class UnitTest {
-		
-		@Test
-		public void testNRetries() throws Exception {
-			
-			RetryNTimes retry = new RetryNTimes(3, true);
-			
-			RuntimeException e = new RuntimeException("failure");
-			retry.begin();
-			
-			Assert.assertTrue(retry.allowRetry());
-			
-			retry.failure(e);
-			Assert.assertTrue(retry.allowRetry());
-			retry.failure(e);
-			Assert.assertTrue(retry.allowRetry());
-			retry.failure(e);
-			Assert.assertTrue(retry.allowRetry());
-			
-			retry.failure(e);
-			Assert.assertFalse(retry.allowRetry());
-			
-			Assert.assertEquals(4, retry.getAttemptCount());
 		}
 	}
 }
