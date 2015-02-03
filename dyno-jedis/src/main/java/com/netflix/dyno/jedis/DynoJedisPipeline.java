@@ -3,7 +3,6 @@ package com.netflix.dyno.jedis;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -19,14 +18,13 @@ import redis.clients.jedis.Response;
 import redis.clients.jedis.SortingParams;
 import redis.clients.jedis.Tuple;
 import redis.clients.jedis.exceptions.JedisConnectionException;
-import redis.clients.jedis.exceptions.JedisDataException;
 
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
-import com.netflix.dyno.contrib.DynoOPMonitor;
 import com.netflix.dyno.jedis.JedisConnectionFactory.JedisConnection;
 
 @NotThreadSafe
@@ -37,7 +35,8 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 	// ConnPool and connection to exec the pipeline
 	private final ConnectionPoolImpl<Jedis> connPool;
 	private volatile Connection<Jedis> connection;
-	private final DynoOPMonitor opMonitor; 
+	private final DynoJedisPipelineMonitor opMonitor; 
+	private final ConnectionPoolMonitor cpMonitor; 
 	
 	// the cached pipeline
 	private volatile Pipeline jedisPipeline = null;
@@ -48,9 +47,10 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 	private static final String DynoPipeline = "DynoPipeline";
 
-	DynoJedisPipeline(ConnectionPoolImpl<Jedis> cPool, DynoOPMonitor operationMonitor) {
+	DynoJedisPipeline(ConnectionPoolImpl<Jedis> cPool, DynoJedisPipelineMonitor operationMonitor, ConnectionPoolMonitor connPoolMonitor) {
 		this.connPool = cPool;
 		this.opMonitor = operationMonitor;
+		this.cpMonitor = connPoolMonitor;
 	}
 
 	private void checkKey(final String key) {
@@ -82,6 +82,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 			Jedis jedis = ((JedisConnection)connection).getClient();
 			jedisPipeline = jedis.pipelined();
+			cpMonitor.incOperationSuccess(connection.getHost(), 0);
 		}
 	}
 
@@ -105,51 +106,15 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 			checkKey(key);
 
 			try {
-				return new PipelineResponseDecorator<R>(execute(jedisPipeline), opName);
+				opMonitor.recordOperation(opName.name());
+				return execute(jedisPipeline);
 
 			} catch (JedisConnectionException ex) {
-				pipelineEx.set(new FatalConnectionException(ex).setAttempt(1));
+				DynoException e = new FatalConnectionException(ex).setAttempt(1);
+				pipelineEx.set(e);
+				cpMonitor.incOperationFailure(connection.getHost(), e);
 				throw ex;
 			}
-		}
-	}
-	
-	private class PipelineResponseDecorator<R> extends Response<R> {
-
-		private final Response<R> innerResponse; 
-		private final OpName opName;
-		private final Long startMillis;
-		
-		public PipelineResponseDecorator(Response<R> innerResp, OpName operationName) {
-			super(null);
-			innerResponse = innerResp;
-			opName = operationName;
-			startMillis = System.currentTimeMillis();
-		}
-		
-		@Override
-		public void set(Object data) {
-			innerResponse.set(data);
-		}
-
-		@Override
-		public R get() {
-			try {
-				R r = innerResponse.get();
-				opMonitor.recordSuccess(opName.name());
-				return r;
-			} catch (JedisDataException e) {
-				opMonitor.recordFailure(opName.name(), e.getMessage());
-				throw e;
-			} finally {
-				long endMillis = System.currentTimeMillis();
-				opMonitor.recordLatency(opName.name(), endMillis-startMillis, TimeUnit.MILLISECONDS);
-			}
-		}
-
-		@Override
-		public String toString() {
-			return innerResponse.toString();
 		}
 	}
 
@@ -1264,8 +1229,10 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 	public void sync() {
 		try {
 			jedisPipeline.sync();
+			opMonitor.recordPipelineSync();
 		} finally {
-			discardPipelineAndReleaseConnection();
+			discardPipeline();
+			releaseConnection();
 		}
 	}
 
@@ -1298,6 +1265,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 	}
 
 	public void discardPipelineAndReleaseConnection() {
+		opMonitor.recordPipelineDiscard();
 		discardPipeline();
 		releaseConnection();
 	}
