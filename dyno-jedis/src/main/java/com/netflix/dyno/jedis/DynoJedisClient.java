@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.lang.NotImplementedException;
 import org.slf4j.Logger;
@@ -39,12 +40,13 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 	
 	private static final Logger Logger = org.slf4j.LoggerFactory.getLogger(DynoJedisClient.class);
 	
+	private final String appName;
 	private final ConnectionPool<Jedis> connPool;
-	private final DynoOPMonitor opMonitor;
+	private final AtomicReference<DynoJedisPipelineMonitor> pipelineMonitor = new AtomicReference<DynoJedisPipelineMonitor>();
 	
 	public DynoJedisClient(String name, ConnectionPool<Jedis> pool, DynoOPMonitor operationMonitor) {
+		this.appName = name;
 		this.connPool = pool;
-		this.opMonitor = operationMonitor;
 	}
 	
 	public ConnectionPoolImpl<Jedis> getConnPool() {
@@ -2076,9 +2078,23 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 	}
 	
 	public DynoJedisPipeline pipelined() {
-		return new DynoJedisPipeline(getConnPool(), opMonitor);
+		return new DynoJedisPipeline(getConnPool(), checkAndInitPipelineMonitor(), getConnPool().getMonitor());
 	}
 
+	private DynoJedisPipelineMonitor checkAndInitPipelineMonitor() {
+		
+		if (pipelineMonitor.get() != null) {
+			return pipelineMonitor.get();
+		}
+		
+		DynoJedisPipelineMonitor plMonitor = new DynoJedisPipelineMonitor(appName);
+		boolean success = pipelineMonitor.compareAndSet(null, plMonitor);
+		if (success) {
+			pipelineMonitor.get().init();
+		}
+		return pipelineMonitor.get();
+	}
+	
 	public static class Builder {
 		
 		private String appName;

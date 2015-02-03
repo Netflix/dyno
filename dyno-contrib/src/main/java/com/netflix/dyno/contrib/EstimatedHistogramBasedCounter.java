@@ -21,6 +21,13 @@ public abstract class EstimatedHistogramBasedCounter extends AbstractMonitor<Num
 		this.estHistogram = histogram;
 	}
 
+	public EstimatedHistogramBasedCounter(final String name, final String opName, final String tagName, final EstimatedHistogram histogram) {
+		super(MonitorConfig.builder(name).build()
+				.withAdditionalTag(DataSourceType.GAUGE)
+				.withAdditionalTag(new BasicTag(tagName, opName)));
+		this.estHistogram = histogram;
+	}
+	
 	/** {@inheritDoc} */
 	@Override
 	public boolean equals(Object obj) {
@@ -52,6 +59,10 @@ public abstract class EstimatedHistogramBasedCounter extends AbstractMonitor<Num
 			super(name, opName, histogram);
 		}
 
+		public EstimatedHistogramMean(final String name, final String opName, final String tagName, final EstimatedHistogram histogram) {
+			super(name, opName, tagName, histogram);
+		}
+
 		@Override
 		public Number getValue() {
 			return estHistogram.mean();
@@ -64,6 +75,11 @@ public abstract class EstimatedHistogramBasedCounter extends AbstractMonitor<Num
 		
 		public EstimatedHistogramPercentile(final String name, final String opName, final EstimatedHistogram histogram, double pVal) {
 			super(name, opName, histogram);
+			percentile = pVal;
+		}
+
+		public EstimatedHistogramPercentile(final String name, final String opName, final String tagName, final EstimatedHistogram histogram, double pVal) {
+			super(name, opName, tagName, histogram);
 			percentile = pVal;
 		}
 
