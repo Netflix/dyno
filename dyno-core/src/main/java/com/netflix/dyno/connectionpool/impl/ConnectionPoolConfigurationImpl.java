@@ -70,6 +70,9 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	public ConnectionPoolConfigurationImpl(String name) {
 		this.name = name;
 		this.localDC = System.getenv("EC2_AVAILABILITY_ZONE");
+		if (this.localDC == null) {
+			this.localDC = System.getProperty("EC2_AVAILABILITY_ZONE");
+		}
 	}
 	
 	@Override
