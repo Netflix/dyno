@@ -67,19 +67,15 @@ public class DynoJedisDemo {
 
 		final TokenMapSupplier tokenSupplier = new TokenMapSupplier() {
 
-			final HostToken localHostToken = new HostToken(100000L, localHost);
+            final HostToken localHostToken = new HostToken(100000L, localHost);
 
 			@Override
-			public void initWithHosts(Collection<Host> hosts) {
-			}
-
-			@Override
-			public List<HostToken> getTokens() {
+			public List<HostToken> getTokens(Set<Host> activeHosts) {
 				return Collections.singletonList(localHostToken);
 			}
 
 			@Override
-			public HostToken getTokenForHost(Host host) {
+			public HostToken getTokenForHost(Host host, Set<Host> activeHosts) {
 				return localHostToken;
 			}
 		};
@@ -523,10 +519,10 @@ public class DynoJedisDemo {
 
 		try {
 			
-			demo.initWithRemoteClusterFromEurekaUrl("dyno_perfload2", 8102);
+			demo.initWithRemoteClusterFromEurekaUrl("dyno_json", 8102);
 			System.out.println("Connected");
 
-			//demo.runSimpleTest();
+			demo.runSimpleTest();
 			//demo.runKeysTest();
 			//demo.runMultiThreaded();
 			//demo.runSinglePipeline();
@@ -542,6 +538,7 @@ public class DynoJedisDemo {
 			e.printStackTrace();
 		} finally {
 			demo.stop();
+            System.out.println("Done");
 		}
 
 	}

@@ -7,6 +7,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
+import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -41,44 +42,29 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 	private static final Logger Logger = LoggerFactory.getLogger(AbstractTokenMapSupplier.class);
 	
 	private final String localZone;
-	private final List<Host> hosts = new ArrayList<Host>();
-	private int port; 
+	protected final int port;
 
-	public AbstractTokenMapSupplier() {
-		localZone = System.getenv("EC2_AVAILABILITY_ZONE");
-		port = -1;
+    public AbstractTokenMapSupplier() {
+        this(8080);
+    }
+
+	public AbstractTokenMapSupplier(int port) {
+		localZone = ConfigUtils.getLocalZone();
+		this.port = port;
 	}
 
-	public abstract String getTopologyJsonPayload();
+	public abstract String getTopologyJsonPayload(Set<Host> activeHosts);
 	
 	public abstract String getTopologyJsonPayload(String hostname);
-
-	@Override
-	public void initWithHosts(Collection<Host> hostList) {
-		
-		port = hostList.iterator().next().getPort();
-		
-		hosts.addAll(CollectionUtils.filter(hostList, new Predicate<Host>() {
-
-			@Override
-			public boolean apply(Host host) {
-				return isLocalZoneHost(host);
-			}
-		}));
-	}
-	
-	protected List<Host> getHosts() {
-		return hosts;
-	}
 	
 	@Override
-	public List<HostToken> getTokens() {
+	public List<HostToken> getTokens(Set<Host> activeHosts) {
 
 		// Doing this since not all tokens are received from an individual call to a dynomite server
 		// hence trying them all
 		Set<HostToken> allTokens = new HashSet<HostToken>();
 		
-		for (Host host : hosts) {
+		for (Host host : activeHosts) {
 			try {
 				List<HostToken> hostTokens = parseTokenListFromJson(getTopologyJsonPayload((host.getHostName())));
 				for (HostToken hToken : hostTokens) {
@@ -92,9 +78,8 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 	}
 	
 	@Override
-	public HostToken getTokenForHost(final Host host) {
-		this.hosts.add(host);
-		String jsonPayload = getTopologyJsonPayload();
+	public HostToken getTokenForHost(final Host host, final Set<Host> activeHosts) {
+		String jsonPayload = getTopologyJsonPayload(activeHosts);
 		List<HostToken> hostTokens = parseTokenListFromJson(jsonPayload);
 		
 		return CollectionUtils.find(hostTokens, new Predicate<HostToken>() {
@@ -113,8 +98,8 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 		return localZone.equalsIgnoreCase(host.getRack());
 	}
 
-
-	private List<HostToken> parseTokenListFromJson(String json) {
+    // package-private for Test
+	List<HostToken> parseTokenListFromJson(String json) {
 		
 		List<HostToken> hostTokens = new ArrayList<HostToken>();
 		

@@ -2162,7 +2162,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 			
 			if (cpConfig.getTokenSupplier() == null) {
 				Logger.info("TOKEN AWARE selected and no token supplier found, using default HttpEndpointBasedTokenMapSupplier()");
-				cpConfig.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier());
+				cpConfig.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier(port));
 			}
 			
 			DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);

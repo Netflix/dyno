@@ -4,9 +4,14 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
+import com.netflix.dyno.connectionpool.exception.DynoConnectException;
+import com.netflix.dyno.connectionpool.exception.DynoException;
+import com.netflix.dyno.connectionpool.exception.TimeoutException;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.conn.ConnectTimeoutException;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.params.HttpConnectionParams;
@@ -26,38 +31,44 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 	private final String serverUrl;
 	private static final Integer NumRetries = 2;
 
-	public HttpEndpointBasedTokenMapSupplier() {
-		this(DefaultServerUrl);
+	public HttpEndpointBasedTokenMapSupplier(int port) {
+		this(DefaultServerUrl, port);
 	}
 
-	public HttpEndpointBasedTokenMapSupplier(String url) {
+	public HttpEndpointBasedTokenMapSupplier(String url, int port) {
+        super(port);
 		serverUrl = url;
 	}
 
 	@Override
-	public String getTopologyJsonPayload() {
+	public String getTopologyJsonPayload(Set<Host> activeHosts) {
 		
 		int count = NumRetries;
 		Exception lastEx = null;
-		
-		String response = null;
+
+		String response;
+        final String randomHost = getRandomHost(activeHosts);
 		do {
 			try {
-				response = getResponseViaHttp(getRandomHost());
-				if (response != null) {
-					return response;
-				}
-			} catch (Exception e) {
+                response = getResponseViaHttp(randomHost);
+                if (response != null) {
+                    return response;
+                }
+            } catch (Exception e) {
 				lastEx = e;
 			} finally {
 				count--;
 			}
-		} while ((count > 0) && (response == null));
+		} while ((count > 0));
 		
-		if (lastEx == null) {
-			throw new RuntimeException(lastEx);
+		if (lastEx != null) {
+            Logger.warn("Unable to obtain topology for Host " + randomHost + ", error = " + lastEx.getMessage());
+            if (lastEx instanceof ConnectTimeoutException) {
+                throw new TimeoutException("Unable to obtain topology", lastEx);
+            }
+			throw new DynoException(lastEx);
 		} else {
-			throw new RuntimeException("Could not contact dynomite for token map");
+			throw new DynoException("Could not contact dynomite for token map");
 		}
 	}
 
@@ -106,10 +117,10 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 		}
 	}
 	
-	private String getRandomHost() {
+	private String getRandomHost(Set<Host> activeHosts) {
 		Random random = new Random();
 		
-		List<Host> hostsUp = new ArrayList<Host>(CollectionUtils.filter(getHosts(), new Predicate<Host>() {
+		List<Host> hostsUp = new ArrayList<Host>(CollectionUtils.filter(activeHosts, new Predicate<Host>() {
 
 			@Override
 			public boolean apply(Host x) {

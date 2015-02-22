@@ -4,6 +4,8 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang.NotImplementedException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 
@@ -26,6 +28,8 @@ import com.netflix.dyno.connectionpool.impl.ConnectionContextImpl;
 import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
 
 public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
+
+    private static final org.slf4j.Logger Logger = LoggerFactory.getLogger(JedisConnectionFactory.class);
 
 	private final OperationMonitor opMonitor; 
 	
@@ -69,15 +73,17 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 				return opResult;
 				
 			} catch (JedisConnectionException ex) {
+                Logger.warn("Caught JedisConnectionException: " + ex.getMessage());
 				opMonitor.recordFailure(opName, ex.getMessage());
 				lastDynoException = (DynoConnectException) new FatalConnectionException(ex).setAttempt(1);
 				throw lastDynoException;
 
 			} catch (RuntimeException ex) {
+                Logger.warn("Caught RuntimeException: " + ex.getMessage());
 				opMonitor.recordFailure(opName, ex.getMessage());
 				lastDynoException = (DynoConnectException) new FatalConnectionException(ex).setAttempt(1);
 				throw lastDynoException;
-				
+
 			} finally {
 				long duration = System.nanoTime()/1000 - startTime;
 				if (opResult != null) {

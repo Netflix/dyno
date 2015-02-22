@@ -422,29 +422,24 @@ public class HostSelectionWithFallbackTest {
 
 		final Map<Host, HostToken> tokenMap = new HashMap<Host, HostToken>();
 
+        tokenMap.put(h1, new HostToken(1383429731L, h1));
+        tokenMap.put(h2, new HostToken(3530913377L, h2));
+        tokenMap.put(h3, new HostToken(1383429731L, h3));
+        tokenMap.put(h4, new HostToken(3530913377L, h4));
+        tokenMap.put(h5, new HostToken(1383429731L, h5));
+        tokenMap.put(h6, new HostToken(3530913377L, h6));
+
 		return new TokenMapSupplier () {
-			@Override
-			public List<HostToken> getTokens() {
+            @Override
+			public List<HostToken> getTokens(Set<Host> activeHosts) {
 				return new ArrayList<HostToken>(tokenMap.values());
 			}
 
 			@Override
-			public HostToken getTokenForHost(Host host) {
+			public HostToken getTokenForHost(Host host, Set<Host> activeHosts) {
 				return tokenMap.get(host);
 			}
 
-			@Override
-			public void initWithHosts(Collection<Host> hosts) {
-
-				tokenMap.clear();
-
-				tokenMap.put(h1, new HostToken(1383429731L, h1));
-				tokenMap.put(h2, new HostToken(3530913377L, h2));
-				tokenMap.put(h3, new HostToken(1383429731L, h3));
-				tokenMap.put(h4, new HostToken(3530913377L, h4));
-				tokenMap.put(h5, new HostToken(1383429731L, h5));
-				tokenMap.put(h6, new HostToken(3530913377L, h6));
-			}
 		};
 	}
 }

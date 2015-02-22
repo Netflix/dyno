@@ -26,6 +26,7 @@ import com.netflix.dyno.connectionpool.RetryPolicy.RetryPolicyFactory;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.health.ErrorMonitor.ErrorMonitorFactory;
 import com.netflix.dyno.connectionpool.impl.health.SimpleErrorMonitorImpl.SimpleErrorMonitorFactory;
+import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
 
 public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfiguration {
 	
@@ -69,10 +70,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	
 	public ConnectionPoolConfigurationImpl(String name) {
 		this.name = name;
-		this.localDC = System.getenv("EC2_AVAILABILITY_ZONE");
-		if (this.localDC == null) {
-			this.localDC = System.getProperty("EC2_AVAILABILITY_ZONE");
-		}
+		this.localDC = ConfigUtils.getLocalZone();
 	}
 	
 	@Override

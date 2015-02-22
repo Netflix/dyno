@@ -95,7 +95,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	private final ConnectionPoolConfiguration cpConfiguration; 
 	private final ConnectionPoolMonitor cpMonitor; 
 	
-	private final HostsUpdator hostsUpdator; 
+	private final HostsUpdater hostsUpdater;
 	private final ScheduledExecutorService connPoolThreadPool = Executors.newScheduledThreadPool(1);
 	
 	private final AtomicBoolean started = new AtomicBoolean(false);
@@ -127,7 +127,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				throw new RuntimeException("unknown type");
 		};
 	
-		this.hostsUpdator = new HostsUpdator(cpConfiguration.getHostSupplier());
+		this.hostsUpdater = new HostsUpdater(cpConfiguration.getHostSupplier());
 	}
 	
 	public HostSelectionWithFallback<CL> getTokenSelection() {
@@ -173,7 +173,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			Logger.info("Adding host connection pool for host: " + host);
 			
 			try {
-				hostPool.primeConnections();
+				int primed = hostPool.primeConnections();
+                Logger.info("Successfully primed " + primed + " connections to " + host);
 				if (refreshLoadBalancer) {
 					selectionStrategy.addHost(host, hostPool);
 				}
@@ -288,7 +289,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				// Add context to the result from the successful execution
 				result.setNode(connection.getHost())
 					  .addMetadata(connection.getContext().getAll());
-				
+
 				retry.success();
 				cpMonitor.incOperationSuccess(connection.getHost(), System.currentTimeMillis()-startTime);
 				
@@ -425,7 +426,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			removeHost(host);
 		}
 		cpHealthTracker.stop();
-		hostsUpdator.stop();
+		hostsUpdater.stop();
 		connPoolThreadPool.shutdownNow();
 	}
 
@@ -441,7 +442,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			throw new DynoException("Host supplier not configured!");
 		}
 
-		HostStatusTracker hostStatus = hostsUpdator.refreshHosts();
+		HostStatusTracker hostStatus = hostsUpdater.refreshHosts();
 		Collection<Host> hostsUp = hostStatus.getActiveHosts();
 		
 		if (hostsUp == null || hostsUp.isEmpty()) {
@@ -487,9 +488,12 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 				@Override
 				public void run() {
-					
-					HostStatusTracker hostStatus = hostsUpdator.refreshHosts();
-					updateHosts(hostStatus.getActiveHosts(), hostStatus.getInactiveHosts());
+					try {
+                        HostStatusTracker hostStatus = hostsUpdater.refreshHosts();
+                        updateHosts(hostStatus.getActiveHosts(), hostStatus.getInactiveHosts());
+                    } catch (Throwable throwable) {
+                        Logger.error("Failed to update hosts cache", throwable);
+                    }
 				}
 				
 			}, 15*1000, 30*1000, TimeUnit.MILLISECONDS);

@@ -1,10 +1,6 @@
 package com.netflix.dyno.connectionpool.impl;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -228,39 +224,46 @@ public class ConnectionPoolImplTest {
 		 */
 		final Map<Host, HostToken> tokenMap = new HashMap<Host, HostToken>();
 
-		return new TokenMapSupplier () {
-			@Override
-			public List<HostToken> getTokens() {
-				return new ArrayList<HostToken>(tokenMap.values());
-			}
+        tokenMap.put(host1, new HostToken(309687905L, host1));
+        tokenMap.put(host2, new HostToken(1383429731L, host2));
+        tokenMap.put(host3, new HostToken(2457171554L, host3));
+
+		return new TokenMapSupplier() {
+
+            @Override
+            public List<HostToken> getTokens(Set<Host> activeHosts) {
+                if (activeHosts.size() < tokenMap.size()) {
+                    List<HostToken> hostTokens = new ArrayList<HostToken>(activeHosts.size());
+                    Iterator iterator = activeHosts.iterator();
+                    while (iterator.hasNext()) {
+                        Host activeHost = (Host) iterator.next();
+                        hostTokens.add(tokenMap.get(activeHost));
+                    }
+                    return hostTokens;
+                } else {
+                    return new ArrayList<HostToken>(tokenMap.values());
+                }
+            }
 
 			@Override
-			public HostToken getTokenForHost(Host host) {
-				Host h = host;
-				if (h.getHostName().equals("host1")) {
-					tokenMap.put(host1, new HostToken(309687905L, host1));
-				} else if (h.getHostName().equals("host2")) {
-					tokenMap.put(host2, new HostToken(1383429731L, host2));
-				} else if (h.getHostName().equals("host3")) {
-					tokenMap.put(host3, new HostToken(2457171554L, host3));
-				}
+			public HostToken getTokenForHost(Host host, Set<Host> activeHosts) {
 				return tokenMap.get(host);
 			}
 
-			@Override
-			public void initWithHosts(Collection<Host> hosts) {
-				
-				tokenMap.clear();
-				for (Host h : hosts) {
-					if (h.getHostName().equals("host1")) {
-						tokenMap.put(host1, new HostToken(309687905L, host1));
-					} else if (h.getHostName().equals("host2")) {
-						tokenMap.put(host2, new HostToken(1383429731L, host2));
-					} else if (h.getHostName().equals("host3")) {
-						tokenMap.put(host3, new HostToken(2457171554L, host3));
-					}
-				}
-			}
+//			@Override
+//			public void initWithHosts(Collection<Host> hosts) {
+//
+//				tokenMap.clear();
+//				for (Host h : hosts) {
+//					if (h.getHostName().equals("host1")) {
+//						tokenMap.put(host1, new HostToken(309687905L, host1));
+//					} else if (h.getHostName().equals("host2")) {
+//						tokenMap.put(host2, new HostToken(1383429731L, host2));
+//					} else if (h.getHostName().equals("host3")) {
+//						tokenMap.put(host3, new HostToken(2457171554L, host3));
+//					}
+//				}
+//			}
 		};
 	}
 	

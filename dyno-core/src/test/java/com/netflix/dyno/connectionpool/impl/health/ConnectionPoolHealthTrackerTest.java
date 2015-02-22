@@ -96,7 +96,7 @@ public class ConnectionPoolHealthTrackerTest {
 		verify(hostPool, atLeastOnce()).reconnect();
 
 		Assert.assertFalse("Pool active? : " + hostPool.isActive(), hostPool.isActive());
-		// Check that the reconnecting pool is no still being tracked by the tracker
+		// Check that the reconnecting pool is not still being tracked by the tracker
 		Assert.assertNotNull(tracker.getReconnectingPools().get(h1));
 	}
 
