@@ -1,9 +1,6 @@
 package com.netflix.dyno.connectionpool.impl.lb;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -25,12 +22,12 @@ public class AbstractTokenMapSupplierTest {
 
 	private TokenMapSupplier testTokenMapSupplier = new AbstractTokenMapSupplier() {
 
-		@Override
-		public String getTopologyJsonPayload() {
-			return json;
-		}
+        @Override
+        public String getTopologyJsonPayload(Set<Host> activeHosts) {
+            return json;
+        }
 
-		@Override
+        @Override
 		public String getTopologyJsonPayload(String hostname) {
 			return json;
 		}
@@ -50,9 +47,7 @@ public class AbstractTokenMapSupplierTest {
 		hostList.add(new Host("ec2-54-211-220-55.compute-1.amazonaws.com", 11211, Status.Up));
 		hostList.add(new Host("ec2-54-80-65-203.compute-1.amazonaws.com", 11211, Status.Up));
 
-		testTokenMapSupplier.initWithHosts(hostList);
-
-		List<HostToken> hTokens = testTokenMapSupplier.getTokens();
+		List<HostToken> hTokens = testTokenMapSupplier.getTokens(new HashSet<Host>(hostList));
 		Collections.sort(hTokens, new Comparator<HostToken>() {
 			@Override
 			public int compare(HostToken o1, HostToken o2) {

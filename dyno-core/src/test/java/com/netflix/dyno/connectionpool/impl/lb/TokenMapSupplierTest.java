@@ -1,6 +1,7 @@
 package com.netflix.dyno.connectionpool.impl.lb;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 
 import org.junit.Assert;
@@ -9,7 +10,7 @@ import org.junit.Test;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
 
-public class TokenMapSupplierImplTest {
+public class TokenMapSupplierTest {
 
 	@Test
 	public void testParseJson() throws Exception {
@@ -35,8 +36,7 @@ public class TokenMapSupplierImplTest {
 		hostList.add(new Host("ec2-54-211-220-55.compute-1.amazonaws.com", 11211, Status.Up));
 		hostList.add(new Host("ec2-54-80-65-203.compute-1.amazonaws.com", 11211, Status.Up));
 
-		TokenMapSupplierImpl tokenSupplier = new TokenMapSupplierImpl();
-		tokenSupplier.initWithHosts(hostList);
+        HttpEndpointBasedTokenMapSupplier tokenSupplier = new HttpEndpointBasedTokenMapSupplier(8080);
 
 		List<HostToken> hTokens = tokenSupplier.parseTokenListFromJson(json);
 

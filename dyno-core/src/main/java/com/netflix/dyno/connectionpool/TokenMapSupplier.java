@@ -17,6 +17,7 @@ package com.netflix.dyno.connectionpool;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 
@@ -28,20 +29,14 @@ import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 public interface TokenMapSupplier {
 
 	/**
-	 * 
-	 * @param hosts
-	 */
-	public void initWithHosts(Collection<Host> hosts);
-	
-	/**
 	 * @return List<HostToken>
 	 */
-	public List<HostToken> getTokens();
+	public List<HostToken> getTokens(Set<Host> activeHosts);
 	
 	/**
 	 * 
 	 * @param host
 	 * @return
 	 */
-	public HostToken getTokenForHost(final Host host);
+	public HostToken getTokenForHost(final Host host, final Set<Host> activeHosts);
 }

@@ -10,14 +10,14 @@ import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 
-public class HostsUpdator {
+public class HostsUpdater {
 
 	private final HostSupplier hostSupplier; 
 
 	private final AtomicBoolean stop = new AtomicBoolean(false);
 	private final AtomicReference<HostStatusTracker> hostTracker = new AtomicReference<HostStatusTracker>(null);
 	
-	public HostsUpdator(HostSupplier hSupplier) {
+	public HostsUpdater(HostSupplier hSupplier) {
 		this.hostSupplier = hSupplier;
 		this.hostTracker.set(new HostStatusTracker());
 	}
@@ -31,7 +31,7 @@ public class HostsUpdator {
 		
 		Collection<Host> allHosts = hostSupplier.getHosts();
 		if (allHosts == null || allHosts.isEmpty()) {
-			throw new NoAvailableHostsException("No available hosts when starting host updator");
+			throw new NoAvailableHostsException("No available hosts when starting HostsUpdater");
 		}
 		
 		List<Host> hostsUp = new ArrayList<Host>();

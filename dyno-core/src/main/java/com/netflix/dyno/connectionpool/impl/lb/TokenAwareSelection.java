@@ -34,7 +34,7 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
 /**
  * Simple class that implements {@link HostSelectionStrategy} using the TOKEN AWARE algorithm. 
  * Note that this component needs to be aware of the dynomite ring topology to be able to 
- * successfully map to the corrent token owner for any key of an {@link Operation}
+ * successfully map to the correct token owner for any key of an {@link Operation}
  * 
  * @author poberai
  *

@@ -219,7 +219,7 @@ public class HostSelectionWithFallback<CL> {
 		}
 		
 		if (lastEx != null) {
-			// Return all previously borrowed connection to avoid any conneciton leaks
+			// Return all previously borrowed connection to avoid any connection leaks
 			for (Connection<CL> connection : connections) {
 				try {
 					connection.getParentConnectionPool().returnConnection(connection);
@@ -281,8 +281,8 @@ public class HostSelectionWithFallback<CL> {
 	public void initWithHosts(Map<Host, HostConnectionPool<CL>> hPools) {
 
 		// Get the list of tokens for these hosts
-		tokenSupplier.initWithHosts(hPools.keySet());
-		List<HostToken> allHostTokens = tokenSupplier.getTokens();
+		//tokenSupplier.initWithHosts(hPools.keySet());
+		List<HostToken> allHostTokens = tokenSupplier.getTokens(hPools.keySet());
 
 		Map<HostToken, HostConnectionPool<CL>> tokenPoolMap = new HashMap<HostToken, HostConnectionPool<CL>>();
 		
@@ -321,7 +321,7 @@ public class HostSelectionWithFallback<CL> {
 
 	public void addHost(Host host, HostConnectionPool<CL> hostPool) {
 		
-		HostToken hostToken = tokenSupplier.getTokenForHost(host);
+		HostToken hostToken = tokenSupplier.getTokenForHost(host, hostTokens.keySet());
 		if (hostToken == null) {
 			throw new DynoConnectException("Could not find host token for host: " + host);
 		}
