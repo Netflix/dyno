@@ -1947,8 +1947,17 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 		return allResults;
 	}
 
+    /**
+     * Use this with care, especially in the context of production databases.
+     *
+     * @param pattern Specifies the mach set for keys
+     * @return a collection of operation results
+     * @see <a href="http://redis.io/commands/KEYS">keys</a>
+     */
 	public Collection<OperationResult<Set<String>>> d_keys(final String pattern) {
-	
+
+        Logger.warn("Executing d_keys for pattern: " + pattern);
+
 		Collection<OperationResult<Set<String>>> results = connPool.executeWithRing(new BaseKeyOperation<Set<String>>(pattern, OpName.KEYS) {
 
 			@Override

@@ -303,17 +303,20 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				
 				retry.failure(e);
 				lastException = e;
-				
-				cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, e);
-				if (retry.allowRetry()) {
-					cpMonitor.incFailover(connection.getHost(), e);
-				}
-				
-				// Track the connection health so that the pool can be purged at a later point
-				if (connection != null) {
-					cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
-				}
-				
+
+                if (connection != null) {
+                    cpMonitor.incOperationFailure(connection.getHost(), e);
+
+                    if (retry.allowRetry()) {
+                        cpMonitor.incFailover(connection.getHost(), e);
+                    }
+
+                    // Track the connection health so that the pool can be purged at a later point
+                    cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
+                } else {
+                    cpMonitor.incOperationFailure(null, e);
+                }
+
 			} catch(Throwable t) {
 				throw new RuntimeException(t);
 			} finally {
