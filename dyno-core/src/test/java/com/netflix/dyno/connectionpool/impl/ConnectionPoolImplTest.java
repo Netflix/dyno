@@ -128,17 +128,18 @@ public class ConnectionPoolImplTest {
 	private Host host1 = new Host("host1", 8080, Status.Up).setRack("localDC");
 	private Host host2 = new Host("host2", 8080, Status.Up).setRack("localDC");
 	private Host host3 = new Host("host3", 8080, Status.Up).setRack("localDC");
-	
-	private final List<Host> hostSupplierHosts = new ArrayList<Host>();
+
+    private final List<Host> hostSupplierHosts = new ArrayList<Host>();
 	
 	@Before
 	public void beforeTest() {
 
 		hostSupplierHosts.clear();
 		
-		host1 = new Host("host1", 8080, Status.Up).setRack("localDC");
-		host2 = new Host("host2", 8080, Status.Up).setRack("localDC");
-		host3 = new Host("host3", 8080, Status.Up).setRack("localDC");
+//		host1 = new Host("host1", 8080, Status.Up).setRack("localDC");
+//		host2 = new Host("host2", 8080, Status.Up).setRack("localDC");
+//		host3 = new Host("host3", 8080, Status.Up).setRack("localDC");
+
 
 		client = new TestClient();
 		cpConfig = new ConnectionPoolConfigurationImpl("TestClient").setLoadBalancingStrategy(LoadBalancingStrategy.RoundRobin);
@@ -523,6 +524,19 @@ public class ConnectionPoolImplTest {
 			pool.shutdown();
 		}
 	}
+
+    @Test(expected = NoAvailableHostsException.class)
+    public void testHostsDownDuringStartup() {
+
+        final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
+
+        hostSupplierHosts.add(new Host("host1_down", 8080, Status.Down).setRack("localDC"));
+        hostSupplierHosts.add(new Host("host2_down", 8080, Status.Down).setRack("localDC"));
+        hostSupplierHosts.add(new Host("host3_down", 8080, Status.Down).setRack("localDC"));
+
+        pool.start();
+
+    }
 
 	private void executeTestClientOperation(final ConnectionPoolImpl<TestClient> pool) {
 		executeTestClientOperation(pool, null);
