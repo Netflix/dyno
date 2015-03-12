@@ -175,19 +175,25 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			try {
 				int primed = hostPool.primeConnections();
                 Logger.info("Successfully primed " + primed + " connections to " + host);
-				if (refreshLoadBalancer) {
-					selectionStrategy.addHost(host, hostPool);
-				}
-				
-				// Initiate ping based monitoring only for async pools.
-				// Note that sync pools get monitored based on feedback from operation executions on the pool itself
-				if (poolType == Type.Async) {
-					cpHealthTracker.initialPingHealthchecksForPool(hostPool);
-				}
+
+                if (hostPool.isActive()) {
+                    if (refreshLoadBalancer) {
+                        selectionStrategy.addHost(host, hostPool);
+                    }
+
+                    // Initiate ping based monitoring only for async pools.
+                    // Note that sync pools get monitored based on feedback from operation executions on the pool itself
+                    if (poolType == Type.Async) {
+                        cpHealthTracker.initialPingHealthchecksForPool(hostPool);
+                    }
+                } else {
+                    Logger.info("Failed to prime enough connections to host " + host + " for it take traffic; will retry");
+                    cpMap.remove(host);
+                }
 				
 				cpMonitor.hostAdded(host, hostPool);
-				
-				return true;
+
+                return primed > 0;
 			} catch (DynoException e) {
 				Logger.info("Failed to init host pool for host: " + host, e);
 				cpMap.remove(host);

@@ -251,20 +251,6 @@ public class ConnectionPoolImplTest {
 				return tokenMap.get(host);
 			}
 
-//			@Override
-//			public void initWithHosts(Collection<Host> hosts) {
-//
-//				tokenMap.clear();
-//				for (Host h : hosts) {
-//					if (h.getHostName().equals("host1")) {
-//						tokenMap.put(host1, new HostToken(309687905L, host1));
-//					} else if (h.getHostName().equals("host2")) {
-//						tokenMap.put(host2, new HostToken(1383429731L, host2));
-//					} else if (h.getHostName().equals("host3")) {
-//						tokenMap.put(host3, new HostToken(2457171554L, host3));
-//					}
-//				}
-//			}
 		};
 	}
 	
