@@ -159,8 +159,16 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		if(cpState.get() != cpNotInited) {
 			throw new DynoException("Connection pool has already been inited, cannot prime connections for host:" + host);
 		}
-		
-		return reconnect(cpNotInited);
+
+        int primedConnectionCount = reconnect(cpNotInited);
+
+        if (primedConnectionCount == 0) {
+            Logger.warn("Unable to make any successful connections to host " + host);
+            cpState.set(cpNotInited);
+            throw new DynoConnectException("Unable to make ANY successful connections to host " + host);
+        }
+
+        return primedConnectionCount;
 	}
 
 	private int reconnect(ConnectionPoolState<CL> prevState) throws DynoException {
@@ -173,7 +181,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		int successfullyCreated = 0; 
 		
 		for (int i=0; i<cpConfig.getMaxConnsPerHost(); i++) {
-			boolean success = createConnectionWithReries(); 
+			boolean success = createConnectionWithRetries();
 			if (success) {
 				successfullyCreated++;
 			}
@@ -191,7 +199,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		return successfullyCreated;
 	}
 	
-	private boolean createConnectionWithReries() {
+	private boolean createConnectionWithRetries() {
 		
 		boolean success = false;
 		RetryPolicy retry = new RetryNTimes.RetryFactory(3).getRetryPolicy();
@@ -277,17 +285,23 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				return connection;
 			} catch (DynoConnectException e) {
 				if (Logger.isDebugEnabled()) {
-					Logger.error("Failed to create connection", e);
-				} else {
-					//Logger.error("Failed to create connection" + e.getMessage());
+                    int divisor = cpConfig.getMaxConnsPerHost() > 0 ? cpConfig.getMaxConnsPerHost() : 100;
+                    if (monitor.getConnectionCreateFailedCount() % divisor < 11) {
+                        Logger.error("Failed to create connection", e);
+                    } else {
+                        Logger.error("Failed to create connection" + e.getMessage());
+                    }
 				}
 				monitor.incConnectionCreateFailed(host, e);
 				throw e;
 			} catch (RuntimeException e) {
 				if (Logger.isDebugEnabled()) {
-					Logger.error("Failed to create connection", e);
-				} else {
-					//Logger.error("Failed to create connection" + e.getMessage());
+                    int divisor = cpConfig.getMaxConnsPerHost() > 0 ? cpConfig.getMaxConnsPerHost() : 100;
+                    if (monitor.getConnectionCreateFailedCount() % divisor < 11) {
+                        Logger.error("Failed to create connection", e);
+                    } else {
+                        Logger.error("Failed to create connection" + e.getMessage());
+                    }
 				}
 				monitor.incConnectionCreateFailed(host, e);
 				throw new DynoConnectException(e);

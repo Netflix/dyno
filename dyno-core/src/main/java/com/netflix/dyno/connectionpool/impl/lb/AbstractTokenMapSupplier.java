@@ -79,7 +79,12 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 	
 	@Override
 	public HostToken getTokenForHost(final Host host, final Set<Host> activeHosts) {
-		String jsonPayload = getTopologyJsonPayload(activeHosts);
+        String jsonPayload;
+        if (activeHosts.size() == 0) {
+            jsonPayload = getTopologyJsonPayload(host.getHostName());
+        } else {
+            jsonPayload = getTopologyJsonPayload(activeHosts);
+        }
 		List<HostToken> hostTokens = parseTokenListFromJson(jsonPayload);
 		
 		return CollectionUtils.find(hostTokens, new Predicate<HostToken>() {
