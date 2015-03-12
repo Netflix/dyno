@@ -113,7 +113,6 @@ public class HostSelectionWithFallback<CL> {
 			
 		} catch (NoAvailableHostsException e) {
 			lastEx = e;
-			cpMonitor.incOperationFailure(null, e);
 			useFallback = true;
 		}
 		
@@ -133,14 +132,20 @@ public class HostSelectionWithFallback<CL> {
 			int numRemotes = remoteDCNames.getEntireList().size();
 			if (numRemotes == 0) {
 				if (lastEx != null) {
+                    cpMonitor.incOperationFailure(null,lastEx);
 					throw lastEx; // give up
 				} else {
-					throw new PoolOfflineException(hostPool.getHost(), "host pool is offline and no DCs available for fallback");
+                    PoolOfflineException poe = new PoolOfflineException(hostPool.getHost(), "host pool is offline and no DCs available for fallback");
+                    cpMonitor.incOperationFailure(null, poe);
+					throw poe;
 				}
 			} else {
 				hostPool = getFallbackHostPool(op, token);
 			}
-		}
+		} else if (useFallback && cpConfig.getMaxFailoverCount() == 0) {
+            // The client is configured not use failover, so increment the operation failure
+            cpMonitor.incOperationFailure(null, lastEx);
+        }
 		
 		if (hostPool == null) {
 			throw new NoAvailableHostsException("Found no hosts when using fallback DC");
