@@ -50,12 +50,6 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     private final AtomicLong connectionReturnCount  = new AtomicLong();
     private final AtomicLong operationFailoverCount = new AtomicLong();
 
-    // tracking host activity
-    private final AtomicLong hostAddedCount         = new AtomicLong();
-    //private final AtomicLong hostRemovedCount       = new AtomicLong();
-    private final AtomicLong hostDownCount          = new AtomicLong();
-    private final AtomicLong hostReactivatedCount   = new AtomicLong();
-    
     //private final AtomicLong poolTimeoutCount      = new AtomicLong();
     private final AtomicLong poolExhastedCount      = new AtomicLong();
     private final AtomicLong operationTimeoutCount  = new AtomicLong();
@@ -193,11 +187,6 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     }
 
     @Override
-    public long getHostDownCount() {
-        return this.hostDownCount.get();
-    }
-
-    @Override
     public long getNoHostCount() {
         return this.noHostsCount.get();
     }
@@ -247,9 +236,8 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
                     .append(",unknown="    ).append(unknownErrorCount.get())
                     .append(",exhausted="  ).append(poolExhastedCount.get())
                 .append("], Hosts[")
-                    .append( "add="        ).append(hostAddedCount.get())
-                    .append(",down="       ).append(hostDownCount.get())
-                    .append(",reactivate=" ).append(hostReactivatedCount.get())
+                    .append( "up="        ).append(getHostUpCount())
+                    .append(",down="       ).append(getHostDownCount())
                 .append("])").toString();
     }
 
@@ -261,6 +249,11 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
 		}
 		return count;
 	}
+
+    @Override
+    public long getHostDownCount() {
+        return hostStats.size() - getHostUpCount();
+    }
 
 	@Override
 	public void hostAdded(Host host, HostConnectionPool<?> pool) {

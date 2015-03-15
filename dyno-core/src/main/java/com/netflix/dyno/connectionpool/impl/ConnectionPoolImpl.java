@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -56,6 +57,8 @@ import com.netflix.dyno.connectionpool.impl.lb.HostSelectionWithFallback;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 
+import javax.management.*;
+
 /**
  * Main implementation class for {@link ConnectionPool}
  * The pool deals with a bunch of other components and brings together all the functionality for Dyno. Hence this is where all the action happens. 
@@ -86,7 +89,7 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
 	private static final Logger Logger = LoggerFactory.getLogger(ConnectionPoolImpl.class);
-	
+
 	private final ConcurrentHashMap<Host, HostConnectionPool<CL>> cpMap = new ConcurrentHashMap<Host, HostConnectionPool<CL>>();
 	private final ConnectionPoolHealthTracker<CL> cpHealthTracker;
 	
@@ -99,8 +102,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	private final ScheduledExecutorService connPoolThreadPool = Executors.newScheduledThreadPool(1);
 	
 	private final AtomicBoolean started = new AtomicBoolean(false);
-	
-	private HostSelectionWithFallback<CL> selectionStrategy; 
+
+    private HostSelectionWithFallback<CL> selectionStrategy;
 	
 	private Type poolType;
 
@@ -437,6 +440,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		cpHealthTracker.stop();
 		hostsUpdater.stop();
 		connPoolThreadPool.shutdownNow();
+        unregisterMonitorConsoleMBean();
 	}
 
 	@Override
@@ -506,12 +510,47 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				}
 				
 			}, 15*1000, 30*1000, TimeUnit.MILLISECONDS);
-			
+
 			MonitorConsole.getInstance().registerConnectionPool(this);
+
+            registerMonitorConsoleMBean(MonitorConsole.getInstance());
 		}
 		
 		return getEmptyFutureTask(true);
 	}
+
+    private void registerMonitorConsoleMBean(MonitorConsoleMBean bean) {
+        final MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        try {
+            ObjectName objectName = new ObjectName(MonitorConsole.OBJECT_NAME);
+            server.registerMBean(bean, objectName);
+            Logger.info("registered mbean " + objectName);
+        } catch (MalformedObjectNameException ex) {
+            Logger.error("Unable to register MonitorConsole mbean ", ex);
+        } catch (InstanceAlreadyExistsException ex) {
+            Logger.error("Unable to register MonitorConsole mbean ", ex);
+        } catch (MBeanRegistrationException ex) {
+            Logger.error("Unable to register MonitorConsole mbean ", ex);
+        } catch (NotCompliantMBeanException ex) {
+            Logger.error("Unable to register MonitorConsole mbean ", ex);
+        }
+    }
+
+    private void unregisterMonitorConsoleMBean() {
+        final MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        try {
+            ObjectName objectName = new ObjectName(MonitorConsole.OBJECT_NAME);
+            server.unregisterMBean(objectName);
+            Logger.info("unregistered mbean " + objectName);
+        } catch (MalformedObjectNameException ex) {
+            Logger.error("Unable to unregister MonitorConsole mbean ", ex);
+        } catch (MBeanRegistrationException ex) {
+            Logger.error("Unable to unregister MonitorConsole mbean ", ex);
+        } catch (InstanceNotFoundException ex) {
+            Logger.error("Unable to unregister MonitorConsole mbean ", ex);
+        }
+
+    }
 	
 	private HostSelectionWithFallback<CL> initSelectionStrategy() {
 		
