@@ -16,14 +16,13 @@
 package com.netflix.dyno.connectionpool.impl;
 
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.netflix.dyno.connectionpool.ConnectionPool;
-import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
-import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.HostConnectionStats;
-import com.netflix.dyno.connectionpool.TokenPoolTopology;
+import com.netflix.dyno.connectionpool.*;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 
 /**
  * Console that gives the admin insight into the current status of the Dyno {@link ConnectionPool}
@@ -31,11 +30,13 @@ import com.netflix.dyno.connectionpool.TokenPoolTopology;
  * @author poberai
  *
  */
-public class MonitorConsole {
+public class MonitorConsole implements MonitorConsoleMBean {
 
 	private static final MonitorConsole Instance = new MonitorConsole();
 
-	public static MonitorConsole getInstance() {
+    /*package*/ static final String OBJECT_NAME = "com.netflix.dyno.connectionpool.impl:type=MonitorConsole";
+
+    public static MonitorConsole getInstance() {
 		return Instance;
 	}
 
@@ -59,6 +60,7 @@ public class MonitorConsole {
 		addMonitorConsole(cp.getName(), cp.getMonitor());
 	}
 
+    @Override
 	public String getMonitorStats(String name) {
 		
 		ConnectionPoolMonitor cpMonitor = cpMonitors.get(name);
@@ -109,9 +111,47 @@ public class MonitorConsole {
 	public Collection<String> getConnectionPoolNames() {
 		return connectionPools.keySet();
 	}
-	
+
 	public TokenPoolTopology getTopology(String cpName) {
 		ConnectionPoolImpl<?> pool = connectionPools.get(cpName);
 		return (pool != null) ? pool.getTopology() : null;
 	}
+
+    @Override
+    public Map<String, Map<String, List<String>>> getTopologySnapshot(String cpName) {
+        Map<String, Map<String, List<String>>> snapshot =
+                new HashMap<String, Map<String, List<String>>>();
+
+        TokenPoolTopology topology = getTopology(cpName);
+
+        if (topology == null) {
+            return snapshot;
+        }
+
+        Map<String, List<TokenPoolTopology.TokenStatus>> map = topology.getAllTokens();
+
+        for (String rack : map.keySet()) {
+            List<TokenPoolTopology.TokenStatus> tokens = map.get(rack);
+            snapshot.put(rack, getTokenStatusMap(tokens));
+        }
+
+        return snapshot;
+    }
+
+    private Map<String, List<String>> getTokenStatusMap(List<TokenPoolTopology.TokenStatus> tokens) {
+        Map<String, List<String>> map = new HashMap<String, List<String>>();
+        for (TokenPoolTopology.TokenStatus tokenStatus : tokens) {
+            String token = tokenStatus.getToken().toString();
+            HostConnectionPool<?> hostPool = tokenStatus.getHostPool();
+
+            List<String> meta = CollectionUtils.newArrayList(
+                    hostPool.getHost().getHostName(),
+                    hostPool.isActive() ? "UP" : "DOWN"
+            );
+
+            map.put(token, meta);
+        }
+        return map;
+    }
+
 }
