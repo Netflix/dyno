@@ -7,6 +7,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
+import com.netflix.dyno.connectionpool.exception.TimeoutException;
 import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -83,7 +84,14 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
         if (activeHosts.size() == 0) {
             jsonPayload = getTopologyJsonPayload(host.getHostName());
         } else {
-            jsonPayload = getTopologyJsonPayload(activeHosts);
+            try {
+                jsonPayload = getTopologyJsonPayload(activeHosts);
+            } catch (TimeoutException ex) {
+                // Try using the host we just primed connections to. If that fails,
+                // let the exception bubble up to ConnectionPoolImpl which will remove
+                // the host from the host-mapping
+                jsonPayload = getTopologyJsonPayload(host.getHostName());
+            }
         }
 		List<HostToken> hostTokens = parseTokenListFromJson(jsonPayload);
 		

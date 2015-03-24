@@ -3,6 +3,7 @@ package com.netflix.dyno.jedis;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -1227,20 +1228,25 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 	}
 
 	public void sync() {
+        long startTime = System.nanoTime()/1000;
 		try {
 			jedisPipeline.sync();
 			opMonitor.recordPipelineSync();
 		} finally {
+            long duration = System.nanoTime()/1000 - startTime;
+            opMonitor.recordLatency(duration, TimeUnit.MICROSECONDS);
 			discardPipeline();
 			releaseConnection();
 		}
 	}
 
 	private void discardPipeline() {
-
 		try { 
 			if (jedisPipeline != null) {
+                long startTime = System.nanoTime()/1000;
 				jedisPipeline.sync();
+                long duration = System.nanoTime()/1000 - startTime;
+                opMonitor.recordLatency(duration, TimeUnit.MICROSECONDS);
 				jedisPipeline = null;
 			}
 		} catch (Exception e) {

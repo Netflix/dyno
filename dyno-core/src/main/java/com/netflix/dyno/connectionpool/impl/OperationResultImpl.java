@@ -27,7 +27,7 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
 
 /**
  * Impl for {@link OperationResult}
- * It tracks operaiton result, op attempts, latency, execution host etc
+ * It tracks operation result, op attempts, latency, execution host etc
  * 
  * @author poberai
  *
