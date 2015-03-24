@@ -3,6 +3,7 @@ package com.netflix.dyno.jedis;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -1227,20 +1228,41 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 	}
 
 	public void sync() {
+        long startTime = System.nanoTime()/1000;
 		try {
 			jedisPipeline.sync();
 			opMonitor.recordPipelineSync();
 		} finally {
-			discardPipeline();
+            long duration = System.nanoTime()/1000 - startTime;
+            opMonitor.recordLatency(duration, TimeUnit.MICROSECONDS);
+			discardPipeline(false);
 			releaseConnection();
 		}
 	}
 
-	private void discardPipeline() {
+    public List<Object> syncAndReturnAll() {
+        long startTime = System.nanoTime()/1000;
+        try {
+            List<Object> result = jedisPipeline.syncAndReturnAll();
+            opMonitor.recordPipelineSync();
+            return result;
+        } finally {
+            long duration = System.nanoTime()/1000 - startTime;
+            opMonitor.recordLatency(duration, TimeUnit.MICROSECONDS);
+            discardPipeline(false);
+            releaseConnection();
+        }
+    }
 
+	private void discardPipeline(boolean recordLatency) {
 		try { 
 			if (jedisPipeline != null) {
+                long startTime = System.nanoTime()/1000;
 				jedisPipeline.sync();
+                if (recordLatency) {
+                    long duration = System.nanoTime() / 1000 - startTime;
+                    opMonitor.recordLatency(duration, TimeUnit.MICROSECONDS);
+                }
 				jedisPipeline = null;
 			}
 		} catch (Exception e) {
@@ -1266,7 +1288,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 	public void discardPipelineAndReleaseConnection() {
 		opMonitor.recordPipelineDiscard();
-		discardPipeline();
+		discardPipeline(true);
 		releaseConnection();
 	}
 

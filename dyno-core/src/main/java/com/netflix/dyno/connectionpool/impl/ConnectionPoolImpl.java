@@ -177,7 +177,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			
 			try {
 				int primed = hostPool.primeConnections();
-                Logger.info("Successfully primed " + primed + " connections to " + host);
+                Logger.info("Successfully primed " + primed + " of " + cpConfiguration.getMaxConnsPerHost() + " to " + host);
 
                 if (hostPool.isActive()) {
                     if (refreshLoadBalancer) {
