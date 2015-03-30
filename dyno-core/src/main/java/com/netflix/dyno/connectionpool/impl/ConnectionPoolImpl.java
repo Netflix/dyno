@@ -167,7 +167,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			return false;
 		}
 		
-		
 		final HostConnectionPool<CL> hostPool = hostConnPoolFactory.createHostConnectionPool(host, this);
 		
 		HostConnectionPool<CL> prevPool = cpMap.putIfAbsent(host, hostPool);
@@ -189,12 +188,13 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
                     if (poolType == Type.Async) {
                         cpHealthTracker.initialPingHealthchecksForPool(hostPool);
                     }
+
+                    cpMonitor.hostAdded(host, hostPool);
+
                 } else {
                     Logger.info("Failed to prime enough connections to host " + host + " for it take traffic; will retry");
                     cpMap.remove(host);
                 }
-				
-				cpMonitor.hostAdded(host, hostPool);
 
                 return primed > 0;
 			} catch (DynoException e) {
@@ -209,15 +209,18 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	
 	@Override
 	public boolean removeHost(Host host) {
-		 
+        Logger.info(String.format("Removing host %s from connection pool", host));
+
 		HostConnectionPool<CL> hostPool = cpMap.remove(host);
 		if (hostPool != null) {
 			selectionStrategy.removeHost(host, hostPool);
 			cpHealthTracker.removeHost(host);
 			cpMonitor.hostRemoved(host);
 			hostPool.shutdown();
-			return true;
+            Logger.info(String.format("Done removing host %s from connection pool", host.getHostName()));
+            return true;
 		} else {
+            Logger.info(String.format("Host %s NOT FOUND in the connection pool", host.getHostName()));
 			return false;
 		}
 	}
