@@ -257,7 +257,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
 
 	@Override
 	public void hostAdded(Host host, HostConnectionPool<?> pool) {
-		hostStats.putIfAbsent(host, new HostConnectionStatsImpl(host));
+        getOrCreateHostStats(host).hostUp.set(true);
 	}
 
 	@Override
