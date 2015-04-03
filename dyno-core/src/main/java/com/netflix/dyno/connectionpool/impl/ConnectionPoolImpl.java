@@ -459,6 +459,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		}
 
 		HostStatusTracker hostStatus = hostsUpdater.refreshHosts();
+		cpMonitor.setHostCount(hostStatus.getHostCount());
 		Collection<Host> hostsUp = hostStatus.getActiveHosts();
 		
 		if (hostsUp == null || hostsUp.isEmpty()) {
@@ -506,6 +507,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 				public void run() {
 					try {
                         HostStatusTracker hostStatus = hostsUpdater.refreshHosts();
+						cpMonitor.setHostCount(hostStatus.getHostCount());
                         updateHosts(hostStatus.getActiveHosts(), hostStatus.getInactiveHosts());
                     } catch (Throwable throwable) {
                         Logger.error("Failed to update hosts cache", throwable);

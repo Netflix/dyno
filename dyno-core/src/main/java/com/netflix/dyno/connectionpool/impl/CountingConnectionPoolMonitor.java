@@ -58,6 +58,13 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     private final AtomicLong unknownErrorCount      = new AtomicLong();
     private final AtomicLong badRequestCount        = new AtomicLong();
 
+    // Use an explicit host count rather than relying on hostStats
+    // being synchronized with the HostSupplier counts. One case
+    // where we can get out of sync is node replacement. In that case
+    // the host will be removed from the HostSupplier but will still be
+    // in our hostStats as 'down'.
+    private final AtomicLong hostSupplierCount      = new AtomicLong();
+
     private final ConcurrentHashMap<Host, HostConnectionStats> hostStats = new ConcurrentHashMap<Host, HostConnectionStats>();
     
     public CountingConnectionPoolMonitor() {
@@ -85,6 +92,11 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
         if (host != null) {
         	getOrCreateHostStats(host).opFailure.incrementAndGet();
         }
+    }
+
+    @Override
+    public void setHostCount(long hostCount) {
+        this.hostSupplierCount.set(hostCount);
     }
 
     @Override
@@ -211,7 +223,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     
     @Override
     public long getHostCount() {
-        return hostStats.keySet().size();
+        return this.hostSupplierCount.get();
     }
 
     public String toString() {
@@ -252,7 +264,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
 
     @Override
     public long getHostDownCount() {
-        return hostStats.size() - getHostUpCount();
+        return getHostCount() - getHostUpCount();
     }
 
 	@Override
