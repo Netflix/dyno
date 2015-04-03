@@ -185,6 +185,14 @@ public interface ConnectionPoolMonitor {
     public void hostUp(Host host, HostConnectionPool<?> pool);
 
     /**
+     * Sets the current total number of hosts tracked by this monitor
+     *
+     * @param hostCount
+     */
+    public void setHostCount(long hostCount);
+
+
+    /**
      * @return Return a mapping of all hosts and their statistics
      */
     public Map<Host, HostConnectionStats> getHostStats();

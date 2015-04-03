@@ -177,6 +177,17 @@ public class HostStatusTracker {
 	public Collection<Host> getInactiveHosts() {
 		return inactiveHosts;
 	}
+
+	/**
+	 * Returns the total number of hosts being tracked by this instance. Note that this is calculated
+	 * on every invocation.
+	 *
+	 * @return Integer
+	 */
+	public int getHostCount() {
+		// The host collections are never null since they are initialized during construction of this instance.
+		return activeHosts.size() + inactiveHosts.size();
+	}
 	
 	public String toString() {
 		return "HostStatusTracker \nactiveSet: " + activeHosts.toString() + "\ninactiveSet: " + inactiveHosts.toString();  
