@@ -235,7 +235,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
                     .append(",busy="       ).append(getNumBusyConnections())
                     .append(",create="     ).append(connectionCreateCount.get())
                     .append(",close="      ).append(connectionClosedCount.get())
-                    .append(",failed="     ).append(connectionCreateFailureCount.get())
+                    .append(",createFailed="     ).append(connectionCreateFailureCount.get())
                     .append(",borrow="     ).append(connectionBorrowCount.get())
                     .append(",return="     ).append(connectionReturnCount.get())
                 .append("], Operations[")

@@ -38,7 +38,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private static final int DEFAULT_CONNECT_TIMEOUT = 3000; 
 	private static final int DEFAULT_SOCKET_TIMEOUT = 12000; 
 	private static final int DEFAULT_POOL_SHUTDOWN_DELAY = 60000; 
-	private static final int DEFAULT_PING_FREQ_SECONDS = 1; 
+	private static final int DEFAULT_PING_FREQ_SECONDS = 1;
+	private static final int DEFAULT_FLUSH_TIMINGS_FREQ_SECONDS = 0;
 	private static final boolean DEFAULT_LOCAL_DC_AFFINITY = true; 
 	private static final LoadBalancingStrategy DEFAULT_LB_STRATEGY = LoadBalancingStrategy.TokenAware; 
 
@@ -53,7 +54,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private int connectTimeout = DEFAULT_CONNECT_TIMEOUT; 
 	private int socketTimeout = DEFAULT_SOCKET_TIMEOUT; 
 	private int poolShutdownDelay = DEFAULT_POOL_SHUTDOWN_DELAY; 
-	private int pingFrequencySeconds = DEFAULT_PING_FREQ_SECONDS; 
+	private int pingFrequencySeconds = DEFAULT_PING_FREQ_SECONDS;
+	private int flushTimingsFrequencySeconds = DEFAULT_FLUSH_TIMINGS_FREQ_SECONDS;
 	private boolean localDcAffinity = DEFAULT_LOCAL_DC_AFFINITY; 
 	private LoadBalancingStrategy lbStrategy = DEFAULT_LB_STRATEGY; 
 	private String localDC;
@@ -281,7 +283,12 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	public String getLocalDC() {
 		return localDC;
 	}
-	
+
+	@Override
+	public int getTimingCountersResetFrequencySeconds() {
+		return flushTimingsFrequencySeconds;
+	}
+
 	public ConnectionPoolConfigurationImpl setLocalDC(String dc) {
 		this.localDC = dc;
 		return this;

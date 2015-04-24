@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
+import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,18 +68,24 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 				verifyKey(key);
 			} else {
 
-				connection = connPool.getConnectionForOperation(new BaseOperation<Jedis, String>() {
+				try {
+					connection = connPool.getConnectionForOperation(new BaseOperation<Jedis, String>() {
 
-					@Override
-					public String getName() {
-						return DynoPipeline;
-					}
+						@Override
+						public String getName() {
+							return DynoPipeline;
+						}
 
-					@Override
-					public String getKey() {
-						return key;
-					}
-				});
+						@Override
+						public String getKey() {
+							return key;
+						}
+					});
+				} catch (NoAvailableHostsException nahe){
+					cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, nahe);
+					discardPipelineAndReleaseConnection();
+					throw nahe;
+				}
 			}
 
 			Jedis jedis = ((JedisConnection)connection).getClient();
