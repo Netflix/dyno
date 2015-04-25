@@ -25,11 +25,7 @@ import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostConnectionStats;
 import com.netflix.dyno.connectionpool.HostGroup;
-import com.netflix.dyno.connectionpool.exception.BadRequestException;
-import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
-import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
-import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
-import com.netflix.dyno.connectionpool.exception.TimeoutException;
+import com.netflix.dyno.connectionpool.exception.*;
 
 /**
  * Impl of {@link ConnectionPoolMonitor} using thread safe AtomicLongs
@@ -77,7 +73,9 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     		} else if (reason instanceof PoolExhaustedException) {
         	        this.poolExhastedCount.incrementAndGet();
     		} else if (reason instanceof TimeoutException) {
-    			this.socketTimeoutCount.incrementAndGet();
+                this.socketTimeoutCount.incrementAndGet();
+            } else if (reason instanceof FatalConnectionException) {
+                this.socketTimeoutCount.incrementAndGet();
     		} else if (reason instanceof BadRequestException) {
     			this.badRequestCount.incrementAndGet();
     		} else if (reason instanceof NoAvailableHostsException ) {
