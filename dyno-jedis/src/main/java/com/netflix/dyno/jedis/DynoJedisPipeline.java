@@ -1242,6 +1242,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 		} catch (JedisConnectionException jce) {
 			String msg = "Failed sync() to host: " + getHostInfo();
 			pipelineEx.set(new FatalConnectionException(msg, jce));
+			cpMonitor.incOperationFailure(connection == null ? null : connection.getHost(), jce);
 			throw jce;
 		} finally {
             long duration = System.nanoTime()/1000 - startTime;
@@ -1260,6 +1261,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 		} catch (JedisConnectionException jce) {
 			String msg = "Failed syncAndReturnAll() to host: " + getHostInfo();
 			pipelineEx.set(new FatalConnectionException(msg, jce));
+			cpMonitor.incOperationFailure(connection == null ? null : connection.getHost(), jce);
 			throw jce;
         } finally {
             long duration = System.nanoTime()/1000 - startTime;
