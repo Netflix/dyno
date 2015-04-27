@@ -116,4 +116,19 @@ public interface ConnectionPoolConfiguration {
      * @return
      */
     public String getLocalDC();
+
+    /**
+     * Returns the amount of time the histogram accumulates data before it is cleared, in seconds.
+     * <p>
+     * A histogram is used to record timing metrics. This provides more accurate timings to telemetry systems that
+     * are polling at a fixed interval that spans hundreds or thousands of requests, i.e. 1 minute. Since the history
+     * off all requests are preserved this is not ideal for scenarios where we don't want the history, for example
+     * after a network latency spike the average latency will be affected for hours or days.
+     * <p>
+     * Note that 0 is the default and effectively disables this setting meaning all history is preserved.
+     *
+     * @return a positive integer that specifies the duration of the frequency to accumulate timing data or 0
+     */
+    public int getTimingCountersResetFrequencySeconds();
+
 }

@@ -28,6 +28,7 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	private final DynamicIntProperty socketTimeout;
 	private final DynamicIntProperty poolShutdownDelay;
 	private final DynamicBooleanProperty localDcAffinity;
+	private final DynamicIntProperty resetTimingsFrequency;
 	
 	private final LoadBalancingStrategy loadBalanceStrategy;
 	private final ErrorRateMonitorConfig errorRateConfig;
@@ -46,7 +47,7 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		socketTimeout = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.socketTimeout", super.getSocketTimeout());
 		poolShutdownDelay = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.poolShutdownDelay", super.getPoolShutdownDelay());
 		localDcAffinity = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + ".connection.localDcAffinity", super.localDcAffinity());
-
+		resetTimingsFrequency = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.metrics.resetFrequencySeconds", super.getTimingCountersResetFrequencySeconds());
 		
 		loadBalanceStrategy = parseLBStrategy(propertyPrefix);
 		errorRateConfig = parseErrorRateMonitorConfig(propertyPrefix);
@@ -109,6 +110,12 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	public LoadBalancingStrategy getLoadBalancingStrategy() {
 		return loadBalanceStrategy;
 	}
+
+	@Override
+	public int getTimingCountersResetFrequencySeconds() {
+		return resetTimingsFrequency.get();
+	}
+
 
 	
 	private LoadBalancingStrategy parseLBStrategy(String propertyPrefix) {

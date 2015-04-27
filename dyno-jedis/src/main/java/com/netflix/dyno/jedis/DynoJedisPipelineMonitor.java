@@ -1,7 +1,6 @@
 package com.netflix.dyno.jedis;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import com.netflix.dyno.connectionpool.impl.utils.EstimatedHistogram;
 import com.netflix.dyno.contrib.EstimatedHistogramBasedCounter.EstimatedHistogramMean;
@@ -10,21 +9,36 @@ import com.netflix.servo.DefaultMonitorRegistry;
 import com.netflix.servo.monitor.BasicCounter;
 import com.netflix.servo.monitor.MonitorConfig;
 import com.netflix.servo.tag.BasicTag;
+import org.slf4j.LoggerFactory;
 
 public class DynoJedisPipelineMonitor {
+
+	private static final org.slf4j.Logger Logger = LoggerFactory.getLogger(DynoJedisPipelineMonitor.class);
 
 	private final ConcurrentHashMap<String, BasicCounter> counterMap = new ConcurrentHashMap<String, BasicCounter>();
 	private final String appName;
 	private final BasicCounter pipelineSync; 
 	private final BasicCounter pipelineDiscard; 
 	private final PipelineTimer timer;
-	
-	public DynoJedisPipelineMonitor(String applicationName) {
-		
+	private final int resetTimingsFrequencyInSeconds;
+
+	private final ScheduledExecutorService threadPool = Executors.newScheduledThreadPool(1, new ThreadFactory() {
+		@Override
+		public Thread newThread(Runnable r) {
+			return new Thread(r, "DynoJedisPipelineMonitor");
+		}
+	});
+
+	public DynoJedisPipelineMonitor(String applicationName, int resetTimingsFrequencyInSeconds) {
 		appName = applicationName;
 		pipelineSync = getNewPipelineCounter("SYNC");
 		pipelineDiscard = getNewPipelineCounter("DISCARD");
 		timer = new PipelineTimer(appName);
+		this.resetTimingsFrequencyInSeconds = resetTimingsFrequencyInSeconds;
+	}
+
+	public DynoJedisPipelineMonitor(String applicationName) {
+		this(applicationName, 0);
 	}
 	
 	public void init() {
@@ -36,6 +50,17 @@ public class DynoJedisPipelineMonitor {
 		DefaultMonitorRegistry.getInstance().register(timer.lat99);
 		DefaultMonitorRegistry.getInstance().register(timer.lat995);
 		DefaultMonitorRegistry.getInstance().register(timer.lat999);
+
+		Logger.debug(String.format("Initializing DynoJedisPipelineMonitor with timing counter reset frequency %d",
+				resetTimingsFrequencyInSeconds));
+		if (resetTimingsFrequencyInSeconds > 0) {
+			threadPool.scheduleAtFixedRate(new Runnable() {
+				@Override
+				public void run() {
+					timer.reset();
+				}
+			}, 1, resetTimingsFrequencyInSeconds, TimeUnit.SECONDS);
+		}
 	}
 	
 	public void recordOperation(String opName) {
@@ -80,7 +105,7 @@ public class DynoJedisPipelineMonitor {
 	
 	private class PipelineTimer {
 		
-		private final EstimatedHistogramMean latMean; 
+		private final EstimatedHistogramMean latMean;
 		private final EstimatedHistogramPercentile lat99;
 		private final EstimatedHistogramPercentile lat995;
 		private final EstimatedHistogramPercentile lat999;
@@ -99,6 +124,11 @@ public class DynoJedisPipelineMonitor {
 		public void recordLatency(long duration, TimeUnit unit) {
 			long durationMicros = TimeUnit.MICROSECONDS.convert(duration, unit);
 			estHistogram.add(durationMicros);
+		}
+
+		public void reset() {
+			 Logger.info("resetting histogram");
+			 estHistogram.getBuckets(true);
 		}
 	}
 

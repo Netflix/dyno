@@ -508,6 +508,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 					try {
                         HostStatusTracker hostStatus = hostsUpdater.refreshHosts();
 						cpMonitor.setHostCount(hostStatus.getHostCount());
+						Logger.debug(hostStatus.toString());
                         updateHosts(hostStatus.getActiveHosts(), hostStatus.getInactiveHosts());
                     } catch (Throwable throwable) {
                         Logger.error("Failed to update hosts cache", throwable);
@@ -524,7 +525,12 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		return getEmptyFutureTask(true);
 	}
 
-    private void registerMonitorConsoleMBean(MonitorConsoleMBean bean) {
+	@Override
+	public ConnectionPoolConfiguration getConfiguration() {
+		return cpConfiguration;
+	}
+
+	private void registerMonitorConsoleMBean(MonitorConsoleMBean bean) {
         final MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
             ObjectName objectName = new ObjectName(MonitorConsole.OBJECT_NAME);

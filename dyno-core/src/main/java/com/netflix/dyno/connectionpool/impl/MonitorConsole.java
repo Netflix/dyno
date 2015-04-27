@@ -75,7 +75,7 @@ public class MonitorConsole implements MonitorConsoleMBean {
          .append("\nConnections[" )
              .append("   created: " ).append(cpMonitor.getConnectionCreatedCount())
              .append(",  closed: "  ).append(cpMonitor.getConnectionClosedCount())
-             .append(",  failed: "  ).append(cpMonitor.getConnectionCreateFailedCount())
+             .append(",  createFailed: "  ).append(cpMonitor.getConnectionCreateFailedCount())
              .append(",  borrowed: ").append(cpMonitor.getConnectionBorrowedCount())
              .append(",  returned: ").append(cpMonitor.getConnectionReturnedCount())
              
@@ -101,7 +101,9 @@ public class MonitorConsole implements MonitorConsoleMBean {
 			 sb.append(" returned: " + hStats.getConnectionsReturned());
 			 sb.append(" created: " + hStats.getConnectionsCreated());
 			 sb.append(" closed: " + hStats.getConnectionsClosed());
-			 sb.append(" failed: " + hStats.getConnectionsCreateFailed());
+			 sb.append(" createFailed: " + hStats.getConnectionsCreateFailed());
+			 sb.append(" errors: " + hStats.getOperationErrorCount());
+			 sb.append(" success: " + hStats.getOperationSuccessCount());
 		 }
 		 sb.append("\n");
 		 

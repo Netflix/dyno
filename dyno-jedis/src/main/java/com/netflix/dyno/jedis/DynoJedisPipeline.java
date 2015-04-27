@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
+import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,18 +68,24 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 				verifyKey(key);
 			} else {
 
-				connection = connPool.getConnectionForOperation(new BaseOperation<Jedis, String>() {
+				try {
+					connection = connPool.getConnectionForOperation(new BaseOperation<Jedis, String>() {
 
-					@Override
-					public String getName() {
-						return DynoPipeline;
-					}
+						@Override
+						public String getName() {
+							return DynoPipeline;
+						}
 
-					@Override
-					public String getKey() {
-						return key;
-					}
-				});
+						@Override
+						public String getKey() {
+							return key;
+						}
+					});
+				} catch (NoAvailableHostsException nahe){
+					cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, nahe);
+					discardPipelineAndReleaseConnection();
+					throw nahe;
+				}
 			}
 
 			Jedis jedis = ((JedisConnection)connection).getClient();
@@ -1232,6 +1239,11 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 		try {
 			jedisPipeline.sync();
 			opMonitor.recordPipelineSync();
+		} catch (JedisConnectionException jce) {
+			String msg = "Failed sync() to host: " + getHostInfo();
+			pipelineEx.set(new FatalConnectionException(msg, jce));
+			cpMonitor.incOperationFailure(connection == null ? null : connection.getHost(), jce);
+			throw jce;
 		} finally {
             long duration = System.nanoTime()/1000 - startTime;
             opMonitor.recordLatency(duration, TimeUnit.MICROSECONDS);
@@ -1243,9 +1255,14 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     public List<Object> syncAndReturnAll() {
         long startTime = System.nanoTime()/1000;
         try {
-            List<Object> result = jedisPipeline.syncAndReturnAll();
-            opMonitor.recordPipelineSync();
-            return result;
+			List<Object> result = jedisPipeline.syncAndReturnAll();
+			opMonitor.recordPipelineSync();
+			return result;
+		} catch (JedisConnectionException jce) {
+			String msg = "Failed syncAndReturnAll() to host: " + getHostInfo();
+			pipelineEx.set(new FatalConnectionException(msg, jce));
+			cpMonitor.incOperationFailure(connection == null ? null : connection.getHost(), jce);
+			throw jce;
         } finally {
             long duration = System.nanoTime()/1000 - startTime;
             opMonitor.recordLatency(duration, TimeUnit.MICROSECONDS);
@@ -1266,7 +1283,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 				jedisPipeline = null;
 			}
 		} catch (Exception e) {
-			Logger.warn("Failed to discard jedis pipeline", e);
+			Logger.warn(String.format("Failed to discard jedis pipeline, %s", getHostInfo()), e);
 		}
 	}
 
@@ -1281,7 +1298,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 				}
 				connection = null;
 			} catch (Exception e) {
-				Logger.warn("Failed to return connection in Dyno Jedis Pipeline", e);
+				Logger.warn(String.format("Failed to return connection in Dyno Jedis Pipeline, %s", getHostInfo()), e);
 			}
 		}
 	}
@@ -1295,5 +1312,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 	@Override
 	public void close() throws Exception {
 		discardPipelineAndReleaseConnection();
+	}
+
+	private String getHostInfo() {
+		if (connection != null && connection.getHost() != null) {
+			return connection.getHost().toString();
+		}
+
+		return "unknown";
 	}
 }

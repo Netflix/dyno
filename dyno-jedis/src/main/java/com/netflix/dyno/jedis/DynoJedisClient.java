@@ -2095,8 +2095,9 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 		if (pipelineMonitor.get() != null) {
 			return pipelineMonitor.get();
 		}
-		
-		DynoJedisPipelineMonitor plMonitor = new DynoJedisPipelineMonitor(appName);
+
+		int flushTimerFrequency = this.connPool.getConfiguration().getTimingCountersResetFrequencySeconds();
+		DynoJedisPipelineMonitor plMonitor = new DynoJedisPipelineMonitor(appName, flushTimerFrequency);
 		boolean success = pipelineMonitor.compareAndSet(null, plMonitor);
 		if (success) {
 			pipelineMonitor.get().init();
