@@ -22,8 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
-
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
@@ -92,7 +90,7 @@ public class RoundRobinSelection<CL> implements HostSelectionStrategy<CL> {
 
 	@Override
 	public List<HostConnectionPool<CL>> getPoolsForTokens(Long start, Long end) {
-		throw new NotImplementedException();
+		throw new UnsupportedOperationException();
 	}
 
 	private HostConnectionPool<CL> getNextConnectionPool() throws NoAvailableHostsException {
