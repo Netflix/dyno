@@ -39,7 +39,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private static final int DEFAULT_SOCKET_TIMEOUT = 12000; 
 	private static final int DEFAULT_POOL_SHUTDOWN_DELAY = 60000; 
 	private static final int DEFAULT_PING_FREQ_SECONDS = 1;
-	private static final int DEFAULT_FLUSH_TIMINGS_FREQ_SECONDS = 0;
+	private static final int DEFAULT_FLUSH_TIMINGS_FREQ_SECONDS = 300;
 	private static final boolean DEFAULT_LOCAL_DC_AFFINITY = true; 
 	private static final LoadBalancingStrategy DEFAULT_LB_STRATEGY = LoadBalancingStrategy.TokenAware; 
 
