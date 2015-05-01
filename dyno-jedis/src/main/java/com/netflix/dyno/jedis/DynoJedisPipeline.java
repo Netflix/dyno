@@ -230,7 +230,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 			@Override
 			Response<Long> execute(final Pipeline jedisPipeline) throws DynoException {
-				return jedisPipeline.expire(key, seconds);
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.expire(key, seconds);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.EXPIRE.name(), duration, TimeUnit.MICROSECONDS);
+                }
 			}
 		}.execute(key, OpName.EXPIRE);
 
@@ -254,7 +260,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 			@Override
 			Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-				return jedisPipeline.get(key);
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.get(key);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.GET.name(), duration, TimeUnit.MICROSECONDS);
+                }
 			}
 		}.execute(key, OpName.GET);
 
@@ -338,7 +350,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 			@Override
 			Response<Map<String, String>> execute(Pipeline jedisPipeline) throws DynoException {
-				return jedisPipeline.hgetAll(key);
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.hgetAll(key);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.HGETALL.name(), duration, TimeUnit.MICROSECONDS);
+                }
 			}
 
 		}.execute(key, OpName.HGETALL);
@@ -386,7 +404,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 			@Override
 			Response<List<String>> execute(Pipeline jedisPipeline) throws DynoException {
-				return jedisPipeline.hmget(key, fields);
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.hmget(key, fields);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.HMGET.name(), duration, TimeUnit.MICROSECONDS);
+                }
 			}
 		}.execute(key, OpName.HMGET);
 
@@ -398,7 +422,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 			@Override
 			Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-				return jedisPipeline.hmset(key, hash);
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.hmset(key, hash);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.HMSET.name(), duration, TimeUnit.MICROSECONDS);
+                }
 			}
 		}.execute(key, OpName.HMSET);
 
@@ -706,7 +736,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 			@Override
 			Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-				return jedisPipeline.set(key, value);
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.set(key, value);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.SET.name(), duration, TimeUnit.MICROSECONDS);
+                }
 			}
 
 		}.execute(key, OpName.SET);

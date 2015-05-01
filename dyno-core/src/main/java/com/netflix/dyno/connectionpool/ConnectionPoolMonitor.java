@@ -96,6 +96,33 @@ public interface ConnectionPoolMonitor {
     public long getConnectionBorrowedCount();
 
     /**
+     * Returns the average latency of the time required to acquire a connection
+     *
+     * @return long indicating the time in microseconds
+     */
+    public long getConnectionBorrowedLatMean();
+
+    /**
+     * Returns the average latency of the time required to acquire a connection
+     *
+     * @return long indicating the time in microseconds
+     */
+    public long getConnectionBorrowedLatP50();
+
+    /**
+     * Returns the average latency of the time required to acquire a connection
+     *
+     * @return long indicating the time in microseconds
+     */
+    public long getConnectionBorrowedLatP99();
+
+    /**
+     * Clears all data from the internal histogram being used to record stats. This is necessary
+     * if the pool goes into a reconnect state, where all connections are torn down and re-primed.
+     */
+    public void resetConnectionBorrowedLatStats();
+
+    /**
      * Incremented for each connection returned.
      * 
      * @param host

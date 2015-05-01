@@ -67,6 +67,14 @@ public abstract class EstimatedHistogramBasedCounter extends AbstractMonitor<Num
 		public Number getValue() {
 			return estHistogram.mean();
 		}
+
+		public void add(long n) {
+            this.estHistogram.add(n);
+        }
+
+        public void reset() {
+            this.estHistogram.getBuckets(true);
+        }
 	}
 
 	public static class EstimatedHistogramPercentile extends EstimatedHistogramBasedCounter {
