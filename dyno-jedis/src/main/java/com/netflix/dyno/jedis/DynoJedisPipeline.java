@@ -43,7 +43,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 	// the cached pipeline
 	private volatile Pipeline jedisPipeline = null;
 	// the cached row key for the pipeline. all subsequent requests to pipeline must be the same. this is used to check that.
-	private final AtomicReference<String> theKey = new AtomicReference<String>(null); 
+	private final AtomicReference<String> theKey = new AtomicReference<String>(null);
 	// used for tracking errors
 	private final AtomicReference<DynoException> pipelineEx = new AtomicReference<DynoException>(null);
 
@@ -68,7 +68,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 				verifyKey(key);
 			} else {
 
-				try {
+                try {
 					connection = connPool.getConnectionForOperation(new BaseOperation<Jedis, String>() {
 
 						@Override
@@ -88,7 +88,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 				}
 			}
 
-			Jedis jedis = ((JedisConnection)connection).getClient();
+            Jedis jedis = ((JedisConnection)connection).getClient();
 			jedisPipeline = jedis.pipelined();
 			cpMonitor.incOperationSuccess(connection.getHost(), 0);
 		}
@@ -109,21 +109,31 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 		abstract Response<R> execute(Pipeline jedisPipeline) throws DynoException;
 
+        Response<R> execute(final byte[] key, final OpName opName) {
+            // For now simply convert the key into a String. Properly supporting this
+            // functionality requires significant changes to plumb this throughout for the LB
+            return execute(new String(key), opName);
+        }
+
 		Response<R> execute(final String key, final OpName opName) {
 			
 			checkKey(key);
+            return executeOperation(opName);
 
-			try {
-				opMonitor.recordOperation(opName.name());
-				return execute(jedisPipeline);
-
-			} catch (JedisConnectionException ex) {
-				DynoException e = new FatalConnectionException(ex).setAttempt(1);
-				pipelineEx.set(e);
-				cpMonitor.incOperationFailure(connection.getHost(), e);
-				throw ex;
-			}
 		}
+
+        Response<R> executeOperation(final OpName opName) {
+            try {
+                opMonitor.recordOperation(opName.name());
+                return execute(jedisPipeline);
+
+            } catch (JedisConnectionException ex) {
+                DynoException e = new FatalConnectionException(ex).setAttempt(1);
+                pipelineEx.set(e);
+                cpMonitor.incOperationFailure(connection.getHost(), e);
+                throw ex;
+            }
+        }
 	}
 
 	@Override
@@ -230,7 +240,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 			@Override
 			Response<Long> execute(final Pipeline jedisPipeline) throws DynoException {
-				return jedisPipeline.expire(key, seconds);
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.expire(key, seconds);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.EXPIRE.name(), duration, TimeUnit.MICROSECONDS);
+                }
 			}
 		}.execute(key, OpName.EXPIRE);
 
@@ -254,7 +270,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 			@Override
 			Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-				return jedisPipeline.get(key);
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.get(key);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.GET.name(), duration, TimeUnit.MICROSECONDS);
+                }
 			}
 		}.execute(key, OpName.GET);
 
@@ -332,18 +354,60 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 	}
 
-	@Override
+    /**
+     * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
+     * interface is not yet implemented.
+     */
+    public Response<byte[]> hget(final byte[] key, final byte[] field) {
+        return new PipelineOperation<byte[]>() {
+
+            @Override
+            Response<byte[]> execute(Pipeline jedisPipeline) throws DynoException {
+                return jedisPipeline.hget(key, field);
+            }
+        }.execute(key, OpName.HGET);
+
+    }
+
+
+    @Override
 	public Response<Map<String, String>> hgetAll(final String key) {
 		return new PipelineOperation<Map<String, String>>() {
 
 			@Override
 			Response<Map<String, String>> execute(Pipeline jedisPipeline) throws DynoException {
-				return jedisPipeline.hgetAll(key);
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.hgetAll(key);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.HGETALL.name(), duration, TimeUnit.MICROSECONDS);
+                }
 			}
 
 		}.execute(key, OpName.HGETALL);
 
 	}
+
+    /**
+     * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
+     * interface is not yet implemented.
+     */
+    public Response<Map<byte[], byte[]>> hgetAll(final byte[] key) {
+        return new PipelineOperation<Map<byte[], byte[]>>() {
+
+            @Override
+            Response<Map<byte[], byte[]>> execute(Pipeline jedisPipeline) throws DynoException {
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.hgetAll(key);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.HGETALL.name(), duration, TimeUnit.MICROSECONDS);
+                }
+            }
+        }.execute(key, OpName.HGETALL);
+    }
 
 	@Override
 	public Response<Long> hincrBy(final String key, final String field, final long value) {
@@ -380,17 +444,65 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 	}
 
+    /**
+     * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
+     * interface is not yet implemented.
+     */
+    public Response<List<byte[]>> hmget(final byte[] key, final byte[]... fields) {
+        return new PipelineOperation<List<byte[]>>() {
+
+            @Override
+            Response<List<byte[]>> execute(Pipeline jedisPipeline) throws DynoException {
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.hmget(key, fields);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.HMGET.name(), duration, TimeUnit.MICROSECONDS);
+                }
+            }
+        }.execute(key, OpName.HMGET);
+    }
+
+
 	@Override
 	public Response<List<String>> hmget(final String key, final String... fields) {
 		return new PipelineOperation<List<String>>() {
 
 			@Override
 			Response<List<String>> execute(Pipeline jedisPipeline) throws DynoException {
-				return jedisPipeline.hmget(key, fields);
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.hmget(key, fields);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.HMGET.name(), duration, TimeUnit.MICROSECONDS);
+                }
 			}
 		}.execute(key, OpName.HMGET);
 
 	}
+
+    /**
+     * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
+     * interface is not yet implemented.
+     */
+    Response<String> hmset(final byte[] key, final Map<byte[], byte[]> hash) {
+        return new PipelineOperation<String>() {
+
+            @Override
+            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.hmset(key, hash);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.HMSET.name(), duration, TimeUnit.MICROSECONDS);
+                }
+            }
+        }.execute(key, OpName.HMSET);
+    }
+
 
 	@Override
 	public Response<String> hmset(final String key, final Map<String, String> hash) {
@@ -398,7 +510,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 			@Override
 			Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-				return jedisPipeline.hmset(key, hash);
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.hmset(key, hash);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.HMSET.name(), duration, TimeUnit.MICROSECONDS);
+                }
 			}
 		}.execute(key, OpName.HMSET);
 
@@ -415,6 +533,21 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 		}.execute(key, OpName.HSET);
 
 	}
+
+    /**
+     * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
+     * interface is not yet implemented.
+     */
+    public Response<Long> hset(final byte[] key, final byte[] field, final byte[] value) {
+        return new PipelineOperation<Long>() {
+
+            @Override
+            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
+                return jedisPipeline.hset(key, field, value);
+            }
+        }.execute(key, OpName.HSET);
+
+    }
 
 	@Override
 	public Response<Long> hsetnx(final String key, final String field, final String value) {
@@ -706,7 +839,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
 			@Override
 			Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-				return jedisPipeline.set(key, value);
+                long startTime = System.nanoTime()/1000;
+                try {
+                    return jedisPipeline.set(key, value);
+                } finally {
+                    long duration = System.nanoTime()/1000 - startTime;
+                    opMonitor.recordSendLatency(OpName.SET.name(), duration, TimeUnit.MICROSECONDS);
+                }
 			}
 
 		}.execute(key, OpName.SET);

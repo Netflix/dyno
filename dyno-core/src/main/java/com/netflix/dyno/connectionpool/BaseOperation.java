@@ -19,8 +19,8 @@ package com.netflix.dyno.connectionpool;
  * Base for any operation that can be performed using a connection from the connection pool
  * @author poberai
  *
- * @param <CL>
- * @param <R>
+ * @param <CL> client
+ * @param <R>  result
  */
 public interface BaseOperation<CL, R> {
 

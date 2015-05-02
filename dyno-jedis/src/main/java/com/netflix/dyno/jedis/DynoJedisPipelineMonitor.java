@@ -1,5 +1,6 @@
 package com.netflix.dyno.jedis;
 
+import java.util.Map;
 import java.util.concurrent.*;
 
 import com.netflix.dyno.connectionpool.impl.utils.EstimatedHistogram;
@@ -20,6 +21,7 @@ public class DynoJedisPipelineMonitor {
 	private final BasicCounter pipelineSync; 
 	private final BasicCounter pipelineDiscard; 
 	private final PipelineTimer timer;
+    private final PipelineSendTimer sendTimer;
 	private final int resetTimingsFrequencyInSeconds;
 
 	private final ScheduledExecutorService threadPool = Executors.newScheduledThreadPool(1, new ThreadFactory() {
@@ -34,6 +36,7 @@ public class DynoJedisPipelineMonitor {
 		pipelineSync = getNewPipelineCounter("SYNC");
 		pipelineDiscard = getNewPipelineCounter("DISCARD");
 		timer = new PipelineTimer(appName);
+        sendTimer = new PipelineSendTimer(appName);
 		this.resetTimingsFrequencyInSeconds = resetTimingsFrequencyInSeconds;
 	}
 
@@ -52,12 +55,13 @@ public class DynoJedisPipelineMonitor {
 		DefaultMonitorRegistry.getInstance().register(timer.lat999);
 
 		Logger.debug(String.format("Initializing DynoJedisPipelineMonitor with timing counter reset frequency %d",
-				resetTimingsFrequencyInSeconds));
+                resetTimingsFrequencyInSeconds));
 		if (resetTimingsFrequencyInSeconds > 0) {
 			threadPool.scheduleAtFixedRate(new Runnable() {
 				@Override
 				public void run() {
 					timer.reset();
+                    sendTimer.reset();
 				}
 			}, 1, resetTimingsFrequencyInSeconds, TimeUnit.SECONDS);
 		}
@@ -78,6 +82,10 @@ public class DynoJedisPipelineMonitor {
 	public void recordLatency(long duration, TimeUnit unit) {
 		timer.recordLatency(duration, unit);
 	}
+
+    public void recordSendLatency(String opName, long duration, TimeUnit unit) {
+        sendTimer.recordLatency(opName, duration, unit);
+    }
 	
 	private BasicCounter getOrCreateCounter(String opName) {
 		
@@ -102,7 +110,11 @@ public class DynoJedisPipelineMonitor {
 							 				.build();
 		return new BasicCounter(config);
 	}
-	
+
+    /**
+     * This class measures the latency of a sync() or syncAndReturnAll() operation, which is the time
+     * it takes the client to receive the response of all operations in the pipeline.
+     */
 	private class PipelineTimer {
 		
 		private final EstimatedHistogramMean latMean;
@@ -131,5 +143,45 @@ public class DynoJedisPipelineMonitor {
 			 estHistogram.getBuckets(true);
 		}
 	}
+
+    /**
+     * This class measures the time it takes to send a request from the client to the server via the pipeline. The
+     * 'send' is not asynchronous within the Jedis client
+     */
+	private class PipelineSendTimer {
+
+        private final Map<String, EstimatedHistogramMean> histograms = new ConcurrentHashMap<String, EstimatedHistogramMean>();
+        private final String appName;
+
+        private PipelineSendTimer(String appName) {
+            this.appName = appName;
+        }
+
+        public void recordLatency(String opName, long duration, TimeUnit unit) {
+            long durationMicros = TimeUnit.MICROSECONDS.convert(duration, unit);
+            getOrCreateHistogram(opName).add(durationMicros);
+        }
+
+        private EstimatedHistogramMean getOrCreateHistogram(String opName) {
+            if (histograms.containsKey(opName)) {
+                return histograms.get(opName);
+            } else {
+                EstimatedHistogram histogram = new EstimatedHistogram();
+                EstimatedHistogramMean histogramMean =
+                        new EstimatedHistogramMean("Dyno__" + appName + "__PL__latMean", "PL_SEND", opName, histogram);
+                histograms.put(opName, histogramMean);
+                return histogramMean;
+            }
+        }
+
+        public void reset() {
+            Logger.info("resetting all SEND histograms");
+
+            for (EstimatedHistogramMean hm: histograms.values()) {
+                hm.reset();
+            }
+        }
+
+    }
 
 }

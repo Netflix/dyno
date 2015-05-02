@@ -26,6 +26,7 @@ import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostConnectionStats;
 import com.netflix.dyno.connectionpool.HostGroup;
 import com.netflix.dyno.connectionpool.exception.*;
+import com.netflix.dyno.connectionpool.impl.utils.EstimatedHistogram;
 
 /**
  * Impl of {@link ConnectionPoolMonitor} using thread safe AtomicLongs
@@ -53,6 +54,8 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     private final AtomicLong noHostsCount           = new AtomicLong();
     private final AtomicLong unknownErrorCount      = new AtomicLong();
     private final AtomicLong badRequestCount        = new AtomicLong();
+
+    private final EstimatedHistogram borrowedConnHistogram = new EstimatedHistogram();
 
     // Use an explicit host count rather than relying on hostStats
     // being synchronized with the HostSupplier counts. One case
@@ -156,8 +159,29 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
         getOrCreateHostStats(host).borrowed.incrementAndGet();
     }
 
+    @Override
+    public long getConnectionBorrowedLatMean() {
+        return borrowedConnHistogram.mean();
+    }
+
+    @Override
+    public long getConnectionBorrowedLatP50() {
+        return borrowedConnHistogram.percentile(0.5);
+    }
+
+    @Override
+    public long getConnectionBorrowedLatP99() {
+        return borrowedConnHistogram.percentile(0.99);
+    }
+
+
     public long getConnectionBorrowedCount() {
         return this.connectionBorrowCount.get();
+    }
+
+    @Override
+    public void resetConnectionBorrowedLatStats() {
+        this.borrowedConnHistogram.getBuckets(true);
     }
 
     @Override

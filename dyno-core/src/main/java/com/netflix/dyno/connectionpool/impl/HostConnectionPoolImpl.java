@@ -124,12 +124,13 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		}
 		
 		monitor.hostDown(host, reason);
+        monitor.resetConnectionBorrowedLatStats(); // NOTE - SIDE EFFECT
 	}
 
 	@Override
-	public void reconnect() {
-		
-		markAsDown(null);
+    public void reconnect() {
+
+        markAsDown(null);
 		reconnect(cpDown);
 	
 		if (cpState.get() == cpActive) {
@@ -364,7 +365,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				.setLatency(delay);
 			}
 
-			monitor.incConnectionBorrowed(host, delay);
+            monitor.incConnectionBorrowed(host, delay);
 			return conn;
 		}
 	}
