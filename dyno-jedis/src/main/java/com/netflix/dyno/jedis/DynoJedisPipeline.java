@@ -487,7 +487,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
      * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
      * interface is not yet implemented.
      */
-    Response<String> hmset(final byte[] key, final Map<byte[], byte[]> hash) {
+    public Response<String> hmset(final byte[] key, final Map<byte[], byte[]> hash) {
         return new PipelineOperation<String>() {
 
             @Override
