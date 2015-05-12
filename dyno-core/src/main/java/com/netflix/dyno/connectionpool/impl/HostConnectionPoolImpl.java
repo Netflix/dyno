@@ -351,7 +351,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		public Connection<CL> borrowConnection(int duration, TimeUnit unit) {
 
 			// Start recording how long it takes to get the connection - for insight/metrics
-			long startTime = System.currentTimeMillis();
+			long startTime = System.nanoTime()/1000;
 
 			Connection<CL> conn = null;
 			try {
@@ -362,7 +362,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				throw new DynoConnectException(e);
 			}
 
-			long delay = System.currentTimeMillis() - startTime;
+			long delay = System.nanoTime()/1000 - startTime;
 
 			if (conn == null) {
 				throw new PoolTimeoutException("Fast fail waiting for connection from pool")

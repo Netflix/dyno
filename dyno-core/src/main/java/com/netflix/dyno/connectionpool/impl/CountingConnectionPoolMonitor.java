@@ -153,10 +153,12 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     @Override
     public void incConnectionBorrowed(Host host, long delay) {
         this.connectionBorrowCount.incrementAndGet();
+        this.borrowedConnHistogram.add(delay);
         if (host == null || (host instanceof HostGroup)) {
         	return;
         }
         getOrCreateHostStats(host).borrowed.incrementAndGet();
+
     }
 
     @Override
