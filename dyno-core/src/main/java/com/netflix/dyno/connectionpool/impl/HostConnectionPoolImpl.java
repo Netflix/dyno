@@ -250,6 +250,11 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		throw new RuntimeException("Not Implemented");
 	}
 
+	@Override
+	public int getConnectionTimeout() {
+		return cpConfig.getConnectTimeout();
+	}
+
 	private interface ConnectionPoolState<CL> { 
 		
 		

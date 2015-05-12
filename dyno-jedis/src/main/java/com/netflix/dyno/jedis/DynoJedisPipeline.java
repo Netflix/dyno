@@ -363,8 +363,8 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
             @Override
             Response<byte[]> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hget(key, field);
-            }
+				return jedisPipeline.hget(key, field);
+			}
         }.execute(key, OpName.HGET);
 
     }

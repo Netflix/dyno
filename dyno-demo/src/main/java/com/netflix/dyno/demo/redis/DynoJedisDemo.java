@@ -307,18 +307,39 @@ public class DynoJedisDemo {
 		return hosts;
 	}
 	
-	public void runSinglePipeline() throws Exception {
+	public void runBinarySinglePipeline() throws Exception {
 
 		for (int i=0; i<10; i++) {
 			DynoJedisPipeline pipeline = client.pipelined();
 
-			Response<Long> resultA1 = pipeline.hset("Puneet_pipeline" + i, "a1", "v11");
-			Response<Long> resultA2 = pipeline.hset("Puneet_pipeline" + i, "a2", "v11");
+			Map<byte[], byte[]> bar = new HashMap<byte[], byte[]>();
+			bar.put("key__1".getBytes(), "value__1".getBytes());
+			bar.put("key__2".getBytes(), "value__2".getBytes());
+
+			Response<String> hmsetResult = pipeline.hmset(("hash__" + i).getBytes(), bar);
+
+//			Response<Long> resultA1 = pipeline.hset("Puneet_pipeline" + i, "a1", "v11");
+//			Response<Long> resultA2 = pipeline.hset("Puneet_pipeline" + i, "a2", "v11");
 
 			pipeline.sync();
 
-			System.out.println(resultA1.get() + " "  + resultA2.get());
+			System.out.println(hmsetResult.get());
 		}
+
+		System.out.println("Reading all keys");
+
+		DynoJedisPipeline readPipeline = client.pipelined();
+		Response<Map<byte[], byte[]>> resp = readPipeline.hgetAll("hash__1".getBytes());
+		readPipeline.sync();
+
+        StringBuilder sb = new StringBuilder();
+        for (byte[] bytes: resp.get().keySet()) {
+            if (sb.length() > 0) {
+                sb.append(",");
+            }
+            sb.append(new String(bytes));
+        }
+		System.out.println("Got hash :" + sb.toString());
 	}
 	
 	public void runPipeline() throws Exception {
@@ -519,14 +540,15 @@ public class DynoJedisDemo {
 
 		try {
 			
-			demo.initWithRemoteClusterFromEurekaUrl("dyno_json", 8102);
+			demo.initWithRemoteClusterFromEurekaUrl("dyno_jcacciatore_7", 8102);
 			System.out.println("Connected");
 
-			demo.runSimpleTest();
+			//demo.runSimpleTest();
 			//demo.runKeysTest();
 			//demo.runMultiThreaded();
 			//demo.runSinglePipeline();
 			//demo.runPipeline();
+			demo.runBinarySinglePipeline();
 			
 			//demo.runLongTest();
 			Thread.sleep(1000);

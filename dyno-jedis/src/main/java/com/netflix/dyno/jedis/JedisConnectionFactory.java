@@ -38,7 +38,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 	}
 	
 	@Override
-	public Connection<Jedis> createConnection(HostConnectionPool<Jedis> pool, ConnectionObservor connectionObservor) 
+	public Connection<Jedis> createConnection(HostConnectionPool<Jedis> pool, ConnectionObservor connectionObservor)
 			throws DynoConnectException, ThrottledException {
 		
 		return new JedisConnection(pool);
@@ -55,7 +55,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 		public JedisConnection(HostConnectionPool<Jedis> hostPool) {
 			this.hostPool = hostPool;
 			Host host = hostPool.getHost();
-			jedisClient = new Jedis(host.getHostName(), host.getPort());
+			jedisClient = new Jedis(host.getHostName(), host.getPort(), hostPool.getConnectionTimeout());
 		}
 		
 		@Override

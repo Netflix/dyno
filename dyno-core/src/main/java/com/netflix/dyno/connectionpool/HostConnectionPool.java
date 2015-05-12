@@ -129,4 +129,6 @@ public interface HostConnectionPool<CL> {
      * @return Collection<Connection<CL>>
      */
     Collection<Connection<CL>> getAllConnections();
+
+    int getConnectionTimeout();
 }
