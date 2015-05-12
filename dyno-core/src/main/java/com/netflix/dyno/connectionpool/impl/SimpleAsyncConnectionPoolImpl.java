@@ -174,6 +174,11 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 		return connMap.keySet();
 	}
 
+	@Override
+	public int getConnectionTimeout() {
+		return cpConfig.getConnectTimeout();
+	}
+
 	private Connection<CL> createConnection() throws DynoException {
 		
 		Connection<CL> connection = connFactory.createConnection((HostConnectionPool<CL>) this, null);
