@@ -58,19 +58,19 @@ public class DynoCPMonitor extends CountingConnectionPoolMonitor {
 		return super.getConnectionBorrowedCount();
 	}
 
-    @Monitor(name = "ConnectionBorrowedAvgLat", type = DataSourceType.COUNTER)
+    @Monitor(name = "ConnectionBorrowedAvgLat", type = DataSourceType.GAUGE)
     @Override
     public long getConnectionBorrowedLatMean() {
         return super.getConnectionBorrowedLatMean();
     }
 
-    @Monitor(name = "ConnectionBorrowedLatP50", type = DataSourceType.COUNTER)
+    @Monitor(name = "ConnectionBorrowedLatP50", type = DataSourceType.GAUGE)
     @Override
     public long getConnectionBorrowedLatP50() {
         return super.getConnectionBorrowedLatP50();
     }
 
-    @Monitor(name = "ConnectionBorrowedLatP99", type = DataSourceType.COUNTER)
+    @Monitor(name = "ConnectionBorrowedLatP99", type = DataSourceType.GAUGE)
     @Override
     public long getConnectionBorrowedLatP99() {
         return super.getConnectionBorrowedLatP99();

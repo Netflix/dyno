@@ -54,6 +54,9 @@ public class DynoJedisPipelineMonitor {
 		DefaultMonitorRegistry.getInstance().register(timer.lat995);
 		DefaultMonitorRegistry.getInstance().register(timer.lat999);
 
+        // NOTE -- pipeline 'send' timers are created on demand and are registered
+        // in PipelineSendTimer.getOrCreateHistogram()
+
 		Logger.debug(String.format("Initializing DynoJedisPipelineMonitor with timing counter reset frequency %d",
                 resetTimingsFrequencyInSeconds));
 		if (resetTimingsFrequencyInSeconds > 0) {
@@ -170,6 +173,7 @@ public class DynoJedisPipelineMonitor {
                 EstimatedHistogramMean histogramMean =
                         new EstimatedHistogramMean("Dyno__" + appName + "__PL__latMean", "PL_SEND", opName, histogram);
                 histograms.put(opName, histogramMean);
+				DefaultMonitorRegistry.getInstance().register(histogramMean);
                 return histogramMean;
             }
         }
