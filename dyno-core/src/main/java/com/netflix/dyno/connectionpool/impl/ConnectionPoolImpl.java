@@ -209,18 +209,16 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	
 	@Override
 	public boolean removeHost(Host host) {
-        Logger.info(String.format("Removing host %s from connection pool", host));
-
 		HostConnectionPool<CL> hostPool = cpMap.remove(host);
 		if (hostPool != null) {
 			selectionStrategy.removeHost(host, hostPool);
 			cpHealthTracker.removeHost(host);
 			cpMonitor.hostRemoved(host);
 			hostPool.shutdown();
-            Logger.info(String.format("Done removing host %s from connection pool", host.getHostName()));
+            Logger.info(String.format("Remove host: Successfully removed host %s from connection pool", host.getHostName()));
             return true;
 		} else {
-            Logger.info(String.format("Host %s NOT FOUND in the connection pool", host.getHostName()));
+            Logger.info(String.format("Remove host: Host %s NOT FOUND in the connection pool", host.getHostName()));
 			return false;
 		}
 	}
