@@ -7,6 +7,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.netflix.dyno.connectionpool.*;
+import com.netflix.dyno.contrib.*;
 import org.apache.commons.lang.NotImplementedException;
 import org.slf4j.Logger;
 
@@ -21,20 +23,11 @@ import redis.clients.jedis.Tuple;
 import redis.clients.jedis.ZParams;
 
 import com.netflix.discovery.DiscoveryClient;
-import com.netflix.dyno.connectionpool.ConnectionContext;
-import com.netflix.dyno.connectionpool.ConnectionPool;
-import com.netflix.dyno.connectionpool.HostSupplier;
-import com.netflix.dyno.connectionpool.Operation;
-import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
 import com.netflix.dyno.connectionpool.impl.lb.HttpEndpointBasedTokenMapSupplier;
-import com.netflix.dyno.contrib.ArchaiusConnectionPoolConfiguration;
-import com.netflix.dyno.contrib.DynoCPMonitor;
-import com.netflix.dyno.contrib.DynoOPMonitor;
-import com.netflix.dyno.contrib.EurekaHostsSupplier;
 
 public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 	
@@ -2177,10 +2170,14 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 			
 			DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);
 			DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
+
+            // Configure cp config publisher if it is specified
+			ConnectionPoolConfigurationPublisher cpConfigPublisher = new ConnectionPoolConfigPublisherFactory()
+                    .createPublisher(appName, clusterName, cpConfig);
 			
 			JedisConnectionFactory connFactory = new JedisConnectionFactory(opMonitor);
 
-			ConnectionPoolImpl<Jedis> pool = new ConnectionPoolImpl<Jedis>(connFactory, cpConfig, cpMonitor);
+			ConnectionPoolImpl<Jedis> pool = new ConnectionPoolImpl<Jedis>(connFactory, cpConfig, cpMonitor, cpConfigPublisher);
 			
 			try {
 				pool.start().get();

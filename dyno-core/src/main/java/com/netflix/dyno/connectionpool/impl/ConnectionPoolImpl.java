@@ -19,36 +19,13 @@ import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.netflix.dyno.connectionpool.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.netflix.dyno.connectionpool.AsyncOperation;
-import com.netflix.dyno.connectionpool.BaseOperation;
-import com.netflix.dyno.connectionpool.Connection;
-import com.netflix.dyno.connectionpool.ConnectionFactory;
-import com.netflix.dyno.connectionpool.ConnectionPool;
-import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
-import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
-import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.HostConnectionPool;
-import com.netflix.dyno.connectionpool.HostSupplier;
-import com.netflix.dyno.connectionpool.ListenableFuture;
-import com.netflix.dyno.connectionpool.Operation;
-import com.netflix.dyno.connectionpool.OperationResult;
-import com.netflix.dyno.connectionpool.RetryPolicy;
-import com.netflix.dyno.connectionpool.TokenPoolTopology;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl.HostConnectionPoolFactory.Type;
@@ -96,7 +73,14 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	private final HostConnectionPoolFactory<CL> hostConnPoolFactory;
 	private final ConnectionFactory<CL> connFactory; 
 	private final ConnectionPoolConfiguration cpConfiguration; 
-	private final ConnectionPoolMonitor cpMonitor; 
+	private final ConnectionPoolMonitor cpMonitor;
+    private final ConnectionPoolConfigurationPublisher cpConfigPublisher;
+    private final ScheduledExecutorService configPublisherThreadPool = Executors.newScheduledThreadPool(1, new ThreadFactory() {
+        @Override
+        public Thread newThread(Runnable r) {
+            return new Thread(r, "DynoJedisConfigPublisher");
+        }
+    });
 	
 	private final HostsUpdater hostsUpdater;
 	private final ScheduledExecutorService connPoolThreadPool = Executors.newScheduledThreadPool(1);
@@ -107,32 +91,42 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 	
 	private Type poolType;
 
-	public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon) {
-		this(cFactory, cpConfig, cpMon, Type.Sync);
-	}
-	
-	public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon, Type type) {
-		this.connFactory = cFactory;
-		this.cpConfiguration = cpConfig;
-		this.cpMonitor = cpMon;
-		this.poolType = type; 
-		
-		this.cpHealthTracker = new ConnectionPoolHealthTracker<CL>(cpConfiguration, connPoolThreadPool);
+    public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon, Type type) {
+        this(cFactory, cpConfig, cpMon, null, type);
+    }
 
-		switch (type) {
-			case Sync:
-				hostConnPoolFactory = new SyncHostConnectionPoolFactory();
-				break;
-			case Async:
-				hostConnPoolFactory = new AsyncHostConnectionPoolFactory();
-				break;
-			default:
-				throw new RuntimeException("unknown type");
-		};
-	
-		this.hostsUpdater = new HostsUpdater(cpConfiguration.getHostSupplier());
+	public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon) {
+		this(cFactory, cpConfig, cpMon, null, Type.Sync);
 	}
-	
+
+    public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon, ConnectionPoolConfigurationPublisher cpConfigPublisher) {
+        this(cFactory, cpConfig, cpMon, cpConfigPublisher, Type.Sync);
+    }
+
+    public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon, ConnectionPoolConfigurationPublisher cpConfigPublisher, Type type) {
+        this.connFactory = cFactory;
+        this.cpConfiguration = cpConfig;
+        this.cpMonitor = cpMon;
+        this.poolType = type;
+        this.cpConfigPublisher = cpConfigPublisher;
+
+        this.cpHealthTracker = new ConnectionPoolHealthTracker<CL>(cpConfiguration, connPoolThreadPool);
+
+        switch (type) {
+            case Sync:
+                hostConnPoolFactory = new SyncHostConnectionPoolFactory();
+                break;
+            case Async:
+                hostConnPoolFactory = new AsyncHostConnectionPoolFactory();
+                break;
+            default:
+                throw new RuntimeException("unknown type");
+        };
+
+        this.hostsUpdater = new HostsUpdater(cpConfiguration.getHostSupplier());
+
+    }
+
 	public HostSelectionWithFallback<CL> getTokenSelection() {
 		return selectionStrategy;
 	}
@@ -472,12 +466,12 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			// Add host connection pool, but don't init the load balancer yet
 			futures.add(threadPool.submit(new Callable<Void>() {
 
-				@Override
-				public Void call() throws Exception {
-					addHost(host, false);  
-					return null;
-				}
-			}));
+                @Override
+                public Void call() throws Exception {
+                    addHost(host, false);
+                    return null;
+                }
+            }));
 		}
 
 		try {
@@ -501,29 +495,44 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 			
 			connPoolThreadPool.scheduleWithFixedDelay(new Runnable() {
 
-				@Override
-				public void run() {
-					try {
+                @Override
+                public void run() {
+                    try {
                         HostStatusTracker hostStatus = hostsUpdater.refreshHosts();
-						cpMonitor.setHostCount(hostStatus.getHostCount());
-						Logger.debug(hostStatus.toString());
+                        cpMonitor.setHostCount(hostStatus.getHostCount());
+                        Logger.debug(hostStatus.toString());
                         updateHosts(hostStatus.getActiveHosts(), hostStatus.getInactiveHosts());
                     } catch (Throwable throwable) {
                         Logger.error("Failed to update hosts cache", throwable);
                     }
-				}
-				
-			}, 15*1000, 30*1000, TimeUnit.MILLISECONDS);
+                }
+
+            }, 15 * 1000, 30 * 1000, TimeUnit.MILLISECONDS);
 
 			MonitorConsole.getInstance().registerConnectionPool(this);
 
             registerMonitorConsoleMBean(MonitorConsole.getInstance());
+
+            publishRuntimeConfiguration();
 		}
 		
 		return getEmptyFutureTask(true);
 	}
 
-	@Override
+    private void publishRuntimeConfiguration() {
+        // Best effort attempt to publish runtime configuration once per hour. This does not
+        // affect the operation of the connection pool. The absence of a retry policy is deliberate
+        if (cpConfigPublisher != null) {
+            configPublisherThreadPool.scheduleAtFixedRate(new Runnable() {
+                @Override
+                public void run() {
+                    cpConfigPublisher.publish();
+                }
+            }, 1, 3600, TimeUnit.SECONDS);
+        }
+    }
+
+    @Override
 	public ConnectionPoolConfiguration getConfiguration() {
 		return cpConfiguration;
 	}

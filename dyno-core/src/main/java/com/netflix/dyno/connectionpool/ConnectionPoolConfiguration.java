@@ -131,4 +131,12 @@ public interface ConnectionPoolConfiguration {
      */
     public int getTimingCountersResetFrequencySeconds();
 
+    /**
+     * Returns info about a system that will consume configuration data from dyno. This is used to
+     * log configuration settings to a central system such as elastic search or cassandra.
+     *
+     * @return todo
+     */
+     public String getConfigurationPublisherConfig();
+
 }
