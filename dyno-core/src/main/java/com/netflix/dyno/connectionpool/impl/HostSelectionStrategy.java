@@ -73,6 +73,15 @@ public interface HostSelectionStrategy<CL> {
 	 */
 	public List<HostConnectionPool<CL>> getPoolsForTokens(Long start, Long end);
 
+    /**
+     * Finds the server Host that owns the specified key.
+     *
+     * @param key
+     * @return {@link HostToken}
+     * @throws UnsupportedOperationException for non-token aware load balancing strategies
+     */
+    HostToken getTokenForKey(String key) throws UnsupportedOperationException;
+
 	/**
 	 * Init the connection pool with the set of hosts provided
 	 * @param hostPools

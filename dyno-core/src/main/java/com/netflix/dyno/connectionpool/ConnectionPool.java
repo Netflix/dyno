@@ -17,9 +17,11 @@ package com.netflix.dyno.connectionpool;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Future;
 
 import com.netflix.dyno.connectionpool.exception.DynoException;
+import com.netflix.dyno.connectionpool.impl.lb.HostSelectionWithFallback;
 
 /**
  * Base interface for a pool of connections. A concrete connection pool will
@@ -37,7 +39,7 @@ public interface ConnectionPool<CL> {
      * @returns True if host was added or false if host already exists
      * @throws DynoException
      */
-    public boolean addHost(Host host);
+    boolean addHost(Host host);
 
 	/**
      * Remove a host from the connection pool.
@@ -46,41 +48,43 @@ public interface ConnectionPool<CL> {
      * @returns True if host was added or false if host already exists
      * @throws DynoException
      */
-    public boolean removeHost(Host host);
+    boolean removeHost(Host host);
 
     /**
      * @return Return true if the host is up
      * @param host
      */
-    public boolean isHostUp(Host host);
+    boolean isHostUp(Host host);
 
     /**
      * @return Return true if host is contained within the connection pool
      * @param host
      */
-    public boolean hasHost(Host host);
+    boolean hasHost(Host host);
 
     /**
      * @return Return list of active hosts on which connections can be created
      */
-    public List<HostConnectionPool<CL>> getActivePools();
+    List<HostConnectionPool<CL>> getActivePools();
 
     /**
      * @return Get all pools
      */
-    public List<HostConnectionPool<CL>> getPools();
+    List<HostConnectionPool<CL>> getPools();
     
     /**
      * Set the complete set of hosts in the ring
-     * @param hosts
+     *
+     * @param activeHosts
+     * @param inactiveHosts
      */
-    public Future<Boolean> updateHosts(Collection<Host> activeHosts, Collection<Host> inactiveHosts);
+    Future<Boolean> updateHosts(Collection<Host> activeHosts, Collection<Host> inactiveHosts);
 
     /**
      * @return Return an immutable connection pool for this host
      * @param host
      */
-    public HostConnectionPool<CL> getHostPool(Host host);
+    HostConnectionPool<CL> getHostPool(Host host);
 
     /**
      * Execute an operation with failover within the context of the connection
@@ -90,7 +94,6 @@ public interface ConnectionPool<CL> {
      * @param <R>
      * @param op
      * @throws DynoException
-     * @throws OperationException
      */
     <R> OperationResult<R> executeWithFailover(Operation<CL, R> op) throws DynoException;
     
@@ -100,7 +103,7 @@ public interface ConnectionPool<CL> {
      * @return Collection<OperationResult<R>>
      * @throws DynoException
      */
-    public <R> Collection<OperationResult<R>> executeWithRing(Operation<CL, R> op) throws DynoException;
+    <R> Collection<OperationResult<R>> executeWithRing(Operation<CL, R> op) throws DynoException;
 
     /**
      * Execute an operation asynchronously.
@@ -108,17 +111,23 @@ public interface ConnectionPool<CL> {
      * @return ListenableFuture<OperationResult<R>>
      * @throws DynoException
      */
-    public <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException;
+    <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<CL, R> op) throws DynoException;
 
     /**
      * Shut down the connection pool and terminate all existing connections
      */
-    public void shutdown();
+    void shutdown();
 
     /**
      * Setup the connection pool and start any maintenance threads
      */
-    public Future<Boolean> start();
+    Future<Boolean> start();
 
-    public ConnectionPoolConfiguration getConfiguration();
+    /**
+     * Retrieve the runtime configuration of the connection pool instance.
+     *
+     * @return ConnectionPoolConfiguration
+     */
+    ConnectionPoolConfiguration getConfiguration();
+
 }

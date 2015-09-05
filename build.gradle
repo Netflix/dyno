@@ -98,5 +98,16 @@ project(':dyno-demo') {
         compile  project(':dyno-contrib')
         compile  project(':dyno-memcache')
         compile  project(':dyno-jedis')
+        compile  project(':dyno-recipes')
+    }
+}
+
+project(':dyno-recipes') {
+    apply plugin: 'osgi'
+    apply plugin: 'project-report'
+
+    dependencies {
+        compile project(':dyno-core')
+        compile project(':dyno-jedis')
     }
 }

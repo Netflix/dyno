@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.netflix.dyno.connectionpool.TopologyView;
 import org.slf4j.Logger;
 
 import redis.clients.jedis.BinaryClient.LIST_POSITION;
@@ -74,6 +75,10 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
         public String getKey() {
             return key;
         }
+    }
+
+    public TopologyView getTopologyView() {
+        return (TopologyView) this.getConnPool();
     }
 
     @Override
@@ -2178,6 +2183,10 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
 
     public void stopClient() {
+        if (pipelineMonitor.get() != null) {
+            pipelineMonitor.get().stop();
+        }
+
         this.connPool.shutdown();
     }
 

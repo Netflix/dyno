@@ -18,7 +18,9 @@ package com.netflix.dyno.connectionpool.impl;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -63,7 +65,7 @@ import javax.management.*;
  *
  * @param <CL>
  */
-public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
+public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView {
 
 	private static final Logger Logger = LoggerFactory.getLogger(ConnectionPoolImpl.class);
 
@@ -126,10 +128,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
         this.hostsUpdater = new HostsUpdater(cpConfiguration.getHostSupplier());
 
     }
-
-	public HostSelectionWithFallback<CL> getTokenSelection() {
-		return selectionStrategy;
-	}
 
 	public String getName() {
 		return cpConfiguration.getName();
@@ -434,6 +432,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		}
 		cpHealthTracker.stop();
 		hostsUpdater.stop();
+        configPublisherThreadPool.shutdownNow();
 		connPoolThreadPool.shutdownNow();
         unregisterMonitorConsoleMBean();
 	}
@@ -464,7 +463,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		for (final Host host : hostsUp) {
 			
 			// Add host connection pool, but don't init the load balancer yet
-			futures.add(threadPool.submit(new Callable<Void>() {
+            futures.add(threadPool.submit(new Callable<Void>() {
 
                 @Override
                 public Void call() throws Exception {
@@ -513,7 +512,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 
             registerMonitorConsoleMBean(MonitorConsole.getInstance());
 
-            publishRuntimeConfiguration();
 		}
 		
 		return getEmptyFutureTask(true);
@@ -659,7 +657,22 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL> {
 		return null;
 	}
 
-	public TokenPoolTopology  getTopology() {
-		return selectionStrategy.getTokenPoolTopology();
-	}
+	public TokenPoolTopology getTopology() {
+        return selectionStrategy.getTokenPoolTopology();
+    }
+
+    @Override
+    public Map<String, List<TokenPoolTopology.TokenStatus>> getTopologySnapshot() {
+        return Collections.unmodifiableMap(selectionStrategy.getTokenPoolTopology().getAllTokens());
+    }
+
+    @Override
+    public Long getTokenForKey(String key) {
+        if (cpConfiguration.getLoadBalancingStrategy() ==
+                ConnectionPoolConfiguration.LoadBalancingStrategy.TokenAware) {
+            return selectionStrategy.getTokenForKey(key);
+        }
+
+        return null;
+    }
 }

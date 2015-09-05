@@ -45,7 +45,7 @@ import com.netflix.dyno.jedis.DynoJedisPipeline;
 
 public class DynoJedisDemo {
 
-	private DynoJedisClient client; 
+	protected DynoJedisClient client;
 
 	public DynoJedisDemo() {
 
@@ -154,18 +154,22 @@ public class DynoJedisDemo {
 			client.del("DynoDemoTest" + i);
 		}
 	}
-	
-	public void runMultiThreaded() throws Exception {
 
-		final int nKeys = 1000;
-		// writes for initial seeding
-		for (int i=0; i<nKeys; i++) {
-			System.out.println("Writing : " + i);
-			client.set("DynoDemoTest" + i, "" + i);
-		}
+    public void runMultiThreaded() throws Exception {
+        this.runMultiThreaded(1000, true, 2, 2);
+    }
 
-		final int numReaders = 2;
-		final int numWriters = 2;
+	public void runMultiThreaded(final int items, boolean doSeed, final int numReaders, final int numWriters) throws Exception {
+
+		final int nKeys = items;
+        if (doSeed) {
+            // writes for initial seeding
+            for (int i = 0; i < nKeys; i++) {
+                System.out.println("Writing : " + i);
+                client.set("DynoDemoTest" + i, "" + i);
+            }
+        }
+
 		final int nThreads = numReaders + numWriters + 1;
 
 		final ExecutorService threadPool = Executors.newFixedThreadPool(nThreads);
@@ -199,14 +203,15 @@ public class DynoJedisDemo {
 		stop.set(true);
 		latch.await();
 		threadPool.shutdownNow();
-		System.out.println("Cleaning up keys");
+
+        System.out.println("Cleaning up keys");
 		cleanup(nKeys);
 
 		System.out.println("FINAL RESULT \nSuccess: " + success.get() + ", failure: " + failure.get() + ", emptyReads: " + emptyReads.get());
 		
 	}
 
-	private void startWrites(final int nKeys, final int numWriters, 
+	protected void startWrites(final int nKeys, final int numWriters,
 			final ExecutorService threadPool, 
 			final AtomicBoolean stop, final CountDownLatch latch,
 			final AtomicInteger success, final AtomicInteger failure) {
@@ -241,7 +246,7 @@ public class DynoJedisDemo {
 	}
 
 
-	private void startReads(final int nKeys, final int numReaders, 
+	protected void startReads(final int nKeys, final int numReaders,
 			final ExecutorService threadPool, 
 			final AtomicBoolean stop, final CountDownLatch latch,
 			final AtomicInteger success, final AtomicInteger failure, final AtomicInteger emptyReads) {
