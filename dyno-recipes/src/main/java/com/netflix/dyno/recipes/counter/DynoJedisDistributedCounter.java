@@ -20,6 +20,7 @@ import com.netflix.dyno.connectionpool.TopologyView;
 import com.netflix.dyno.jedis.DynoJedisClient;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.concurrent.ThreadSafe;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -39,11 +40,11 @@ import java.util.concurrent.atomic.AtomicLong;
  * use Redis as its backing data store.
  * </p>
  *
- * @see {@Jedis.incr http://}
  * @see {@INCR http://redis.io/commands/INCR}
  *
  * @author jcacciatore
  */
+@ThreadSafe
 public class DynoJedisDistributedCounter implements DynoCounter {
 
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(DynoJedisDistributedCounter.class);
@@ -52,7 +53,6 @@ public class DynoJedisDistributedCounter implements DynoCounter {
 
     protected final String key;
     protected final DynoJedisClient client;
-    protected final AtomicLong incrementCount = new AtomicLong(0L);
     protected final List<String> generatedKeys;
 
     public DynoJedisDistributedCounter(String key, DynoJedisClient client) {
@@ -61,9 +61,13 @@ public class DynoJedisDistributedCounter implements DynoCounter {
         this.generatedKeys = generateKeys();
     }
 
+    @Override
+    public void initialize() {
+        // set Lifecycle state
+    }
+
     public void incr() {
         client.incr(generatedKeys.get(randomIntFrom0toN()));
-        incrementCount.incrementAndGet();
     }
 
     public void incrBy(long value) {
@@ -75,11 +79,13 @@ public class DynoJedisDistributedCounter implements DynoCounter {
         ArrayList<String> values = new ArrayList<String>(generatedKeys.size());
         for (String key: generatedKeys) {
             String val = client.get(key);
-            result += Long.valueOf(val);
-            values.add(val);
+            if (val != null) {
+                result += Long.valueOf(val);
+                values.add(val);
+            }
         }
 
-        logger.info("result=>" + result + ", key: " + key + ", values: " + values.toString());
+        logger.debug("result=>" + result + ", key: " + key + ", values: " + values.toString());
 
         return result;
     }
@@ -90,10 +96,6 @@ public class DynoJedisDistributedCounter implements DynoCounter {
 
     public List<String> getGeneratedKeys() {
         return Collections.unmodifiableList(generatedKeys);
-    }
-
-    public Long getIncrCount() {
-        return incrementCount.get();
     }
 
     List<String> generateKeys() {
@@ -121,17 +123,13 @@ public class DynoJedisDistributedCounter implements DynoCounter {
             if (tokens.contains(token)) {
                 if (tokens.remove(token)) {
                     String generated = key + "_" + i;
-                    logger.info(String.format("Found key=>%s for token=>%s", generated, token));
+                    logger.debug(String.format("Found key=>%s for token=>%s", generated, token));
                     generatedKeys.add(generated);
                 }
             }
         }
 
         return generatedKeys;
-    }
-
-    private void set(String value) {
-        client.set(generatedKeys.get(0), value);
     }
 
     int randomIntFrom0toN() {
@@ -145,6 +143,6 @@ public class DynoJedisDistributedCounter implements DynoCounter {
 
     @Override
     public void close() throws Exception {
-        // nothing to do
+        // nothing to do for this implementation
     }
 }

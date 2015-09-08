@@ -20,10 +20,22 @@ import java.util.List;
 /**
  * A counter whose semantics mimic that of an in-memory counter. The counter supports incrementing by one or
  * by an arbitrary natural number.
+ * <p>
+ * This counter has a lifecycle; callers must invoke {@link #initialize()} prior to all other methods except
+ * {@link #getKey()} otherwise an {@link IllegalStateException} may be thrown. To properly shutdown the counter
+ * Callers must invoke {@link #close}.
+ * </p>
+ *
+ * @see {@link AutoCloseable}
  *
  * @author jcacciatore
  */
 public interface DynoCounter extends AutoCloseable {
+
+    /**
+     * Initializes the counter
+     */
+    void initialize();
 
     /**
      * Increments the counter instance by one.
@@ -58,10 +70,4 @@ public interface DynoCounter extends AutoCloseable {
      */
     List<String> getGeneratedKeys();
 
-    /**
-     * Returns the local in-memory count of the number of times {@link #incr()} was invoked
-     *
-     * @return the local in-memory count of the number of times {@link #incr()} was invoked
-     */
-    Long getIncrCount();
 }

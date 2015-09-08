@@ -41,37 +41,53 @@ public class DynoDistributedCounterDemo extends DynoJedisDemo {
             counters.add(new DynoJedisDistributedCounter(client.getConnPool().getName() + "-counter", client));
         }
 
-        this.runMultiThreaded(1000, false, 1, 2);
+        this.runMultiThreaded(5000, false, 1, 2);
     }
 
     private void runMultiThreadedPipelineCounter(final int numCounters) throws Exception {
         for (int i = 0; i < numCounters; i++) {
-            counters.add(new DynoJedisPipelineDistributedCounter(client.getConnPool().getName() + "-async-counter", client));
+            DynoJedisPipelineDistributedCounter counter =
+                    new DynoJedisPipelineDistributedCounter(client.getConnPool().getName() +
+                            "-async-counter-" + i, client);
+            counter.initialize();
+            counters.add(counter);
         }
 
-        this.runMultiThreaded(1000, false, 1, 2);
+
+        this.runMultiThreaded(50000, false, 1, 2);
     }
 
-    private void runSingleThreadedAsyncCounter() throws Exception {
+    private void runSingleThreadedPipelineCounter() throws Exception {
 
-        DynoJedisPipelineDistributedCounter counter = new DynoJedisPipelineDistributedCounter("demo-test", client);
+        DynoJedisPipelineDistributedCounter counter = new DynoJedisPipelineDistributedCounter("demo-single-async", client);
+
+        counter.initialize();
+
+        System.out.println("counter is currently set at " + counter.get());
 
         for (int i = 0; i < 10000; i++) {
             counter.incr();
         }
 
         counter.sync();
-        Long result = counter.get();
 
-        System.out.println("Local increment count=> " + counter.getIncrCount() + ", Total count => " + result);
+        System.out.println("Total count => " + counter.get());
+
+        counter.close();
+
+        System.out.println("Cleaning up keys");
+        cleanup(counter);
     }
 
     private void runMultiThreadedBatchCounter(int numCounters) throws Exception {
         for (int i = 0; i < numCounters; i++) {
-            counters.add(new DynoJedisBatchDistributedCounter(client.getConnPool().getName() + "-batch-counter", client));
+            counters.add(new DynoJedisBatchDistributedCounter(
+                    client.getConnPool().getName() + "-batch-counter", // key
+                    client,                                            // client
+                    500L));                                            // flush period
         }
 
-        this.runMultiThreaded(1000, false, 1, 2);
+        this.runMultiThreaded(-1, false, 1, 2);
     }
 
     @Override
@@ -92,19 +108,38 @@ public class DynoDistributedCounterDemo extends DynoJedisDemo {
 
                 @Override
                 public Void call() throws Exception {
-                    while (!stop.get()) {
+                    int localCount = 0;
+                    while (!stop.get() && (localCount < ops || ops == -1)) {
                         try {
-                            counters.get(random.nextInt(numCounters)).incr();
+                            int index = random.nextInt(numCounters);
+
+                            DynoCounter counter = counters.get(index);
+
+                            counter.incr();
                             success.incrementAndGet();
+
+                            // If we are pipelining, sync every 10000 increments
+                            if (++localCount % 10000 == 0 &&
+                                    counter instanceof DynoJedisPipelineDistributedCounter) {
+                                System.out.println("WRITE - sync() " + Thread.currentThread().getName());
+                                ((DynoJedisPipelineDistributedCounter) counter).sync();
+                            }
                         } catch (Exception e) {
-                            System.out.println("WRITE FAILURE: " + Thread.currentThread().getName() + ": " +  e.getMessage());
+                            System.out.println("WRITE FAILURE: " + Thread.currentThread().getName() + ": " + e.getMessage());
                             e.printStackTrace();
                             failure.incrementAndGet();
                         }
                     }
 
+                    for (DynoCounter counter : counters) {
+                        if (counter instanceof DynoJedisPipelineDistributedCounter) {
+                            System.out.println(Thread.currentThread().getName() + " => localCount = " + localCount);
+                            ((DynoJedisPipelineDistributedCounter) counter).sync();
+                        }
+                    }
+
                     latch.countDown();
-                    System.out.println(Thread.currentThread().getName() + "=> Done writes");
+                    System.out.println(Thread.currentThread().getName() + " => Done writes");
                     return null;
                 }
             });
@@ -125,35 +160,39 @@ public class DynoDistributedCounterDemo extends DynoJedisDemo {
         threadPool.submit(new Callable<Void>() {
             @Override
             public Void call() throws Exception {
-                // Sleep until writes are finished
-                while (!stop.get() && !(threadPool.isShutdown() || threadPool.isTerminated())) {
-                    try {
-                        Thread.sleep(5000);
-                    } catch (InterruptedException e) {
-                        // ignore
+
+                if (counters != null && counters.get(0) instanceof DynoJedisPipelineDistributedCounter) {
+                    latch.countDown();
+                    return null;
+                }
+
+                while (!stop.get()) {
+                    long result = 0L;
+
+                    for (DynoCounter counter : counters) {
+                        result += counter.get();
                     }
+
+                    System.out.println("counter value ==> " + result);
+                    Thread.sleep(1000);
                 }
-
-                System.out.println("All writes have completed -- retrieving counter value");
-
-                long result = 0L;
-                for (DynoCounter counter : counters) {
-                    if (counter instanceof DynoJedisPipelineDistributedCounter) {
-                        ((DynoJedisPipelineDistributedCounter) counter).sync();
-                    }
-                    result += counter.get();
-                }
-
-                System.out.println("Total Count ==> " + result);
-                System.out.println("Counter increment counts");
-                for (DynoCounter counter : counters) {
-                    System.out.println("    counter[" + counter.getKey() + "] = " + counter.getIncrCount());
-                }
-
                 latch.countDown();
                 return null;
             }
         });
+    }
+
+    @Override
+    protected void executePostRunActions() {
+        long result = 0L;
+        for (DynoCounter counter : counters) {
+            if (counter instanceof DynoJedisPipelineDistributedCounter) {
+                ((DynoJedisPipelineDistributedCounter) counter).sync();
+            }
+            result += counter.get();
+        }
+
+        System.out.println("COUNTER value ==> " + result);
     }
 
     @Override
@@ -195,9 +234,9 @@ public class DynoDistributedCounterDemo extends DynoJedisDemo {
             demo.initWithRemoteClusterFromEurekaUrl(args[0], 8102);
 
             //demo.runMultiThreadedCounter(numCounters);
-            demo.runMultiThreadedPipelineCounter(numCounters);
-            //demo.runSingleThreadedAsyncCounter();
-            //demo.runMultiThreadedBatchCounter(numCounters);
+            //demo.runMultiThreadedPipelineCounter(numCounters);
+            //demo.runSingleThreadedPipelineCounter();
+            demo.runMultiThreadedBatchCounter(numCounters);
 
         } catch (Exception ex) {
             ex.printStackTrace();

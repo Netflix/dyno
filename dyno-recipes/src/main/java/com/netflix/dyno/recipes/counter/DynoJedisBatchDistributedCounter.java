@@ -1,3 +1,18 @@
+/*******************************************************************************
+ * Copyright 2011 Netflix
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.recipes.counter;
 
 import java.util.List;
@@ -10,11 +25,18 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import com.netflix.dyno.jedis.DynoJedisClient;
 
+import javax.annotation.concurrent.ThreadSafe;
+
+/**
+ *  Batch implementation of {@link DynoCounter} that uses an in-memory counter to
+ *  track {@link #incr()} calls and flushes the value at the specified frequency.
+ */
+@ThreadSafe
 public class DynoJedisBatchDistributedCounter implements DynoCounter {
 
     private final AtomicLong localCounter;
-    private final AtomicLong incrementCount;
     private final AtomicReference<DynoJedisDistributedCounter> counter = new AtomicReference<DynoJedisDistributedCounter>(null);
+    private final Long frequencyInMillis;
 
     private final ScheduledExecutorService counterThreadPool = Executors.newScheduledThreadPool(1, new ThreadFactory() {
         @Override
@@ -23,20 +45,24 @@ public class DynoJedisBatchDistributedCounter implements DynoCounter {
         }
     });
 
-    public DynoJedisBatchDistributedCounter(String key, DynoJedisClient client) {
+    public DynoJedisBatchDistributedCounter(String key, DynoJedisClient client, Long frequencyInMillis) {
         this.counter.compareAndSet(null, new DynoJedisDistributedCounter(key, client));
         this.localCounter = new AtomicLong(0L);
-        this.incrementCount = new AtomicLong(0L);
+        this.frequencyInMillis = frequencyInMillis;
+    }
+
+    @Override
+    public void initialize() {
+        counter.get().initialize();
 
         counterThreadPool.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
                 if (localCounter.get() > 0) {
-                    incrementCount.addAndGet(localCounter.get());
                     counter.get().incrBy(localCounter.getAndSet(0));
                 }
             }
-        }, 1000, 1000, TimeUnit.MILLISECONDS);
+        }, 1000, frequencyInMillis, TimeUnit.MILLISECONDS);
     }
 
     @Override
@@ -62,11 +88,6 @@ public class DynoJedisBatchDistributedCounter implements DynoCounter {
     @Override
     public List<String> getGeneratedKeys() {
         return counter.get().getGeneratedKeys();
-    }
-
-    @Override
-    public Long getIncrCount() {
-        return incrementCount.get();
     }
 
     @Override

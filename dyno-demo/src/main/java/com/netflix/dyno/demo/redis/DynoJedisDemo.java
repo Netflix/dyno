@@ -186,23 +186,25 @@ public class DynoJedisDemo {
 
 		threadPool.submit(new Callable<Void>() {
 
-			@Override
-			public Void call() throws Exception {
-				while (!stop.get()) {
-					System.out.println("Success: " + success.get() + ", failure: " + failure.get() + ", emptyReads: " + emptyReads.get());
-					Thread.sleep(1000);
-				}
-				latch.countDown();
-				return null;
-			}
+            @Override
+            public Void call() throws Exception {
+                while (!stop.get()) {
+                    System.out.println("Success: " + success.get() + ", failure: " + failure.get() + ", emptyReads: " + emptyReads.get());
+                    Thread.sleep(1000);
+                }
+                latch.countDown();
+                return null;
+            }
 
-		});
+        });
 
-		Thread.sleep(15*1000);
+		Thread.sleep(15 * 1000);
 
 		stop.set(true);
 		latch.await();
 		threadPool.shutdownNow();
+
+        executePostRunActions();
 
         System.out.println("Cleaning up keys");
 		cleanup(nKeys);
@@ -211,7 +213,11 @@ public class DynoJedisDemo {
 		
 	}
 
-	protected void startWrites(final int nKeys, final int numWriters,
+    protected void executePostRunActions() {
+        // nothing to do here
+    }
+
+    protected void startWrites(final int nKeys, final int numWriters,
 			final ExecutorService threadPool, 
 			final AtomicBoolean stop, final CountDownLatch latch,
 			final AtomicInteger success, final AtomicInteger failure) {
