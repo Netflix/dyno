@@ -81,10 +81,15 @@ public class DynoDistributedCounterDemo extends DynoJedisDemo {
 
     private void runMultiThreadedBatchCounter(int numCounters) throws Exception {
         for (int i = 0; i < numCounters; i++) {
-            counters.add(new DynoJedisBatchDistributedCounter(
+
+            DynoJedisBatchDistributedCounter counter = new DynoJedisBatchDistributedCounter(
                     client.getConnPool().getName() + "-batch-counter", // key
                     client,                                            // client
-                    500L));                                            // flush period
+                    500L                                               // flush period
+            );
+
+            counter.initialize();
+            counters.add(counter);
         }
 
         this.runMultiThreaded(-1, false, 1, 2);

@@ -20,6 +20,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -34,6 +35,7 @@ import javax.annotation.concurrent.ThreadSafe;
 @ThreadSafe
 public class DynoJedisBatchDistributedCounter implements DynoCounter {
 
+    private final AtomicBoolean initialized = new AtomicBoolean(false);
     private final AtomicLong localCounter;
     private final AtomicReference<DynoJedisDistributedCounter> counter = new AtomicReference<DynoJedisDistributedCounter>(null);
     private final Long frequencyInMillis;
@@ -53,25 +55,35 @@ public class DynoJedisBatchDistributedCounter implements DynoCounter {
 
     @Override
     public void initialize() {
-        counter.get().initialize();
+        if (initialized.compareAndSet(false, true)) {
+            counter.get().initialize();
 
-        counterThreadPool.scheduleAtFixedRate(new Runnable() {
-            @Override
-            public void run() {
-                if (localCounter.get() > 0) {
-                    counter.get().incrBy(localCounter.getAndSet(0));
+            counterThreadPool.scheduleAtFixedRate(new Runnable() {
+                @Override
+                public void run() {
+                    if (localCounter.get() > 0) {
+                        counter.get().incrBy(localCounter.getAndSet(0));
+                    }
                 }
-            }
-        }, 1000, frequencyInMillis, TimeUnit.MILLISECONDS);
+            }, 1000, frequencyInMillis, TimeUnit.MILLISECONDS);
+        }
     }
 
     @Override
     public void incr() {
+        if (!initialized.get()) {
+            throw new IllegalStateException("Counter has not been initialized");
+        }
+
         this.localCounter.incrementAndGet();
     }
 
     @Override
     public void incrBy(long value) {
+        if (!initialized.get()) {
+            throw new IllegalStateException("Counter has not been initialized");
+        }
+
         this.localCounter.addAndGet(value);
     }
 
