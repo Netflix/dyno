@@ -89,6 +89,10 @@ public class DynoJedisPipelineMonitor {
     public void recordSendLatency(String opName, long duration, TimeUnit unit) {
         sendTimer.recordLatency(opName, duration, unit);
     }
+
+    public void stop() {
+        threadPool.shutdownNow();
+    }
 	
 	private BasicCounter getOrCreateCounter(String opName) {
 		

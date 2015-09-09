@@ -93,7 +93,12 @@ public class RoundRobinSelection<CL> implements HostSelectionStrategy<CL> {
 		throw new UnsupportedOperationException();
 	}
 
-	private HostConnectionPool<CL> getNextConnectionPool() throws NoAvailableHostsException {
+    @Override
+    public HostToken getTokenForKey(String key) throws UnsupportedOperationException {
+        throw new UnsupportedOperationException("Not implemented for Round Robin load balancing strategy");
+    }
+
+    private HostConnectionPool<CL> getNextConnectionPool() throws NoAvailableHostsException {
 
 		HostToken hostToken = circularList.getNextElement();
 

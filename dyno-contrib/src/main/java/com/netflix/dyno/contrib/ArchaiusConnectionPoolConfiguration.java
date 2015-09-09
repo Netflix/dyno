@@ -1,5 +1,6 @@
 package com.netflix.dyno.contrib;
 
+import com.netflix.config.DynamicStringProperty;
 import org.codehaus.jettison.json.JSONArray;
 import org.codehaus.jettison.json.JSONObject;
 import org.slf4j.Logger;
@@ -29,11 +30,12 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	private final DynamicIntProperty poolShutdownDelay;
 	private final DynamicBooleanProperty localDcAffinity;
 	private final DynamicIntProperty resetTimingsFrequency;
+    private final DynamicStringProperty configPublisherConfig;
 	
 	private final LoadBalancingStrategy loadBalanceStrategy;
 	private final ErrorRateMonitorConfig errorRateConfig;
 	private final RetryPolicyFactory retryPolicyFactory;
-	
+
 	public ArchaiusConnectionPoolConfiguration(String name) {
 		super(name);
 		
@@ -48,6 +50,7 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		poolShutdownDelay = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.poolShutdownDelay", super.getPoolShutdownDelay());
 		localDcAffinity = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + ".connection.localDcAffinity", super.localDcAffinity());
 		resetTimingsFrequency = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.metrics.resetFrequencySeconds", super.getTimingCountersResetFrequencySeconds());
+        configPublisherConfig = DynamicPropertyFactory.getInstance().getStringProperty(propertyPrefix + ".config.publisher.address", super.getConfigurationPublisherConfig());
 		
 		loadBalanceStrategy = parseLBStrategy(propertyPrefix);
 		errorRateConfig = parseErrorRateMonitorConfig(propertyPrefix);
@@ -116,8 +119,12 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		return resetTimingsFrequency.get();
 	}
 
+    @Override
+    public String getConfigurationPublisherConfig() {
+        return configPublisherConfig.get();
+    }
 
-	
+
 	private LoadBalancingStrategy parseLBStrategy(String propertyPrefix) {
 		
 		LoadBalancingStrategy defaultConfig = super.getLoadBalancingStrategy();

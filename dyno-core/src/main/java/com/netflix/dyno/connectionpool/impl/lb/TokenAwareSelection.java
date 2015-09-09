@@ -70,8 +70,7 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 	public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op) throws NoAvailableHostsException {
 		
 		String key = op.getKey();
-		Long keyHash = tokenMapper.hash(key);
-		HostToken hToken = tokenMapper.getToken(keyHash);
+		HostToken hToken = this.getTokenForKey(key);
 		
 		HostConnectionPool<CL> hostPool = null;
 		if (hToken != null) {
@@ -79,7 +78,8 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 		}
 		
 		if (hostPool == null) {
-			throw new NoAvailableHostsException("Could not find host connection pool for key: " + key + ", hash: " + keyHash);
+			throw new NoAvailableHostsException("Could not find host connection pool for key: " + key + ", hash: " +
+                    tokenMapper.hash(key));
 		}
 		
 		return hostPool;
@@ -104,7 +104,13 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 		throw new RuntimeException("Not Implemented");
 	}
 
-	@Override
+    @Override
+    public HostToken getTokenForKey(String key) throws UnsupportedOperationException {
+        Long keyHash = tokenMapper.hash(key);
+        return tokenMapper.getToken(keyHash);
+    }
+
+    @Override
 	public boolean addHostPool(HostToken hostToken, HostConnectionPool<CL> hostPool) {
 		
 		HostConnectionPool<CL> prevPool = tokenPools.put(hostToken.getToken(), hostPool);

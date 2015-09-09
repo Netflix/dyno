@@ -43,8 +43,7 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
  * This class is intended to be used within a collection of {@link HostConnectionPool} tracked by a
  * {@link ConnectionPool} for all the {@link Host}(s) within a cassandra cluster. 
  * 
- * @see {@link SimpleHostConnectionPool} for sample implementations of this class. 
- * @see {@link ConnectionPool} for references to this class. 
+ * @see {@link ConnectionPool} for references to this class.
  *  
  * @author poberai
  * 
@@ -56,7 +55,8 @@ public interface HostConnectionPool<CL> {
      * Borrow a connection from the host. May create a new connection if one is
      * not available.
      * 
-     * @param timeout
+     * @param duration The amount of time to wait for a connection to become available
+     * @param unit Specifies the unit of time corresponding to the duration (i.e. seconds vs milliseconds)
      * @return A borrowed connection.  Connection must be returned either by calling returnConnection 
      *  or closeConnection.
      * @throws DynoException

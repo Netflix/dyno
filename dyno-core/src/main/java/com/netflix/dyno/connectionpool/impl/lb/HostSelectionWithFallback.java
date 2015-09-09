@@ -394,4 +394,8 @@ public class HostSelectionWithFallback<CL> {
 			topology.addToken(rack, hToken.getToken(), pool);
 		}
 	}
+
+    public Long getTokenForKey(String key) {
+        return localSelector.getTokenForKey(key).getToken();
+    }
 }
