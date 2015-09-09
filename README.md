@@ -1,4 +1,4 @@
-# dyno: connection pool for Dynomite
+# Dyno: connection pool for Dynomite
  
  The dyno client encapsulates features necessary to scale a client application utilizing [Dynomite](https://github.com/Netflix/dynomite).
  
