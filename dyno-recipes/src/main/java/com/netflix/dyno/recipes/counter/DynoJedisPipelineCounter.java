@@ -35,8 +35,7 @@ import com.netflix.dyno.recipes.util.Tuple;
 
 /**
  * Pipeline implementation of {@link DynoCounter}. This implementation has slightly different semantics than
- * as {@link DynoJedisPipeline} in that both {@link #incr()} and {@link #sync()} are asynchronous. Callers
- * should b
+ * {@link DynoJedisPipeline} in that both {@link #incr()} and {@link #sync()} are asynchronous.
  * <p>
  * Note that this implementation is thread-safe whereas {@link DynoJedisPipeline} is not.
  * </p>
@@ -46,7 +45,7 @@ import com.netflix.dyno.recipes.util.Tuple;
  * @author jcacciatore
  */
 @ThreadSafe
-public class DynoJedisPipelineDistributedCounter extends DynoJedisDistributedCounter {
+public class DynoJedisPipelineCounter extends DynoJedisCounter {
 
     private enum Command {
         INCR,
@@ -54,14 +53,14 @@ public class DynoJedisPipelineDistributedCounter extends DynoJedisDistributedCou
         STOP
     }
 
-    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(DynoJedisPipelineDistributedCounter.class);
+    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(DynoJedisPipelineCounter.class);
 
     private final LinkedBlockingQueue<Command> queue = new LinkedBlockingQueue<Command>();
 
     private final ExecutorService counterThreadPool = Executors.newSingleThreadExecutor(new ThreadFactory() {
         @Override
         public Thread newThread(Runnable r) {
-            return new Thread(r, "DynoJedisPipelineDistributedCounter-Poller");
+            return new Thread(r, "DynoJedisPipelineCounter-Poller");
         }
     });
 
@@ -71,7 +70,7 @@ public class DynoJedisPipelineDistributedCounter extends DynoJedisDistributedCou
 
     private final Consumer consumer;
 
-    public DynoJedisPipelineDistributedCounter(String key, DynoJedisClient client) {
+    public DynoJedisPipelineCounter(String key, DynoJedisClient client) {
         super(key, client);
 
         this.consumer = new Consumer(queue, generatedKeys);

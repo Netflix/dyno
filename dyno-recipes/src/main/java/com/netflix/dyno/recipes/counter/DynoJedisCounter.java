@@ -22,22 +22,19 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.concurrent.ThreadSafe;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Synchronous implementation of a {@link DynoCounter}. This class is the base
- * class for other implementations as is contains the logic to shard the counter
+ * class for other implementations as it contains the logic to shard the counter
  * key.
  * <p>
- * All DynoJedis* implementations, including this one, are predicated upon Redis's
- * atomic increment functionality therefore the dynomite cluster must be configured to
- * use Redis as its backing data store.
+ * All DynoJedis*Counter implementations are predicated upon Dynomite's features in conjunction with
+ * Redis's atomic increment functionality.
  * </p>
  *
  * @see {@INCR http://redis.io/commands/INCR}
@@ -45,9 +42,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author jcacciatore
  */
 @ThreadSafe
-public class DynoJedisDistributedCounter implements DynoCounter {
+public class DynoJedisCounter implements DynoCounter {
 
-    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(DynoJedisDistributedCounter.class);
+    private static final org.slf4j.Logger logger = LoggerFactory.getLogger(DynoJedisCounter.class);
 
     private static final int MAX_ITERATIONS = 1000;
 
@@ -55,7 +52,7 @@ public class DynoJedisDistributedCounter implements DynoCounter {
     protected final DynoJedisClient client;
     protected final List<String> generatedKeys;
 
-    public DynoJedisDistributedCounter(String key, DynoJedisClient client) {
+    public DynoJedisCounter(String key, DynoJedisClient client) {
         this.key = key;
         this.client = client;
         this.generatedKeys = generateKeys();

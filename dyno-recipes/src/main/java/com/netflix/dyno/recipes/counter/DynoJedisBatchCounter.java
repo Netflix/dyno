@@ -30,25 +30,25 @@ import javax.annotation.concurrent.ThreadSafe;
 
 /**
  *  Batch implementation of {@link DynoCounter} that uses an in-memory counter to
- *  track {@link #incr()} calls and flushes the value at the specified frequency.
+ *  track {@link #incr()} calls and flushes the value at the given frequency.
  */
 @ThreadSafe
-public class DynoJedisBatchDistributedCounter implements DynoCounter {
+public class DynoJedisBatchCounter implements DynoCounter {
 
     private final AtomicBoolean initialized = new AtomicBoolean(false);
     private final AtomicLong localCounter;
-    private final AtomicReference<DynoJedisDistributedCounter> counter = new AtomicReference<DynoJedisDistributedCounter>(null);
+    private final AtomicReference<DynoJedisCounter> counter = new AtomicReference<DynoJedisCounter>(null);
     private final Long frequencyInMillis;
 
     private final ScheduledExecutorService counterThreadPool = Executors.newScheduledThreadPool(1, new ThreadFactory() {
         @Override
         public Thread newThread(Runnable r) {
-            return new Thread(r, "DynoJedisBatchDistributedCounter-Poller");
+            return new Thread(r, "DynoJedisBatchCounter-Poller");
         }
     });
 
-    public DynoJedisBatchDistributedCounter(String key, DynoJedisClient client, Long frequencyInMillis) {
-        this.counter.compareAndSet(null, new DynoJedisDistributedCounter(key, client));
+    public DynoJedisBatchCounter(String key, DynoJedisClient client, Long frequencyInMillis) {
+        this.counter.compareAndSet(null, new DynoJedisCounter(key, client));
         this.localCounter = new AtomicLong(0L);
         this.frequencyInMillis = frequencyInMillis;
     }

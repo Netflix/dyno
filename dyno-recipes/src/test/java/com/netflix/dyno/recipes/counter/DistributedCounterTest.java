@@ -116,7 +116,7 @@ public class DistributedCounterTest {
         when(client.getTopologyView()).thenReturn(topologyView);
         when(topologyView.getTopologySnapshot()).thenReturn(topology);
 
-        DynoJedisDistributedCounter counter = new DynoJedisDistributedCounter("testCounter", client);
+        DynoJedisCounter counter = new DynoJedisCounter("testCounter", client);
 
         List<String> keys = counter.generateKeys();
 
