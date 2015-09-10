@@ -251,7 +251,8 @@ public class HostSelectionWithFallbackTest {
 		poolStatus.get(h3).set(false);
 
 		hostnames = runConnectionsToRingTest(selection);
-		verifyPresent(hostnames, "h4", "h5");
+        verifyAtLeastOnePresent(hostnames, "h4", "h6");
+        verifyPresent(hostnames, "h5");
 
 		// Put Hosts H1,H2,H3,H4 as DOWN
 		selection.initWithHosts(pools);
