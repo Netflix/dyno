@@ -114,7 +114,11 @@ public class DynoRedissonClient {
 			try {
 				pool.start().get();
 			} catch (Exception e) {
-				throw new RuntimeException(e);
+                if (cpConfig.getFailOnStartupIfNoHosts()) {
+                    throw new RuntimeException(e);
+                }
+
+                pool.idle();
 			}
 			
 			final DynoRedissonClient client = new DynoRedissonClient(appName, pool);

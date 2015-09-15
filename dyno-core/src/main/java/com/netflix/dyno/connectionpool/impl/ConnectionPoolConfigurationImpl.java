@@ -43,6 +43,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private static final boolean DEFAULT_LOCAL_DC_AFFINITY = true; 
 	private static final LoadBalancingStrategy DEFAULT_LB_STRATEGY = LoadBalancingStrategy.TokenAware;
     private static final String DEFAULT_CONFIG_PUBLISHER_ADDRESS = null;
+    private static final boolean DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS = false;
+    private static final int DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS_SECONDS = 60;
 
 	private HostSupplier hostSupplier;
 	private TokenMapSupplier tokenSupplier;
@@ -61,6 +63,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private LoadBalancingStrategy lbStrategy = DEFAULT_LB_STRATEGY; 
 	private String localDC;
     private String configPublisherAddress = DEFAULT_CONFIG_PUBLISHER_ADDRESS;
+    private boolean failOnStartupIfNoHosts = DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS;
+    private int failOnStarupIfNoHostsSeconds = DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS_SECONDS;
 
 	private RetryPolicyFactory retryFactory = new RetryPolicyFactory() {
 
@@ -146,6 +150,30 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	public int getPingFrequencySeconds() {
 		return pingFrequencySeconds;
 	}
+
+    @Override
+    public String getLocalDC() {
+        return localDC;
+    }
+
+    @Override
+    public int getTimingCountersResetFrequencySeconds() {
+        return flushTimingsFrequencySeconds;
+    }
+
+    @Override
+    public String getConfigurationPublisherConfig() {
+        return null;
+    }
+
+    @Override
+    public boolean getFailOnStartupIfNoHosts() {
+        return failOnStartupIfNoHosts;
+    }
+
+    public int getDefaultFailOnStartupIfNoHostsSeconds() {
+        return failOnStarupIfNoHostsSeconds;
+    }
 	
 	// ALL SETTERS
 	public ConnectionPoolConfigurationImpl setMaxConnsPerHost(int maxConnsPerHost) {
@@ -197,6 +225,16 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		localDcAffinity = condition;
 		return this;
 	}
+
+    public ConnectionPoolConfigurationImpl setFailOnStartupIfNoHosts(boolean condition) {
+        this.failOnStartupIfNoHosts = condition;
+        return this;
+    }
+
+    public ConnectionPoolConfigurationImpl setFailOnStartupIfNoHostsSeconds(int seconds) {
+        this.failOnStarupIfNoHostsSeconds = seconds;
+        return null;
+    }
 
 	public HostSupplier getHostSupplier() {
 		return hostSupplier;
@@ -280,21 +318,6 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 			});
 		}
 	}
-
-	@Override
-	public String getLocalDC() {
-		return localDC;
-	}
-
-	@Override
-	public int getTimingCountersResetFrequencySeconds() {
-		return flushTimingsFrequencySeconds;
-	}
-
-    @Override
-    public String getConfigurationPublisherConfig() {
-        return null;
-    }
 
     public ConnectionPoolConfigurationImpl setLocalDC(String dc) {
 		this.localDC = dc;

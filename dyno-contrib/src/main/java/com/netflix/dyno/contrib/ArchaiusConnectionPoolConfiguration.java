@@ -35,6 +35,7 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	private final LoadBalancingStrategy loadBalanceStrategy;
 	private final ErrorRateMonitorConfig errorRateConfig;
 	private final RetryPolicyFactory retryPolicyFactory;
+    private final DynamicBooleanProperty failOnStartupIfNoHosts;
 
 	public ArchaiusConnectionPoolConfiguration(String name) {
 		super(name);
@@ -51,7 +52,8 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		localDcAffinity = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + ".connection.localDcAffinity", super.localDcAffinity());
 		resetTimingsFrequency = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.metrics.resetFrequencySeconds", super.getTimingCountersResetFrequencySeconds());
         configPublisherConfig = DynamicPropertyFactory.getInstance().getStringProperty(propertyPrefix + ".config.publisher.address", super.getConfigurationPublisherConfig());
-		
+		failOnStartupIfNoHosts = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + ".config.startup.failIfNoHosts", super.getFailOnStartupIfNoHosts());
+
 		loadBalanceStrategy = parseLBStrategy(propertyPrefix);
 		errorRateConfig = parseErrorRateMonitorConfig(propertyPrefix);
 		retryPolicyFactory = parseRetryPolicyFactory(propertyPrefix);
@@ -124,8 +126,13 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
         return configPublisherConfig.get();
     }
 
+    @Override
+    public boolean getFailOnStartupIfNoHosts() {
+        return failOnStartupIfNoHosts.get();
+    }
 
-	private LoadBalancingStrategy parseLBStrategy(String propertyPrefix) {
+
+    private LoadBalancingStrategy parseLBStrategy(String propertyPrefix) {
 		
 		LoadBalancingStrategy defaultConfig = super.getLoadBalancingStrategy();
 		

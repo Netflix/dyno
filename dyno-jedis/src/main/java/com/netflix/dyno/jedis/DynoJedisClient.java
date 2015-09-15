@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.netflix.dyno.connectionpool.TopologyView;
 import org.slf4j.Logger;
 
 import redis.clients.jedis.BinaryClient.LIST_POSITION;
@@ -28,8 +27,10 @@ import com.netflix.dyno.connectionpool.ConnectionPoolConfigurationPublisher;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.OperationResult;
+import com.netflix.dyno.connectionpool.TopologyView;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
+import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
 import com.netflix.dyno.connectionpool.impl.lb.HttpEndpointBasedTokenMapSupplier;
@@ -2287,10 +2288,23 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
             JedisConnectionFactory connFactory = new JedisConnectionFactory(opMonitor);
 
-            ConnectionPoolImpl<Jedis> pool = new ConnectionPoolImpl<Jedis>(connFactory, cpConfig, cpMonitor, cpConfigPublisher);
+            final ConnectionPoolImpl<Jedis> pool = new ConnectionPoolImpl<Jedis>(connFactory, cpConfig, cpMonitor, cpConfigPublisher);
 
             try {
                 pool.start().get();
+
+                Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        pool.shutdown();
+                    }
+                }));
+            } catch (NoAvailableHostsException e) {
+                if (cpConfig.getFailOnStartupIfNoHosts()) {
+                    throw new RuntimeException(e);
+                }
+
+                pool.idle();
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
