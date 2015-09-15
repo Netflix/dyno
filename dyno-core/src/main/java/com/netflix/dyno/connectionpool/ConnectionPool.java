@@ -119,9 +119,22 @@ public interface ConnectionPool<CL> {
     void shutdown();
 
     /**
-     * Setup the connection pool and start any maintenance threads
+     * Setup the connection pool and start any maintenance threads. This includes priming connections
+     * to server hosts.
      */
-    Future<Boolean> start();
+    Future<Boolean> start() throws DynoException;
+
+    /**
+     * Construct the connection pool but do not start any threads. The pool will poll the {@link HostSupplier}
+     * once per minute and will start upon finding active hosts.
+     * <p>
+     * Note that an {@link IllegalStateException} will be thrown if the connection pool has been successfully
+     * started.
+     * </p>
+     * This api is utilized by DynoJedisClient and DynoRedissonClient when starting the connection pool unless
+     * {@link ConnectionPoolConfiguration#getFailOnStartupIfNoHosts()} is set to true.
+     */
+    void idle();
 
     /**
      * Retrieve the runtime configuration of the connection pool instance.

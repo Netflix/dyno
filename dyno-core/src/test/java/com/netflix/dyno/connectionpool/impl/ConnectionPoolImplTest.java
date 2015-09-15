@@ -199,7 +199,7 @@ public class ConnectionPoolImplTest {
 		
 		Assert.assertEquals(numHosts*cpConfig.getMaxConnsPerHost(), cpMonitor.getConnectionCreatedCount());
 		Assert.assertEquals(0, cpMonitor.getConnectionCreateFailedCount());
-		Assert.assertEquals(numHosts*cpConfig.getMaxConnsPerHost(), cpMonitor.getConnectionClosedCount());
+		Assert.assertEquals(numHosts * cpConfig.getMaxConnsPerHost(), cpMonitor.getConnectionClosedCount());
 		
 		Assert.assertEquals(client.ops.get(), cpMonitor.getConnectionBorrowedCount());
 		Assert.assertEquals(client.ops.get(), cpMonitor.getConnectionReturnedCount());
@@ -351,6 +351,24 @@ public class ConnectionPoolImplTest {
 			pool.shutdown();
 		}
 	}
+
+    @Test
+    public void testIdleWhenNoAvailableHosts() throws Exception {
+        final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
+
+        try {
+            pool.start();
+        } catch (NoAvailableHostsException nah) {
+            pool.idle();
+            Thread.sleep(1000);
+
+            // calling idle() again should have no effect and will throw an exception if the pool has already been
+            // started
+            pool.idle();
+        } finally {
+            pool.shutdown();
+        }
+    }
 	
 	@Test
 	public void testPoolExhausted() throws Exception {
@@ -359,8 +377,8 @@ public class ConnectionPoolImplTest {
 		hostSupplierHosts.add(host1);
 		hostSupplierHosts.add(host2);
 		hostSupplierHosts.add(host3);
-		
-		pool.start();
+
+        pool.start();
 		
 		// Now exhaust all 9 connections, so that the 10th one can fail with PoolExhaustedException
 		final ExecutorService threadPool = Executors.newFixedThreadPool(9);
@@ -390,8 +408,9 @@ public class ConnectionPoolImplTest {
 				}
 			});
 		}
-		
-		latch.await(); Thread.sleep(100); // wait patiently for all threads to have blocked the connections
+
+        latch.await();
+        Thread.sleep(100); // wait patiently for all threads to have blocked the connections
 		
 		try {
 			executeTestClientOperation(pool);
@@ -438,8 +457,8 @@ public class ConnectionPoolImplTest {
 		hostSupplierHosts.add(host1);
 		hostSupplierHosts.add(host2);
 		hostSupplierHosts.add(host3);
-		
-		pool.start();
+
+        pool.start();
 
 		final Callable<Void> testLogic = new Callable<Void>() {
 
@@ -451,15 +470,15 @@ public class ConnectionPoolImplTest {
 				return null;
 			}
 		};
-		
-		runTest(pool, testLogic);
+
+        runTest(pool, testLogic);
 		
 		Assert.assertTrue("Total ops: " + client.ops.get(), client.ops.get() > 0);
 		Assert.assertTrue("Total errors: " + cpMonitor.getOperationFailureCount(), cpMonitor.getOperationFailureCount() > 0);
 		
-		Assert.assertEquals(3*cpConfig.getMaxConnsPerHost(), cpMonitor.getConnectionCreatedCount());
+		Assert.assertEquals(3 * cpConfig.getMaxConnsPerHost(), cpMonitor.getConnectionCreatedCount());
 		Assert.assertEquals(0, cpMonitor.getConnectionCreateFailedCount());
-		Assert.assertEquals(3*cpConfig.getMaxConnsPerHost(), cpMonitor.getConnectionClosedCount());
+		Assert.assertEquals(3 * cpConfig.getMaxConnsPerHost(), cpMonitor.getConnectionClosedCount());
 		
 		Assert.assertEquals(client.ops.get() + cpMonitor.getOperationFailureCount(), cpMonitor.getConnectionBorrowedCount());
 		Assert.assertEquals(client.ops.get() + cpMonitor.getOperationFailureCount(), cpMonitor.getConnectionReturnedCount());
@@ -503,7 +522,7 @@ public class ConnectionPoolImplTest {
 		
 		try { 
 			executeTestClientOperation(pool, null);
-			Assert.fail("Test failed: expected PoolExhaustedException");
+            Assert.fail("Test failed: expected PoolExhaustedException");
 		} catch (DynoException e) {
 			Assert.assertEquals("Retry: " + retry.getAttemptCount(), 4, retry.getAttemptCount());
 		} finally {

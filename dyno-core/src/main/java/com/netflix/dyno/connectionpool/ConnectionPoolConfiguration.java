@@ -21,25 +21,25 @@ import com.netflix.dyno.connectionpool.impl.health.ErrorMonitor.ErrorMonitorFact
 
 public interface ConnectionPoolConfiguration {
 	
-	public static enum LoadBalancingStrategy {
+	enum LoadBalancingStrategy {
 		RoundRobin, TokenAware;
 	}
 
     /**
      * @return Unique name assigned to this connection pool
      */
-    public String getName();
+    String getName();
 
     /**
      * @return Data port to be used when no port is specified to a list of seeds or when
      * doing a ring describe since the ring describe does not include a host
      */
-    public int getPort();
+    int getPort();
 
     /**
      * @return Maximum number of connections to allocate for a single host's pool
      */
-    public int getMaxConnsPerHost();
+    int getMaxConnsPerHost();
 
     /**
      * @return Maximum amount of time to wait for a connection to free up when a
@@ -47,75 +47,75 @@ public interface ConnectionPoolConfiguration {
      * 
      * @return
      */
-    public int getMaxTimeoutWhenExhausted();
+    int getMaxTimeoutWhenExhausted();
 
     /**
      * @return Get the max number of failover attempts
      */
-    public int getMaxFailoverCount();
+    int getMaxFailoverCount();
 
     /**
      * @return Socket read/write timeout
      */
-    public int getSocketTimeout();
+    int getSocketTimeout();
 
     /**
      * @return LoadBalancingStrategy
      */
-    public LoadBalancingStrategy getLoadBalancingStrategy();
+    LoadBalancingStrategy getLoadBalancingStrategy();
     
     /**
      * @return Socket connect timeout
      */
-    public int getConnectTimeout();
+    int getConnectTimeout();
     
     /**
      * 
      * @return
      */
-    public int getPoolShutdownDelay();
+    int getPoolShutdownDelay();
     
     /**
      * 
      * @return
      */
-    public boolean localDcAffinity(); 
+    boolean localDcAffinity();
     
     /**
      * 
      * @return
      */
-    public ErrorMonitorFactory getErrorMonitorFactory();
+    ErrorMonitorFactory getErrorMonitorFactory();
     
     /**
      * 
      * @return
      */
-    public RetryPolicyFactory getRetryPolicyFactory();
+    RetryPolicyFactory getRetryPolicyFactory();
     
     /**
      * 
      * @return
      */
-    public HostSupplier getHostSupplier();
+    HostSupplier getHostSupplier();
     
     /**
      * 
      * @return
      */
-    public TokenMapSupplier getTokenSupplier();
+    TokenMapSupplier getTokenSupplier();
     
     /**
      * 
      * @return
      */
-    public int getPingFrequencySeconds();
+    int getPingFrequencySeconds();
     
     /**
      * 
      * @return
      */
-    public String getLocalDC();
+    String getLocalDC();
 
     /**
      * Returns the amount of time the histogram accumulates data before it is cleared, in seconds.
@@ -129,7 +129,7 @@ public interface ConnectionPoolConfiguration {
      *
      * @return a positive integer that specifies the duration of the frequency to accumulate timing data or 0
      */
-    public int getTimingCountersResetFrequencySeconds();
+    int getTimingCountersResetFrequencySeconds();
 
     /**
      * Returns info about a system that will consume configuration data from dyno. This is used to
@@ -137,6 +137,21 @@ public interface ConnectionPoolConfiguration {
      *
      * @return todo
      */
-     public String getConfigurationPublisherConfig();
+     String getConfigurationPublisherConfig();
+
+    /**
+     * If there are no hosts marked as 'Up' in the {@link HostSupplier} when starting the connection pool
+     * a {@link com.netflix.dyno.connectionpool.exception.NoAvailableHostsException} will be thrown
+     * if this is set to true. By default this is false.
+     * <p>
+     * When this does occur and this property is set to false, a warning will be logged and the connection pool
+     * will go into an idle state, polling once per minute in the background for available hosts to connect to.
+     * The connection pool can idle indefinitely. In the event that hosts do become available, the connection
+     * pool will start.
+     * </p>
+     *
+     * @return boolean to control the startup behavior specified in the description.
+     */
+    boolean getFailOnStartupIfNoHosts();
 
 }

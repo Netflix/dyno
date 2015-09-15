@@ -77,6 +77,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 	private final ConnectionPoolConfiguration cpConfiguration; 
 	private final ConnectionPoolMonitor cpMonitor;
     private final ConnectionPoolConfigurationPublisher cpConfigPublisher;
+
     private final ScheduledExecutorService configPublisherThreadPool = Executors.newScheduledThreadPool(1, new ThreadFactory() {
         @Override
         public Thread newThread(Runnable r) {
@@ -88,6 +89,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 	private final ScheduledExecutorService connPoolThreadPool = Executors.newScheduledThreadPool(1);
 	
 	private final AtomicBoolean started = new AtomicBoolean(false);
+    private final AtomicBoolean idling = new AtomicBoolean(false);
 
     private HostSelectionWithFallback<CL> selectionStrategy;
 	
@@ -231,14 +233,14 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 		
 		return new ArrayList<HostConnectionPool<CL>>(CollectionUtils.filter(getPools(), new Predicate<HostConnectionPool<CL>>() {
 
-			@Override
-			public boolean apply(HostConnectionPool<CL> hostPool) {
-				if (hostPool == null) {
-					return false;
-				}
-				return hostPool.isActive();
-			}
-		}));
+            @Override
+            public boolean apply(HostConnectionPool<CL> hostPool) {
+                if (hostPool == null) {
+                    return false;
+                }
+                return hostPool.isActive();
+            }
+        }));
 	}
 
 	@Override
@@ -427,14 +429,17 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 	
 	@Override
 	public void shutdown() {
-		for (Host host : cpMap.keySet()) {
-			removeHost(host);
-		}
-		cpHealthTracker.stop();
-		hostsUpdater.stop();
-        configPublisherThreadPool.shutdownNow();
-		connPoolThreadPool.shutdownNow();
-        unregisterMonitorConsoleMBean();
+
+        if (started.get()) {
+            for (Host host : cpMap.keySet()) {
+                removeHost(host);
+            }
+            cpHealthTracker.stop();
+            hostsUpdater.stop();
+            configPublisherThreadPool.shutdownNow();
+            connPoolThreadPool.shutdownNow();
+            unregisterMonitorConsoleMBean();
+        }
 	}
 
 	@Override
@@ -489,6 +494,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 		
 		boolean success = started.compareAndSet(false, true);
 		if (success) {
+            idling.set(false);
 			selectionStrategy = initSelectionStrategy();
 			cpHealthTracker.start();
 			
@@ -516,6 +522,37 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 		
 		return getEmptyFutureTask(true);
 	}
+
+    @Override
+    public void idle() {
+        if (this.started.get()) {
+            throw new IllegalStateException("Cannot move from started to idle once the pool has been started");
+        }
+
+        if (idling.compareAndSet(false, true)) {
+            final ScheduledExecutorService threadPool = Executors.newSingleThreadScheduledExecutor();
+
+            threadPool.scheduleAtFixedRate(new Runnable() {
+                @Override
+                public void run() {
+                    while (!started.get()) {
+                        HostStatusTracker hostStatus = hostsUpdater.refreshHosts();
+                        cpMonitor.setHostCount(hostStatus.getHostCount());
+                        Collection<Host> hostsUp = hostStatus.getActiveHosts();
+                        if (hostsUp.size() > 0) {
+                            try {
+                                start().get();
+                            } catch (DynoException de) {
+                                Logger.warn("Attempt to start connection pool FAILED", de);
+                            } catch (Exception e) {
+                                Logger.warn("Attempt to start connection pool FAILED", e);
+                            }
+                        }
+                    }
+                }
+            }, 30, 60, TimeUnit.SECONDS);
+        }
+    }
 
     private void publishRuntimeConfiguration() {
         // Best effort attempt to publish runtime configuration once per hour. This does not
@@ -577,7 +614,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 		selection.initWithHosts(cpMap);
 		return selection;
 	}
-	
 
 	private Future<Boolean> getEmptyFutureTask(final Boolean condition) {
 		
