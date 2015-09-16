@@ -43,7 +43,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private static final boolean DEFAULT_LOCAL_DC_AFFINITY = true; 
 	private static final LoadBalancingStrategy DEFAULT_LB_STRATEGY = LoadBalancingStrategy.TokenAware;
     private static final String DEFAULT_CONFIG_PUBLISHER_ADDRESS = null;
-    private static final boolean DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS = false;
+    private static final boolean DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS = true;
     private static final int DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS_SECONDS = 60;
 
 	private HostSupplier hostSupplier;
