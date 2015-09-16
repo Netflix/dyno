@@ -84,6 +84,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
             return new Thread(r, "DynoJedisConfigPublisher");
         }
     });
+
+    private final ScheduledExecutorService idleThreadPool = Executors.newSingleThreadScheduledExecutor();
 	
 	private final HostsUpdater hostsUpdater;
 	private final ScheduledExecutorService connPoolThreadPool = Executors.newScheduledThreadPool(1);
@@ -495,6 +497,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 		boolean success = started.compareAndSet(false, true);
 		if (success) {
             idling.set(false);
+            idleThreadPool.shutdownNow();
 			selectionStrategy = initSelectionStrategy();
 			cpHealthTracker.start();
 			
@@ -530,23 +533,24 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
         }
 
         if (idling.compareAndSet(false, true)) {
-            final ScheduledExecutorService threadPool = Executors.newSingleThreadScheduledExecutor();
-
-            threadPool.scheduleAtFixedRate(new Runnable() {
+            idleThreadPool.scheduleAtFixedRate(new Runnable() {
                 @Override
                 public void run() {
-                    while (!started.get()) {
-                        HostStatusTracker hostStatus = hostsUpdater.refreshHosts();
-                        cpMonitor.setHostCount(hostStatus.getHostCount());
-                        Collection<Host> hostsUp = hostStatus.getActiveHosts();
-                        if (hostsUp.size() > 0) {
-                            try {
+                    if (!started.get()) {
+                        try {
+                            HostStatusTracker hostStatus = hostsUpdater.refreshHosts();
+                            cpMonitor.setHostCount(hostStatus.getHostCount());
+                            Collection<Host> hostsUp = hostStatus.getActiveHosts();
+                            if (hostsUp.size() > 0) {
+                                Logger.debug("Found hosts while IDLING; starting the connection pool");
                                 start().get();
-                            } catch (DynoException de) {
-                                Logger.warn("Attempt to start connection pool FAILED", de);
-                            } catch (Exception e) {
-                                Logger.warn("Attempt to start connection pool FAILED", e);
                             }
+                        } catch (NoAvailableHostsException nah) {
+                            Logger.debug("No hosts found, will continue IDLING");
+                        } catch (DynoException de) {
+                            Logger.warn("Attempt to start connection pool FAILED", de);
+                        } catch (Exception e) {
+                            Logger.warn("Attempt to start connection pool FAILED", e);
                         }
                     }
                 }
