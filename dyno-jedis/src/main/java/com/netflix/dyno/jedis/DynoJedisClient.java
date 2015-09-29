@@ -374,6 +374,22 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
         });
     }
+    
+    public Double hincrByFloat(final String key, final String field, final double increment) {
+        return d_hincrByFloat(key, field, increment).getResult();
+    }
+
+    public OperationResult<Double> d_hincrByFloat(final String key, final String field, final double increment) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Double>(key, OpName.HINCRBYFLOAT) {
+
+            @Override
+            public Double execute(Jedis client, ConnectionContext state) {
+                return client.hincrByFloat(key, field, increment);
+            }
+
+        });
+    }
 
     @Override
     public Long hsetnx(final String key, final String field, final String value) {
