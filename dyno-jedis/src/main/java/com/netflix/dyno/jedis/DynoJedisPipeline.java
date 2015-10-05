@@ -430,12 +430,12 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
     
     @Override
-    public Response<Double> hincrByFloat(final String key, final String field, final double increment) {
+    public Response<Double> hincrByFloat(final String key, final String field, final double value) {
         return new PipelineOperation<Double>() {
 
             @Override
             Response<Double> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hincrByFloat(key, field, increment);
+                return jedisPipeline.hincrByFloat(key, field, value);
             }
         }.execute(key, OpName.HINCRBYFLOAT);
     }
@@ -619,11 +619,11 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     
     @Override
     public Response<Double> incrByFloat(final String key, final double increment) {
-        return new PipelineOperation<Long>() {
+        return new PipelineOperation<Double>() {
 
             @Override
             Response<Double> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.incrBy(key, increment);
+                return jedisPipeline.incrByFloat(key, increment);
             }
 
         }.execute(key, OpName.INCRBYFLOAT);
@@ -784,6 +784,30 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
             }
 
         }.execute(key, OpName.PERSIST);
+
+    }
+    
+    @Override
+    public Response<String> rename(String oldkey, String newkey) {
+        return new PipelineOperation<String>() {
+        	
+            @Override
+            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
+                return jedisPipeline.rename(oldkey, newkey);
+            }
+        }.execute(oldkey, OpName.RENAME);
+
+    }
+    
+    @Override
+    public Response<Long> renamenx(String oldkey, String newkey) {
+        return new PipelineOperation<Long>() {
+        	
+            @Override
+            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
+                return jedisPipeline.renamenx(oldkey, newkey);
+            }
+        }.execute(oldkey, OpName.RENAMENX);
 
     }
 
@@ -987,6 +1011,12 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }.execute(key, OpName.SPOP);
 
     }
+    
+    @Override
+    public Response<Set<String>> spop(final String key, final long count) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
 
     @Override
     public Response<String> srandmember(final String key) {
@@ -1431,6 +1461,16 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
     @Override
     public Response<Long> pfcount(String key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+    
+    @Override
+    public Response<Set<String>> zrevrangeByLex(String key, String max, String min) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+    
+    @Override
+    public Response<Set<String>> zrevrangeByLex(String key, String max, String min, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 

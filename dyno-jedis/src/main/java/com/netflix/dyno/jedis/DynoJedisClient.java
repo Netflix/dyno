@@ -375,17 +375,18 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
         });
     }
     
-    public Double hincrByFloat(final String key, final String field, final double increment) {
-        return d_hincrByFloat(key, field, increment).getResult();
+    @Override
+    public Double hincrByFloat(final String key, final String field, final double value) {
+        return d_hincrByFloat(key, field, value).getResult();
     }
 
-    public OperationResult<Double> d_hincrByFloat(final String key, final String field, final double increment) {
+    public OperationResult<Double> d_hincrByFloat(final String key, final String field, final double value) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Double>(key, OpName.HINCRBYFLOAT) {
 
             @Override
             public Double execute(Jedis client, ConnectionContext state) {
-                return client.hincrByFloat(key, field, increment);
+                return client.hincrByFloat(key, field, value);
             }
 
         });
@@ -811,6 +812,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
         });
     }
     
+    @Override
     public String rename(String oldkey, String newkey) {
         return d_rename(oldkey, newkey).getResult();
     }
@@ -827,6 +829,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
            });
     }
     
+    @Override
     public Long renamenx(String oldkey, String newkey) {
         return d_renamenx(oldkey, newkey).getResult();
     }
@@ -1196,6 +1199,11 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
             }
 
         });
+    }
+    
+    @Override
+    public Set<String> spop(String key, long count) {
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
@@ -2158,6 +2166,16 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
     @Override
     public Long zinterstore(String dstkey, ZParams params, String... sets) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+    
+    @Override
+    public  Set<String> zrevrangeByLex(String key, String max, String min) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+    
+    @Override
+    public  Set<String> zrevrangeByLex(String key, String max, String min, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
