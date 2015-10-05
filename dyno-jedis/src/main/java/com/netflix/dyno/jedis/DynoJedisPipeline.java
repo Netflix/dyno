@@ -430,12 +430,12 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
     
     @Override
-    public Response<Double> hincrByFloat(final String key, final String field, final long value) {
+    public Response<Double> hincrByFloat(final String key, final String field, final double increment) {
         return new PipelineOperation<Double>() {
 
             @Override
             Response<Double> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hincrByFloat(key, field, value);
+                return jedisPipeline.hincrByFloat(key, field, increment);
             }
         }.execute(key, OpName.HINCRBYFLOAT);
     }
