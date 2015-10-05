@@ -616,6 +616,20 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }.execute(key, OpName.INCRBY);
 
     }
+    
+    @Override
+    public Response<Double> incrByFloat(final String key, final double increment) {
+        return new PipelineOperation<Long>() {
+
+            @Override
+            Response<Double> execute(Pipeline jedisPipeline) throws DynoException {
+                return jedisPipeline.incrBy(key, increment);
+            }
+
+        }.execute(key, OpName.INCRBYFLOAT);
+
+    }
+
 
     @Override
     public Response<String> lindex(final String key, final long index) {
