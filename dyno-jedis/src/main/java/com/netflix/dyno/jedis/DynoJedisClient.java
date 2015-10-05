@@ -810,6 +810,38 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
         });
     }
+    
+    public String rename(String oldkey, String newkey) {
+        return d_rename(oldkey, newkey).getResult();
+    }
+   
+    public OperationResult<String> d_rename(final String oldkey, final String newkey) {
+
+    	   return connPool.executeWithFailover(new BaseKeyOperation<String>(oldkey, OpName.RENAME) {
+
+               @Override
+               public String execute(Jedis client, ConnectionContext state) {
+                   return client.rename(oldkey, newkey);
+               }
+
+           });
+    }
+    
+    public Long renamenx(String oldkey, String newkey) {
+        return d_renamenx(oldkey, newkey).getResult();
+    }
+   
+    public OperationResult<Long> d_renamenx(final String oldkey, final String newkey) {
+
+    	   return connPool.executeWithFailover(new BaseKeyOperation<Long>(oldkey, OpName.RENAMENX) {
+
+               @Override
+               public Long execute(Jedis client, ConnectionContext state) {
+                   return client.renamenx(oldkey, newkey);
+               }
+
+           });
+    }
 
     public String restore(final String key, final Integer ttl, final byte[] serializedValue) {
         return d_restore(key, ttl, serializedValue).getResult();
@@ -2077,16 +2109,6 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
     @Override
     public Long msetnx(String... keysvalues) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public String rename(String oldkey, String newkey) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long renamenx(String oldkey, String newkey) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
