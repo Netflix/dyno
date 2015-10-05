@@ -375,7 +375,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
         });
     }
     
-    @Override
+    /* not supported by RedisPipeline 2.7.3 */
     public Double hincrByFloat(final String key, final String field, final double value) {
         return d_hincrByFloat(key, field, value).getResult();
     }
