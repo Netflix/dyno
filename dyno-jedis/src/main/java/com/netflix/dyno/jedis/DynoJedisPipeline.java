@@ -429,7 +429,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }.execute(key, OpName.HINCRBY);
     }
     
-    @Override
+    /* not supported by RedisPipeline 2.7.3 */
     public Response<Double> hincrByFloat(final String key, final String field, final double value) {
         return new PipelineOperation<Double>() {
 
@@ -617,7 +617,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
     }
     
-    @Override
+    /* not supported by RedisPipeline 2.7.3 */
     public Response<Double> incrByFloat(final String key, final double increment) {
         return new PipelineOperation<Double>() {
 
@@ -787,7 +787,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
     }
     
-    @Override
+    /* not supported by RedisPipeline 2.7.3 */
     public Response<String> rename(String oldkey, String newkey) {
         return new PipelineOperation<String>() {
         	
@@ -799,7 +799,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
     }
     
-    @Override
+    /* not supported by RedisPipeline 2.7.3 */
     public Response<Long> renamenx(String oldkey, String newkey) {
         return new PipelineOperation<Long>() {
         	
