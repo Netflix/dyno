@@ -788,7 +788,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
     
     /* not supported by RedisPipeline 2.7.3 */
-    public Response<String> rename(String oldkey, String newkey) {
+    public Response<String> rename(final String oldkey, final String newkey) {
         return new PipelineOperation<String>() {
         	
             @Override
@@ -800,7 +800,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
     
     /* not supported by RedisPipeline 2.7.3 */
-    public Response<Long> renamenx(String oldkey, String newkey) {
+    public Response<Long> renamenx(final String oldkey, final String newkey) {
         return new PipelineOperation<Long>() {
         	
             @Override
