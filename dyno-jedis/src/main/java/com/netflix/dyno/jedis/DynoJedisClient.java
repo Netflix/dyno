@@ -375,17 +375,18 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
         });
     }
     
-    public Double hincrByFloat(final String key, final String field, final double increment) {
-        return d_hincrByFloat(key, field, increment).getResult();
+    /* not supported by RedisPipeline 2.7.3 */
+    public Double hincrByFloat(final String key, final String field, final double value) {
+        return d_hincrByFloat(key, field, value).getResult();
     }
 
-    public OperationResult<Double> d_hincrByFloat(final String key, final String field, final double increment) {
+    public OperationResult<Double> d_hincrByFloat(final String key, final String field, final double value) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Double>(key, OpName.HINCRBYFLOAT) {
 
             @Override
             public Double execute(Jedis client, ConnectionContext state) {
-                return client.hincrByFloat(key, field, increment);
+                return client.hincrByFloat(key, field, value);
             }
 
         });
@@ -810,6 +811,40 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
         });
     }
+    
+    @Override
+    public String rename(String oldkey, String newkey) {
+        return d_rename(oldkey, newkey).getResult();
+    }
+   
+    public OperationResult<String> d_rename(final String oldkey, final String newkey) {
+
+    	   return connPool.executeWithFailover(new BaseKeyOperation<String>(oldkey, OpName.RENAME) {
+
+               @Override
+               public String execute(Jedis client, ConnectionContext state) {
+                   return client.rename(oldkey, newkey);
+               }
+
+           });
+    }
+    
+    @Override
+    public Long renamenx(String oldkey, String newkey) {
+        return d_renamenx(oldkey, newkey).getResult();
+    }
+   
+    public OperationResult<Long> d_renamenx(final String oldkey, final String newkey) {
+
+    	   return connPool.executeWithFailover(new BaseKeyOperation<Long>(oldkey, OpName.RENAMENX) {
+
+               @Override
+               public Long execute(Jedis client, ConnectionContext state) {
+                   return client.renamenx(oldkey, newkey);
+               }
+
+           });
+    }
 
     public String restore(final String key, final Integer ttl, final byte[] serializedValue) {
         return d_restore(key, ttl, serializedValue).getResult();
@@ -1164,6 +1199,11 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
             }
 
         });
+    }
+    
+    @Override
+    public Set<String> spop(String key, long count) {
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
@@ -2081,16 +2121,6 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
 
     @Override
-    public String rename(String oldkey, String newkey) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long renamenx(String oldkey, String newkey) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
     public Set<String> sinter(String... keys) {
         throw new UnsupportedOperationException("not yet implemented");
     }
@@ -2136,6 +2166,16 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
     @Override
     public Long zinterstore(String dstkey, ZParams params, String... sets) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+    
+    @Override
+    public  Set<String> zrevrangeByLex(String key, String max, String min) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+    
+    @Override
+    public  Set<String> zrevrangeByLex(String key, String max, String min, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 

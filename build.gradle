@@ -74,7 +74,7 @@ project(':dyno-jedis') {
     dependencies {
         compile  project(':dyno-core')
         compile  project(':dyno-contrib')
-        compile "redis.clients:jedis:2.6.3"
+        compile "redis.clients:jedis:2.7.3"
     }
 }
 
