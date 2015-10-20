@@ -1,6 +1,6 @@
-# Dyno: connection pool for Dynomite
+# Dyno [![Build Status](https://secure.travis-ci.org/Netflix/dyno.png)](http://travis-ci.org/Netflix/dyno)
  
- The dyno client encapsulates features necessary to scale a client application utilizing [Dynomite](https://github.com/Netflix/dynomite).
+ Dyno is a connection pool for Dynomite. It encapsulates features necessary to scale a client application utilizing [Dynomite](https://github.com/Netflix/dynomite).
  
  See the [blog post](http://techblog.netflix.com/2014/11/introducing-dynomite.html) for introductory info.
  
