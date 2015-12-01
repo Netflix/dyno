@@ -1,3 +1,18 @@
+/*******************************************************************************
+ * Copyright 2011 Netflix
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.jedis;
 
 import java.util.concurrent.TimeUnit;
@@ -67,10 +82,14 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 			OperationResultImpl<R> opResult = null;
 			
 			try { 
-				R result = op.execute(jedisClient, null);
-				opMonitor.recordSuccess(opName);
+				R result = op.execute(jedisClient, context);
+				if (context.hasMetadata("compression") || context.hasMetadata("decompression")) {
+                    opMonitor.recordSuccess(opName, true);
+                } else {
+                    opMonitor.recordSuccess(opName);
+                }
 				opResult = new OperationResultImpl<R>(opName, result, opMonitor);
-				return opResult;
+                return opResult;
 				
 			} catch (JedisConnectionException ex) {
                 Logger.warn("Caught JedisConnectionException: " + ex.getMessage());

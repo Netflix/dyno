@@ -50,6 +50,17 @@ public class LastOperationMonitor implements OperationMonitor {
 	}
 
 	@Override
+	public void recordSuccess(String opName, boolean compressionEnabled) {
+		String name = opName + "_" + compressionEnabled;
+		AtomicInteger count = opCounters.get(name);
+		if (count == null) {
+			opCounters.put(name, new AtomicInteger(1));
+		} else {
+			count.incrementAndGet();
+		}
+	}
+
+	@Override
 	public void recordFailure(String opName, String reason) {
 		AtomicInteger count = opFailureCounters.get(opName);
 		if (count == null) {
@@ -58,5 +69,24 @@ public class LastOperationMonitor implements OperationMonitor {
 			count.incrementAndGet();
 		}
 	}
+
+	@Override
+	public void recordFailure(String opName, boolean compressionEnabled, String reason) {
+		String name = opName + "_" + compressionEnabled;
+        AtomicInteger count = opCounters.get(name);
+        if (count == null) {
+            opCounters.put(name, new AtomicInteger(1));
+        } else {
+            count.incrementAndGet();
+        }
+	}
+
+    public Integer getSuccessCount(String opName) {
+        return opCounters.get(opName).get();
+    }
+
+    public Integer getSuccessCount(String opName, boolean compressionEnabled) {
+        return opCounters.get(opName + "_" + compressionEnabled).get();
+    }
 
 }

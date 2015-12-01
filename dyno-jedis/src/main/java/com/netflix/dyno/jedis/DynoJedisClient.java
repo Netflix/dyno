@@ -1,44 +1,41 @@
+/*******************************************************************************
+ * Copyright 2011 Netflix
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.jedis;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
-
-import org.slf4j.Logger;
-
-import redis.clients.jedis.BinaryClient.LIST_POSITION;
-import redis.clients.jedis.BitOP;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisCommands;
-import redis.clients.jedis.JedisPubSub;
-import redis.clients.jedis.MultiKeyCommands;
-import redis.clients.jedis.ScanResult;
-import redis.clients.jedis.SortingParams;
-import redis.clients.jedis.Tuple;
-import redis.clients.jedis.ZParams;
-
 import com.netflix.discovery.DiscoveryClient;
-import com.netflix.dyno.connectionpool.ConnectionContext;
-import com.netflix.dyno.connectionpool.ConnectionPool;
-import com.netflix.dyno.connectionpool.ConnectionPoolConfigurationPublisher;
-import com.netflix.dyno.connectionpool.HostSupplier;
-import com.netflix.dyno.connectionpool.Operation;
-import com.netflix.dyno.connectionpool.OperationResult;
-import com.netflix.dyno.connectionpool.TopologyView;
+import com.netflix.dyno.connectionpool.*;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
 import com.netflix.dyno.connectionpool.impl.lb.HttpEndpointBasedTokenMapSupplier;
-import com.netflix.dyno.contrib.ArchaiusConnectionPoolConfiguration;
-import com.netflix.dyno.contrib.ConnectionPoolConfigPublisherFactory;
-import com.netflix.dyno.contrib.DynoCPMonitor;
-import com.netflix.dyno.contrib.DynoOPMonitor;
-import com.netflix.dyno.contrib.EurekaHostsSupplier;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
+import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
+import com.netflix.dyno.contrib.*;
+import org.slf4j.Logger;
+import redis.clients.jedis.BinaryClient.LIST_POSITION;
+import redis.clients.jedis.*;
+
+import java.io.IOException;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.CompressionStrategy;
+
 
 public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
@@ -47,6 +44,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     private final String appName;
     private final ConnectionPool<Jedis> connPool;
     private final AtomicReference<DynoJedisPipelineMonitor> pipelineMonitor = new AtomicReference<DynoJedisPipelineMonitor>();
+    private final EnumSet<OpName> compressionOperations = EnumSet.of(OpName.APPEND);
 
     public DynoJedisClient(String name, ConnectionPool<Jedis> pool, DynoOPMonitor operationMonitor) {
         this.appName = name;
@@ -76,6 +74,78 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
         public String getKey() {
             return key;
         }
+
+    }
+
+    /**
+     * The following commands are supported
+     *
+     * <ul>
+     *     <lh>String Operations</lh>
+     *     <li>{@link #get(String) GET}</li>
+     *     <li>{@link #getSet(String, String) GETSET}</li>
+     *     <li>{@link #set(String, String) SET}</li>
+     *     <li>{@link #setex(String, int, String) SETEX}</li>
+     * </ul>
+     * <ul>
+     *     <lh>Hash Operations</lh>
+     *     <li>{@link #hget(String, String) HGET}</li>
+     *     <li>{@link #hgetAll(String) HGETALL}</li>
+     *     <li>{@link #hmget(String, String...) HMGET}</li>
+     *     <li>{@link #hmset(String, Map) HMSET}</li>
+     *     <li>{@link #hset(String, String, String) HSET}</li>
+     *     <li>{@link #hsetnx(String, String, String) HSETNX}</li>
+     *     <li>{@link #hvals(String) HVALS}</li>
+     * </ul>
+     *
+     * @param <T> the parameterized type
+     */
+    private abstract class CompressionValueOperation<T> extends BaseKeyOperation<T> implements CompressionOperation<Jedis, T> {
+
+        private CompressionValueOperation(String k, OpName o) {
+            super(k, o);
+        }
+
+        /**
+         * Compresses the value based on the threshold defined by
+         * {@link ConnectionPoolConfiguration#getValueCompressionThreshold()}
+         *
+         * @param value
+         * @return 
+         */
+        @Override
+        public String compressValue(String value, ConnectionContext ctx) {
+            String result = value;
+            int thresholdInKB = connPool.getConfiguration().getValueCompressionThreshold();
+
+            try {
+                // prefer speed over accuracy here so rather than using getBytes() to get the actual size
+                // just estimate using 2 bytes per character
+                if ((2 * value.length()) > (thresholdInKB * 1024)) {
+                    result = ZipUtils.compressStringToBase64String(value);
+                    ctx.setMetadata("compression", true);
+                }
+            } catch (IOException e) {
+                Logger.warn("UNABLE to compress [" + value + "] for key [" + getKey() + "]; sending value uncompressed");
+            }
+
+            return result;
+        }
+
+        @Override
+        public String decompressValue(String value, ConnectionContext ctx) {
+            try {
+                if (ZipUtils.isCompressed(value)) {
+                    ctx.setMetadata("decompression", true);
+                    return ZipUtils.decompressFromBase64String(value);
+                }
+            } catch (IOException e) {
+                Logger.warn("Unable to decompress value [" + value + "]");
+            }
+
+            return value;
+        }
+
     }
 
     public TopologyView getTopologyView() {
@@ -90,12 +160,10 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     public OperationResult<Long> d_append(final String key, final String value) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.APPEND) {
-
             @Override
             public Long execute(Jedis client, ConnectionContext state) {
                 return client.append(key, value);
             }
-
         });
     }
 
@@ -229,14 +297,21 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
     public OperationResult<String> d_get(final String key) {
 
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.GET) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.get(key);
-            }
-
-        });
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.GET) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.get(key);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.GET) {
+                @Override
+                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                    return decompressValue(client.get(key), state);
+                }
+            });
+        }
     }
 
     @Override
@@ -279,15 +354,21 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
 
     public OperationResult<String> d_getSet(final String key, final String value) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.GETSET) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.getSet(key, value);
-            }
-
-        });
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.GETSET) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.getSet(key, value);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.GETSET) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return decompressValue(client.getSet(key, compressValue(value, state)), state);
+                }
+            });
+        }
     }
 
     @Override
@@ -330,15 +411,21 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
 
     public OperationResult<String> d_hget(final String key, final String field) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.HGET) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.hget(key, field);
-            }
-
-        });
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.HGET) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.hget(key, field);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.HGET) {
+                @Override
+                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                    return decompressValue(client.hget(key, field), state);
+                }
+            });
+        }
     }
 
     @Override
@@ -347,15 +434,28 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
 
     public OperationResult<Map<String, String>> d_hgetAll(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Map<String, String>>(key, OpName.HGETALL) {
-
-            @Override
-            public Map<String, String> execute(Jedis client, ConnectionContext state) {
-                return client.hgetAll(key);
-            }
-
-        });
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<Map<String, String>>(key, OpName.HGETALL) {
+                @Override
+                public Map<String, String> execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.hgetAll(key);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<Map<String, String>>(key, OpName.HGETALL) {
+                @Override
+                public Map<String, String> execute(final Jedis client, final ConnectionContext state) {
+                    return CollectionUtils.transform(
+                            client.hgetAll(key),
+                            new CollectionUtils.MapEntryTransform<String, String, String>() {
+                                @Override
+                                public String get(String key, String val) {
+                                    return decompressValue(val, state);
+                                }
+                            });
+                }
+            });
+        }
     }
 
     @Override
@@ -381,15 +481,22 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
 
     public OperationResult<Long> d_hsetnx(final String key, final String field, final String value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HSETNX) {
+                @Override
+                public Long execute(Jedis client, ConnectionContext state) {
+                    return client.hsetnx(key, field, value);
+                }
 
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HSETNX) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.hsetnx(key, field, value);
-            }
-
-        });
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<Long>(key, OpName.HSETNX) {
+                @Override
+                public Long execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                    return client.hsetnx(key, field, compressValue(value, state));
+                }
+            });
+        }
     }
 
     @Override
@@ -432,15 +539,27 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
 
     public OperationResult<List<String>> d_hmget(final String key, final String... fields) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.HMGET) {
-
-            @Override
-            public List<String> execute(Jedis client, ConnectionContext state) {
-                return client.hmget(key, fields);
-            }
-
-        });
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.HMGET) {
+                @Override
+                public List<String> execute(Jedis client, ConnectionContext state) {
+                    return client.hmget(key, fields);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<List<String>>(key, OpName.HMGET) {
+                @Override
+                public List<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                    return new ArrayList<String>(CollectionUtils.transform(client.hmget(key, fields),
+                            new CollectionUtils.Transform<String, String>() {
+                        @Override
+                        public String get(String s) {
+                            return decompressValue(s, state);
+                        }
+                    }));
+                }
+            });
+        }
     }
 
     @Override
@@ -449,15 +568,28 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
 
     public OperationResult<String> d_hmset(final String key, final Map<String, String> hash) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.HMSET) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.hmset(key, hash);
-            }
-
-        });
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.HMSET) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) {
+                    return client.hmset(key, hash);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.HMSET) {
+                @Override
+                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                    return client.hmset(key,
+                            CollectionUtils.transform(hash, new CollectionUtils.MapEntryTransform<String, String, String>() {
+                                @Override
+                                public String get(String key, String val) {
+                                    return compressValue(val, state);
+                                }
+                            })
+                    );
+                }
+            });
+        }
     }
 
     @Override
@@ -466,15 +598,22 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
 
     public OperationResult<Long> d_hset(final String key, final String field, final String value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HSET) {
+                @Override
+                public Long execute(Jedis client, ConnectionContext state) {
+                    return client.hset(key, field, value);
+                }
 
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HSET) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.hset(key, field, value);
-            }
-
-        });
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<Long>(key, OpName.HSET) {
+                @Override
+                public Long execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                    return client.hset(key, field, compressValue(value, state));
+                }
+            });
+        }
     }
 
     @Override
@@ -483,15 +622,28 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
 
     public OperationResult<List<String>> d_hvals(final String key) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.HVALS) {
+                @Override
+                public List<String> execute(Jedis client, ConnectionContext state) {
+                    return client.hvals(key);
+                }
 
-        return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.HVALS) {
-
-            @Override
-            public List<String> execute(Jedis client, ConnectionContext state) {
-                return client.hvals(key);
-            }
-
-        });
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<List<String>>(key, OpName.HVALS) {
+                @Override
+                public List<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                    return new ArrayList<String>(CollectionUtils.transform(client.hvals(key),
+                            new CollectionUtils.Transform<String, String>() {
+                                @Override
+                                public String get(String s) {
+                                    return decompressValue(s, state);
+                                }
+                            }));
+                }
+            });
+        }
     }
 
     @Override
@@ -953,15 +1105,22 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
 
     public OperationResult<String> d_set(final String key, final String value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.set(key, value);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.SET) {
+                @Override
+                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                    return client.set(key, compressValue(value, state));
+                }
+            });
+        }
 
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.set(key, value);
-            }
-
-        });
     }
 
     @Override
@@ -1004,15 +1163,21 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
 
     public OperationResult<String> d_setex(final String key, final Integer seconds, final String value) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SETEX) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.setex(key, seconds, value);
-            }
-
-        });
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SETEX) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.setex(key, seconds, value);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.SETEX) {
+                @Override
+                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                    return client.setex(key, seconds, compressValue(value, state));
+                }
+            });
+        }
     }
 
     @Override
@@ -1021,15 +1186,21 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
 
     public OperationResult<Long> d_setnx(final String key, final String value) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.SETNX) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.setnx(key, value);
-            }
-
-        });
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.SETNX) {
+                @Override
+                public Long execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.setnx(key, value);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<Long>(key, OpName.SETNX) {
+                @Override
+                public Long execute(final Jedis client, final ConnectionContext state) {
+                    return client.setnx(key, compressValue(value, state));
+                }
+            });
+        }
     }
 
     @Override
@@ -2046,6 +2217,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
                 return client.keys(pattern);
             }
         });
+
         return results;
     }
 
@@ -2312,5 +2484,28 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
             final DynoJedisClient client = new DynoJedisClient(appName, pool, opMonitor);
             return client;
         }
+    }
+
+    /**
+     * Used for unit testing ONLY
+     */
+    /*package*/ static class TestBuilder {
+        private ConnectionPool cp;
+        private String appName;
+
+        public TestBuilder withAppname(String appName) {
+            this.appName = appName;
+            return this;
+        }
+
+        public TestBuilder withConnectionPool(ConnectionPool cp) {
+            this.cp = cp;
+            return this;
+        }
+
+        public DynoJedisClient build() {
+            return new DynoJedisClient(appName, cp, null);
+        }
+
     }
 }

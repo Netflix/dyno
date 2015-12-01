@@ -32,22 +32,37 @@ public class DynoOPMonitor implements OperationMonitor {
 
 	@Override
 	public void recordSuccess(String opName) {
-		getOrCreateCounter(opName).incrementSuccess();
+		getOrCreateCounter(opName, false).incrementSuccess();
 	}
 
 	@Override
 	public void recordFailure(String opName, String reason) {
-		getOrCreateCounter(opName).incrementFailure();
+		getOrCreateCounter(opName, false).incrementFailure();
 	}
-	
-	private class DynoOpCounter {
+
+    @Override
+    public void recordSuccess(String opName, boolean compressionEnabled) {
+        getOrCreateCounter(opName, compressionEnabled).incrementSuccess();
+    }
+
+    @Override
+    public void recordFailure(String opName, boolean compressionEnabled, String reason) {
+        getOrCreateCounter(opName, true).incrementFailure();
+    }
+
+    private class DynoOpCounter {
 		
-		private final Counter success; 
+		private final Counter success;
+        private final Counter successCompressionEnabled;
 		private final Counter failure;
+        private final Counter failureCompressionEnabled;
 		
 		private DynoOpCounter(String appName, String opName) {
-			success = getNewCounter("Dyno__" + appName + "__" + opName + "__SUCCESS", opName);
-			failure = getNewCounter("Dyno__" + appName + "__" + opName + "__ERROR", opName);
+			success = getNewCounter("Dyno__" + appName + "__" + opName + "__SUCCESS", opName, "false");
+            successCompressionEnabled = getNewCounter("Dyno__" + appName + "__" + opName + "__SUCCESS", opName, "true");
+
+            failure = getNewCounter("Dyno__" + appName + "__" + opName + "__ERROR", opName, "false");
+            failureCompressionEnabled = getNewCounter("Dyno__" + appName + "__" + opName + "__ERROR", opName, "true");
 		}
 		
 		private void incrementSuccess() {
@@ -58,26 +73,36 @@ public class DynoOPMonitor implements OperationMonitor {
 			failure.increment();
 		}
 		
-		private BasicCounter getNewCounter(String metricName, String opName) {
-			MonitorConfig config = 
-					MonitorConfig.builder(metricName).withTag(new BasicTag("dyno_op", opName)).build();
+		private BasicCounter getNewCounter(String metricName, String opName, String compressionEnabled) {
+			MonitorConfig config = MonitorConfig.builder(metricName)
+					.withTag(new BasicTag("dyno_op", opName))
+                    .withTag(new BasicTag("compression_enabled", compressionEnabled))
+                    .build();
 			return new BasicCounter(config);
 		}
 	}
 	
-	private DynoOpCounter getOrCreateCounter(String opName) {
-		
-		DynoOpCounter counter = counterMap.get(opName);
+	private DynoOpCounter getOrCreateCounter(String opName, boolean compressionEnabled) {
+
+		String counterName = opName + "_" + compressionEnabled;
+		DynoOpCounter counter = counterMap.get(counterName);
+
 		if (counter != null) {
 			return counter;
 		}
-		counter = new DynoOpCounter(appName, opName);
-		DynoOpCounter prevCounter = counterMap.putIfAbsent(opName, counter);
+
+		counter = new DynoOpCounter(appName, counterName);
+
+		DynoOpCounter prevCounter = counterMap.putIfAbsent(counterName, counter);
 		if (prevCounter != null) {
 			return prevCounter;
 		}
+
 		DefaultMonitorRegistry.getInstance().register(counter.success);
 		DefaultMonitorRegistry.getInstance().register(counter.failure);
+		DefaultMonitorRegistry.getInstance().register(counter.successCompressionEnabled);
+		DefaultMonitorRegistry.getInstance().register(counter.failureCompressionEnabled);
+
 		return counter; 
 	}
 

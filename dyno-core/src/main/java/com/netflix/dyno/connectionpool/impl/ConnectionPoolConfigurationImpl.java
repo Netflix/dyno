@@ -42,12 +42,15 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private static final int DEFAULT_FLUSH_TIMINGS_FREQ_SECONDS = 300;
 	private static final boolean DEFAULT_LOCAL_DC_AFFINITY = true; 
 	private static final LoadBalancingStrategy DEFAULT_LB_STRATEGY = LoadBalancingStrategy.TokenAware;
+	private static final CompressionStrategy DEFAULT_COMPRESSION_STRATEGY = CompressionStrategy.NONE;
     private static final String DEFAULT_CONFIG_PUBLISHER_ADDRESS = null;
     private static final boolean DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS = true;
     private static final int DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS_SECONDS = 60;
+    private static final int DEFAULT_VALUE_COMPRESSION_THRESHOLD = 5; // Specified in KB; by default, compression is OFF
 
-	private HostSupplier hostSupplier;
+    private HostSupplier hostSupplier;
 	private TokenMapSupplier tokenSupplier;
+	private HostConnectionPoolFactory hostConnectionPoolFactory;
 
 	private final String name;
 	private int port = DEFAULT_PORT; 
@@ -65,6 +68,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     private String configPublisherAddress = DEFAULT_CONFIG_PUBLISHER_ADDRESS;
     private boolean failOnStartupIfNoHosts = DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS;
     private int failOnStarupIfNoHostsSeconds = DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS_SECONDS;
+    private CompressionStrategy compressionStrategy = DEFAULT_COMPRESSION_STRATEGY;
+	private int valueCompressionThreshold = DEFAULT_VALUE_COMPRESSION_THRESHOLD;
 
 	private RetryPolicyFactory retryFactory = new RetryPolicyFactory() {
 
@@ -171,6 +176,16 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         return failOnStartupIfNoHosts;
     }
 
+    @Override
+    public CompressionStrategy getCompressionStrategy() {
+        return compressionStrategy;
+    }
+
+    @Override
+    public int getValueCompressionThreshold() {
+        return valueCompressionThreshold;
+    }
+
     public int getDefaultFailOnStartupIfNoHostsSeconds() {
         return failOnStarupIfNoHostsSeconds;
     }
@@ -233,8 +248,14 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 
     public ConnectionPoolConfigurationImpl setFailOnStartupIfNoHostsSeconds(int seconds) {
         this.failOnStarupIfNoHostsSeconds = seconds;
-        return null;
+        return this;
     }
+
+    public ConnectionPoolConfigurationImpl setCompressionStrategy(CompressionStrategy compStrategy) {
+        this.compressionStrategy = compStrategy;
+        return this;
+    }
+
 
 	public HostSupplier getHostSupplier() {
 		return hostSupplier;
@@ -258,6 +279,11 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		errorMonitorFactory = factory;
 		return this;
 	}
+
+    public ConnectionPoolConfigurationImpl withHostConnectionPoolFactory(HostConnectionPoolFactory factory) {
+        hostConnectionPoolFactory = factory;
+        return this;
+    }
 	
 	public static class ErrorRateMonitorConfigImpl implements ErrorRateMonitorConfig {
 
