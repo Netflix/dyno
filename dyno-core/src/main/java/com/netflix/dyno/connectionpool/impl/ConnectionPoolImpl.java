@@ -141,7 +141,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 		return cpMonitor;
 	}
 	
-	public ConnectionPoolHealthTracker<CL> getCPHealthTracker() {
+	public ConnectionPoolHealthTracker<CL> getHealthTracker() {
 		return cpHealthTracker;
 	}
 

@@ -4,15 +4,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -23,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
+import com.netflix.dyno.connectionpool.*;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
@@ -33,11 +26,7 @@ import org.xml.sax.helpers.DefaultHandler;
 
 import redis.clients.jedis.Response;
 
-import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
-import com.netflix.dyno.connectionpool.HostSupplier;
-import com.netflix.dyno.connectionpool.OperationResult;
-import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.jedis.DynoJedisClient;
@@ -47,9 +36,13 @@ public class DynoJedisDemo {
 
 	protected DynoJedisClient client;
 
-	public DynoJedisDemo() {
+    protected int numKeys;
 
-	}
+    protected final String localDC;
+
+	public DynoJedisDemo(String localDC) {
+        this.localDC = localDC;
+    }
 
 	public void initWithLocalHost() throws Exception {
 
@@ -109,28 +102,82 @@ public class DynoJedisDemo {
 		.withApplicationName("demo")
 		.withDynomiteClusterName("dyno_demo")
 		.withHostSupplier(hostSupplier)
-		.withCPConfig(new ConnectionPoolConfigurationImpl("demo")
-		.setLocalDC("us-east-1e")
-				)
+		.withCPConfig(
+                new ConnectionPoolConfigurationImpl("demo")
+                        .setLocalDC(this.localDC)
+                        //.setCompressionStrategy(ConnectionPoolConfiguration.CompressionStrategy.THRESHOLD)
+                        //.setCompressionThreshold(2)
+        )
 		.withPort(port)
 		.build();
 	}
 
 	public void runSimpleTest() throws Exception {
 
-		int numKeys = 11;
+		this.numKeys = 10;
+
 		// write
 		for (int i=0; i<numKeys; i++) {
-			client.set("PuneetTest" + i, "" + i);
+            System.out.println("Writing key/value => DynoClientTest-" + i + " / " + i);
+			client.set("DynoClientTest-" + i, "" + i);
 		}
 		// read
 		for (int i=0; i<numKeys; i++) {
-			OperationResult<String> result = client.d_get("PuneetTest"+i);
-			System.out.println("Key: " + i + ", Value: " + result.getResult() + " " + result.getNode());
+			OperationResult<String> result = client.d_get("DynoClientTest-"+i);
+			System.out.println("Reading Key: " + i + ", Value: " + result.getResult() + " " + result.getNode());
 		}
 	}
 
-	
+	public void runPipelineEmptyResult() throws Exception {
+		DynoJedisPipeline pipeline  = client.pipelined();
+        DynoJedisPipeline pipeline2  = client.pipelined();
+
+		try {
+			byte[] field1 = "field1".getBytes();
+			byte[] field2 = "field2".getBytes();
+
+			pipeline.hset("myHash".getBytes(), field1, "hello".getBytes());
+			pipeline.hset("myHash".getBytes(), field2, "world".getBytes());
+
+			Thread.sleep(1000);
+
+			Response<List<byte[]>> result = pipeline.hmget("myHash".getBytes(), field1, field2, "miss".getBytes());
+
+			pipeline.sync();
+
+			System.out.println("TEST-1: hmget for 2 valid results and 1 non-existent field");
+            for (int i=0; i < result.get().size(); i++) {
+                byte[] val = result.get().get(i);
+                if (val != null) {
+                    System.out.println("TEST-1:Result => " + i + ") " +  new String(val) );
+                } else {
+                    System.out.println("TEST-1:Result => " + i + ") " + val);
+                }
+            }
+
+		} catch (Exception e) {
+			pipeline.discardPipelineAndReleaseConnection();
+			throw e;
+		}
+
+        try {
+            Response<List<byte[]>> result2 = pipeline2.hmget("foo".getBytes(), "miss1".getBytes(), "miss2".getBytes());
+
+            pipeline2.sync();
+
+            System.out.println("TEST-2: hmget when all fields (3) are not present in the hash");
+            if (result2.get() == null) {
+                System.out.println("TEST-2: result is null");
+            } else {
+                for (int i = 0; i < result2.get().size(); i++) {
+                    System.out.println("TEST-2:" + Arrays.toString(result2.get().get(i)));
+                }
+            }
+        } catch (Exception e) {
+            pipeline.discardPipelineAndReleaseConnection();
+            throw e;
+        }
+	}
 
 	public void runKeysTest() throws Exception {
 
@@ -329,9 +376,6 @@ public class DynoJedisDemo {
 
 			Response<String> hmsetResult = pipeline.hmset(("hash__" + i).getBytes(), bar);
 
-//			Response<Long> resultA1 = pipeline.hset("Puneet_pipeline" + i, "a1", "v11");
-//			Response<Long> resultA2 = pipeline.hset("Puneet_pipeline" + i, "a2", "v11");
-
 			pipeline.sync();
 
 			System.out.println(hmsetResult.get());
@@ -352,6 +396,59 @@ public class DynoJedisDemo {
         }
 		System.out.println("Got hash :" + sb.toString());
 	}
+
+    public void runSinglePipelineWithCompression(boolean useBinary) throws Exception {
+        for (int i=0; i<3; i++) {
+            DynoJedisPipeline pipeline = client.pipelined();
+
+            // Map
+//            Map<String, String> map = new HashMap<String, String>();
+//            String value1 = generateValue(3);
+//            String value2 = generateValue(4);
+//            map.put("key__1", value1);
+//            map.put("key__2", value2);
+//            Response<String> hmsetResult = pipeline.hmset(("hash__" + i).getBytes(), bar);
+
+            // Strings
+            String value1 = generateValue(3);
+            Response<String> resp = pipeline.set("DynoJedisDemo__key__" + i, value1);
+
+            pipeline.sync();
+
+            System.out.println(resp.get());
+        }
+
+        System.out.println("Reading keys");
+
+        for (int i=0; i<3; i++) {
+            DynoJedisPipeline readPipeline = client.pipelined();
+            Response<String> resp = readPipeline.get("DynoJedisDemo__key__" + i);
+            readPipeline.sync();
+            System.out.println("Result => " + i + ") " +  resp.get());
+        }
+
+    }
+
+    public void runSandboxTest() throws Exception {
+        Set<String> keys = client.keys("zuulRules:*");
+        System.out.println("GOT KEYS");
+        System.out.println(keys.size());
+    }
+
+    private static String generateValue(int kilobytes) {
+        StringBuilder sb = new StringBuilder(kilobytes * 512); // estimating 2 bytes per char
+        for (int i = 0; i < kilobytes; i++) {
+            for (int j = 0; j < 10; j++) {
+                sb.append("abcdefghijklmnopqrstuvwxzy0123456789a1b2c3d4f5g6h7"); // 50 characters (~100 bytes)
+                sb.append(":");
+                sb.append("abcdefghijklmnopqrstuvwxzy0123456789a1b2c3d4f5g6h7");
+                sb.append(":");
+            }
+        }
+
+        return sb.toString();
+
+    }
 	
 	public void runPipeline() throws Exception {
 		
@@ -543,29 +640,71 @@ public class DynoJedisDemo {
 			return list;
 		}
 	};
-	
+
+	/**
+	 *
+	 * @param args Should contain:
+	 *             <ol>dynomite_cluster_name</ol>
+	 *             <ol>
+	 *                 test number, in the set:
+	 *                 1 - simple test
+	 *                 2 - keys test
+	 *                 3 - multi-threaded
+	 *                 4 - singe pipeline
+	 *                 5 - pipeline
+	 *                 6 - binary single pipeline
+	 *             </ol>
+	 */
 	public static void main(String args[]) {
 
-		//BasicConfigurator.configure();
-		DynoJedisDemo demo = new DynoJedisDemo();
+		if (args.length < 2) {
+			System.out.println("Incorrect numer of arguments.");
+			printUsage();
+			System.exit(1);
+		}
 
-		try {
-			
-			demo.initWithRemoteClusterFromEurekaUrl("dyno_jcacciatore_7", 8102);
+		String clusterName = args[0];
+		int testNumber = Integer.valueOf(args[1]);
+        String localDC = args.length > 2 ? args[2] : "us-east-1e";
+        String hostsFile = args.length == 4 ? args[3] : null;
+
+        DynoJedisDemo demo = new DynoJedisDemo(localDC);
+
+        try {
+			if (hostsFile != null) {
+                demo.initWithRemoteClusterFromFile(hostsFile, 8102);
+            } else {
+                demo.initWithRemoteClusterFromEurekaUrl(clusterName, 8102);
+            }
+
 			System.out.println("Connected");
 
-			//demo.runSimpleTest();
-			//demo.runKeysTest();
-			//demo.runMultiThreaded();
+			switch (testNumber) {
+				case 1: {
+					demo.runSimpleTest();
+					break;
+				}
+				case 2: {
+					demo.runKeysTest();
+					break;
+				}
+				case 3: {
+					demo.runMultiThreaded();
+					break;
+				}
+			}
+
 			//demo.runSinglePipeline();
 			//demo.runPipeline();
-			demo.runBinarySinglePipeline();
-			
+			//demo.runBinarySinglePipeline();
+			//demo.runPipelineEmptyResult();
+            //demo.runSinglePipelineWithCompression(false);
 			//demo.runLongTest();
+            demo.runSandboxTest();
+
 			Thread.sleep(1000);
 			
-			//		demo.cleanup();
-			
+			demo.cleanup(demo.numKeys);
 			
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -573,6 +712,9 @@ public class DynoJedisDemo {
 			demo.stop();
             System.out.println("Done");
 		}
-
 	}
+
+    protected static void printUsage() {
+        // todo
+    }
 }

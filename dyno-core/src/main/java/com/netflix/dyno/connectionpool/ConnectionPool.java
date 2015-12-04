@@ -143,4 +143,9 @@ public interface ConnectionPool<CL> {
      */
     ConnectionPoolConfiguration getConfiguration();
 
+    /**
+     * Retrieve an instance of {@link HealthTracker}
+     */
+    HealthTracker<CL> getHealthTracker();
+
 }

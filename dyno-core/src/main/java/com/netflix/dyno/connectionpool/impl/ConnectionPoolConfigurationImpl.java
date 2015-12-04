@@ -256,6 +256,11 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         return this;
     }
 
+	public ConnectionPoolConfigurationImpl setCompressionThreshold(int thresholdInKB) {
+		this.valueCompressionThreshold = thresholdInKB;
+		return this;
+	}
+
 
 	public HostSupplier getHostSupplier() {
 		return hostSupplier;

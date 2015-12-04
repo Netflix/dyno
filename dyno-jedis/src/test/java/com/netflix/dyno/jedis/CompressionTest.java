@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2011 Netflix
+ * Copyright 2015 Netflix
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,9 @@ package com.netflix.dyno.jedis;
 
 import com.netflix.dyno.connectionpool.ConnectionPool;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
+import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.OperationMonitor;
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
 import com.netflix.dyno.connectionpool.impl.LastOperationMonitor;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
 import org.junit.Assert;
@@ -31,6 +33,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -44,6 +47,12 @@ public class CompressionTest {
     private DynoJedisClient client;
     private ConnectionPool<Jedis> connectionPool;
     private OperationMonitor opMonitor;
+
+    @Mock
+    DynoJedisPipelineMonitor pipelineMonitor;
+
+    @Mock
+    ConnectionPoolMonitor cpMonitor;
 
     @Mock
     ConnectionPoolConfiguration config;
@@ -113,6 +122,33 @@ public class CompressionTest {
         LastOperationMonitor monitor = (LastOperationMonitor) opMonitor;
         Assert.assertTrue(1 == monitor.getSuccessCount(OpName.HMSET.name(), true));
     }
+
+    @Test
+    public void testZipUtilsDecompressBytesNonBase64() throws Exception {
+        String s = "ABCDEFG__abcdefg__1234567890'\"\\+=-::ABCDEFG__abcdefg__1234567890'\"\\+=-::ABCDEFG__abcdefg__1234567890'\"\\+=-";
+        byte[] val = s.getBytes();
+
+        byte[] compressed =  ZipUtils.compressBytesNonBase64(val);
+
+        Assert.assertTrue(compressed.length < val.length);
+
+        byte[] decompressed = ZipUtils.decompressBytesNonBase64(compressed);
+
+        Assert.assertEquals(s, new String(decompressed));
+    }
+
+//    @Test
+//    public void testDynoJedisPipeline_Binary_HGETALL() throws Exception {
+//        Map<byte[], byte[]>
+//
+//        ConnectionPoolImpl cp = mock(ConnectionPoolImpl.class);
+//
+//        DynoJedisPipeline pipeline = new
+//                DynoJedisPipeline(cp, pipelineMonitor, cpMonitor);
+//
+//        //pipeline.hgetAll();
+//
+//    }
 
     public static final String KEY_1KB = "keyFor1KBValue";
     public static final String KEY_3KB = "keyFor3KBValue";

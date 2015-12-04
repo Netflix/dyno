@@ -67,6 +67,19 @@ public final class ZipUtils {
     }
 
     /**
+     * Decompresses the given byte array without transforming it into a String
+     *
+     * @param compressed byte array input
+     * @return decompressed data in a byte array
+     * @throws IOException
+     */
+    public static byte[] decompressBytesNonBase64(byte[] compressed) throws IOException {
+        ByteArrayInputStream is = new ByteArrayInputStream(compressed);
+        InputStream gis = new GZIPInputStream(is);
+        return IOUtils.toByteArray(gis);
+    }
+
+    /**
      * Decompresses the given byte array
      *
      * @param compressed byte array input

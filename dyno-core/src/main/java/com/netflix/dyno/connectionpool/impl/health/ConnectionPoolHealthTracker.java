@@ -20,14 +20,11 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.netflix.dyno.connectionpool.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.netflix.dyno.connectionpool.Connection;
-import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
-import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
-import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import com.netflix.dyno.connectionpool.exception.TimeoutException;
@@ -46,7 +43,7 @@ import com.netflix.dyno.connectionpool.exception.TimeoutException;
  *
  * @param <CL>
  */
-public class ConnectionPoolHealthTracker<CL> {
+public class ConnectionPoolHealthTracker<CL> implements HealthTracker<CL> {
 	
 	private static final Logger Logger = LoggerFactory.getLogger(ConnectionPoolHealthTracker.class);
 	
@@ -139,7 +136,8 @@ public class ConnectionPoolHealthTracker<CL> {
 	public void stop() {
 		stop.set(true);
 	}
-	
+
+	@Override
 	public void trackConnectionError(HostConnectionPool<CL> hostPool, DynoException e) {
 			
 		if (e != null && e instanceof TimeoutException) {

@@ -433,14 +433,14 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
         return d_hgetAll(key).getResult();
     }
 
-    public OperationResult<Map<String, String>> d_hgetAll(final String key) {
-        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<Map<String, String>>(key, OpName.HGETALL) {
-                @Override
-                public Map<String, String> execute(Jedis client, ConnectionContext state) throws DynoException {
-                    return client.hgetAll(key);
-                }
-            });
+            public OperationResult<Map<String, String>> d_hgetAll(final String key) {
+                if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+                    return connPool.executeWithFailover(new BaseKeyOperation<Map<String, String>>(key, OpName.HGETALL) {
+                        @Override
+                        public Map<String, String> execute(Jedis client, ConnectionContext state) throws DynoException {
+                            return client.hgetAll(key);
+                        }
+                    });
         } else {
             return connPool.executeWithFailover(new CompressionValueOperation<Map<String, String>>(key, OpName.HGETALL) {
                 @Override
@@ -2476,6 +2476,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
                     throw new RuntimeException(e);
                 }
 
+                Logger.warn("UNABLE TO START CONNECTION POOL -- IDLING");
                 pool.idle();
             } catch (Exception e) {
                 throw new RuntimeException(e);

@@ -118,6 +118,7 @@ public class DynoRedissonClient {
                     throw new RuntimeException(e);
                 }
 
+				Logger.warn("UNABLE TO START CONNECTION POOL -- IDLING");
                 pool.idle();
 			}
 			

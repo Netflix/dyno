@@ -189,6 +189,11 @@ public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
         return config;
     }
 
+    @Override
+    public HealthTracker<Jedis> getHealthTracker() {
+        return null;
+    }
+
 
     @Override
     public Future<Boolean> updateHosts(Collection activeHosts, Collection inactiveHosts) {
