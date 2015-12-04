@@ -163,17 +163,26 @@ public interface ConnectionPoolConfiguration {
     boolean getFailOnStartupIfNoHosts();
 
     /**
-     * Determines if values should be compressed prior to sending them across the wire to Dynomite. A value of
-     * -1 disables this feature. Note that this feature <strong>is disabled by default</strong>. Clients
-     * need to explicitly set a threshold for this to take effect. It is recommended that clients be mindful in
-     * choosing a threshold that will yield an appropriate return given the speed tradeoff.
+     * This works in conjunction with {@link #getCompressionStrategy()}. The compression strategy must be set to
+     * {@link CompressionStrategy#THRESHOLD} for this to have any effect.
      * <p>
-     * The value for this configuration setting is specific in terms of <strong>kilobytes</strong>
+     * The value for this configuration setting is specified in <strong>kilobytes</strong>
      *
-     * @return The final value to be used as a threshold. Note that a negative value disables this feature.
+     * @return The final value to be used as a threshold in kilobytes.
      */
     int getValueCompressionThreshold();
 
+    /**
+     * Determines if values should be compressed prior to sending them across the wire to Dynomite. Note that this
+     * feature <strong>is disabled by default</strong>.
+     * <p>
+     * Note that if compression is not enabled, no attempt to compress or decompress any data is made. If compression
+     * has been enabled and needs to be disabled, rather than disabling compression it is recommended to set the
+     * threshold to a large number so that effectively nothing will be compressed however data retrieved will still
+     * be decompressed.
+     *
+     * @return the configured compression strategy value
+     */
     CompressionStrategy getCompressionStrategy();
 
 }
