@@ -256,7 +256,7 @@ public class HostConnectionPoolImplTest {
 
 				Connection<TestClient> connection = null;
 				try {
-					connection = pool.borrowConnection(20, TimeUnit.MILLISECONDS);
+					connection = pool.borrowConnection(100, TimeUnit.MILLISECONDS);
 					if (sleepMs > 0) {
 						Thread.sleep(sleepMs);
 					}
