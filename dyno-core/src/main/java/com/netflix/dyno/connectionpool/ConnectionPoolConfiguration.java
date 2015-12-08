@@ -25,6 +25,14 @@ public interface ConnectionPoolConfiguration {
 		RoundRobin, TokenAware;
 	}
 
+    enum CompressionStrategy {
+        /** Disables compression */
+        NONE,
+
+        /** Compresses values that exceed {@link #getValueCompressionThreshold()} */
+        THRESHOLD
+    }
+
     /**
      * @return Unique name assigned to this connection pool
      */
@@ -153,5 +161,28 @@ public interface ConnectionPoolConfiguration {
      * @return boolean to control the startup behavior specified in the description.
      */
     boolean getFailOnStartupIfNoHosts();
+
+    /**
+     * This works in conjunction with {@link #getCompressionStrategy()}. The compression strategy must be set to
+     * {@link CompressionStrategy#THRESHOLD} for this to have any effect.
+     * <p>
+     * The value for this configuration setting is specified in <strong>kilobytes</strong>
+     *
+     * @return The final value to be used as a threshold in kilobytes.
+     */
+    int getValueCompressionThreshold();
+
+    /**
+     * Determines if values should be compressed prior to sending them across the wire to Dynomite. Note that this
+     * feature <strong>is disabled by default</strong>.
+     * <p>
+     * Note that if compression is not enabled, no attempt to compress or decompress any data is made. If compression
+     * has been enabled and needs to be disabled, rather than disabling compression it is recommended to set the
+     * threshold to a large number so that effectively nothing will be compressed however data retrieved will still
+     * be decompressed.
+     *
+     * @return the configured compression strategy value
+     */
+    CompressionStrategy getCompressionStrategy();
 
 }

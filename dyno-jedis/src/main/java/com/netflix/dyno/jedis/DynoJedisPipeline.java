@@ -1,33 +1,30 @@
 package com.netflix.dyno.jedis;
 
+import com.netflix.dyno.connectionpool.*;
+import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.exception.DynoException;
+import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
+import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
+import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
+import com.netflix.dyno.jedis.JedisConnectionFactory.JedisConnection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import redis.clients.jedis.BinaryClient.LIST_POSITION;
+import redis.clients.jedis.*;
+import redis.clients.jedis.exceptions.JedisConnectionException;
+
+import javax.annotation.concurrent.NotThreadSafe;
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import javax.annotation.concurrent.NotThreadSafe;
-
-import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import redis.clients.jedis.BinaryClient.LIST_POSITION;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.Pipeline;
-import redis.clients.jedis.RedisPipeline;
-import redis.clients.jedis.Response;
-import redis.clients.jedis.SortingParams;
-import redis.clients.jedis.Tuple;
-import redis.clients.jedis.exceptions.JedisConnectionException;
-
-import com.netflix.dyno.connectionpool.BaseOperation;
-import com.netflix.dyno.connectionpool.Connection;
-import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
-import com.netflix.dyno.connectionpool.exception.DynoException;
-import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
-import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
-import com.netflix.dyno.jedis.JedisConnectionFactory.JedisConnection;
+import static com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.CompressionStrategy;
 
 @NotThreadSafe
 public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
@@ -105,6 +102,166 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }
     }
 
+    private String decompressValue(String value) {
+        try {
+            if (ZipUtils.isCompressed(value)) {
+                return ZipUtils.decompressFromBase64String(value);
+            }
+        } catch (IOException e) {
+            Logger.warn("Unable to decompress value [" + value + "]");
+        }
+
+        return value;
+    }
+
+    private byte[] decompressValue(byte[] value) {
+        try {
+            if (ZipUtils.isCompressed(value)) {
+                return ZipUtils.decompressBytesNonBase64(value);
+            }
+        } catch (IOException e) {
+            Logger.warn("Unable to decompress byte array value [" + value + "]");
+        }
+        return value;
+    }
+
+    /**
+     * As long as jdk 7 and below is supported we need to define our own function interfaces
+     */
+    private interface Func0<R> {
+        R call();
+    }
+
+    public class PipelineResponse extends Response<String> {
+
+        private Response<String> response;
+
+        public PipelineResponse(Builder<String> b) {
+            super(BuilderFactory.STRING);
+        }
+
+        public PipelineResponse apply(Func0<? extends Response<String>> f) {
+            this.response = f.call();
+            return this;
+        }
+
+        @Override
+        public String get() {
+            return decompressValue(response.get());
+        }
+
+    }
+
+    public class PipelineLongResponse extends Response<Long> {
+        private Response<Long> response;
+
+        public PipelineLongResponse(Builder<Long> b) {
+            super(b);
+        }
+
+        public PipelineLongResponse apply(Func0<? extends Response<Long>> f) {
+            this.response = f.call();
+            return this;
+        }
+    }
+
+    public class PipelineListResponse extends Response<List<String>> {
+
+        private Response<List<String>> response;
+
+        public PipelineListResponse(Builder<List> b) {
+            super(BuilderFactory.STRING_LIST);
+        }
+
+        public PipelineListResponse apply(Func0<? extends Response<List<String>>> f) {
+            this.response = f.call();
+            return this;
+        }
+
+        @Override
+        public List<String> get() {
+            return new ArrayList<String>(CollectionUtils.transform(
+                    response.get(),
+                    new CollectionUtils.Transform<String, String>(){
+                        @Override
+                        public String get(String s) {
+                            return decompressValue(s);
+                        }
+                    }
+            ));
+        }
+    }
+
+    public class PipelineBinaryResponse extends Response<byte[]> {
+
+        private Response<byte[]> response;
+
+        public PipelineBinaryResponse(Builder<String> b) {
+            super(BuilderFactory.BYTE_ARRAY);
+        }
+
+        public PipelineBinaryResponse apply(Func0<? extends Response<byte[]>> f) {
+            this.response = f.call();
+            return this;
+        }
+
+        @Override
+        public byte[] get() {
+            return decompressValue(response.get());
+        }
+
+    }
+
+    public class PipelineMapResponse extends Response<Map<String, String>> {
+
+        private Response<Map<String, String>> response;
+
+        public PipelineMapResponse(Builder<Map<String, String>> b) {
+            super(BuilderFactory.STRING_MAP);
+        }
+
+        @Override
+        public Map<String, String> get() {
+            return CollectionUtils.transform(
+                    response.get(),
+                    new CollectionUtils.MapEntryTransform<String, String, String>() {
+                        @Override
+                        public String get(String key, String val) {
+                            return decompressValue(val);
+                        }
+                    }
+            );
+        }
+    }
+
+    public class PipelineBinaryMapResponse extends Response<Map<byte[], byte[]>> {
+
+        private Response<Map<byte[], byte[]>> response;
+
+        public PipelineBinaryMapResponse(Builder<Map<byte[], byte[]>> b) {
+            super(BuilderFactory.BYTE_ARRAY_MAP);
+        }
+
+        public PipelineBinaryMapResponse apply(Func0<? extends Response<Map<byte[], byte[]>>> f) {
+            this.response = f.call();
+            return this;
+        }
+
+        @Override
+        public Map<byte[], byte[]> get() {
+            return CollectionUtils.transform(
+                    response.get(),
+                    new CollectionUtils.MapEntryTransform<byte[], byte[], byte[]>() {
+                        @Override
+                        public byte[] get(byte[] key, byte[] val) {
+                            return decompressValue(val);
+                        }
+                    }
+            );
+        }
+
+    }
+
     private abstract class PipelineOperation<R> {
 
         abstract Response<R> execute(Pipeline jedisPipeline) throws DynoException;
@@ -128,12 +285,59 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
                 return execute(jedisPipeline);
 
             } catch (JedisConnectionException ex) {
-                DynoException e = new FatalConnectionException(ex).setAttempt(1);
-                pipelineEx.set(e);
-                cpMonitor.incOperationFailure(connection.getHost(), e);
+                handleConnectionException(ex);
                 throw ex;
             }
         }
+
+        void handleConnectionException(JedisConnectionException ex) {
+            DynoException e = new FatalConnectionException(ex).setAttempt(1);
+            pipelineEx.set(e);
+            cpMonitor.incOperationFailure(connection.getHost(), e);
+        }
+    }
+
+    private abstract class PipelineCompressionOperation<R> extends PipelineOperation<R> {
+
+        /**
+         * Compresses the value based on the threshold defined by
+         * {@link ConnectionPoolConfiguration#getValueCompressionThreshold()}
+         *
+         * @param value
+         * @return
+         */
+        public String compressValue(String value) {
+            String result = value;
+            int thresholdInKB = connPool.getConfiguration().getValueCompressionThreshold();
+
+            try {
+                // prefer speed over accuracy here so rather than using getBytes() to get the actual size
+                // just estimate using 2 bytes per character
+                if ((2 * value.length()) > (thresholdInKB * 1024)) {
+                    result = ZipUtils.compressStringToBase64String(value);
+                }
+            } catch (IOException e) {
+                Logger.warn("UNABLE to compress [" + value + "]; sending value uncompressed");
+            }
+
+            return result;
+        }
+
+        public byte[] compressValue(byte[] value) {
+            int thresholdInKB = connPool.getConfiguration().getValueCompressionThreshold();
+
+            if (value.length > thresholdInKB * 1024) {
+                try {
+                    return ZipUtils.compressBytesNonBase64(value);
+                } catch (IOException e) {
+                    Logger.warn("UNABLE to compress byte array [" + value + "]; sending value uncompressed");
+                }
+            }
+
+            return value;
+        }
+
+
     }
 
     @Override
@@ -276,19 +480,32 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
     @Override
     public Response<String> get(final String key) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                long startTime = System.nanoTime() / 1000;
-                try {
-                    return jedisPipeline.get(key);
-                } finally {
-                    long duration = System.nanoTime() / 1000 - startTime;
-                    opMonitor.recordSendLatency(OpName.GET.name(), duration, TimeUnit.MICROSECONDS);
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<String>() {
+                @Override
+                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
+                    long startTime = System.nanoTime() / 1000;
+                    try {
+                        return jedisPipeline.get(key);
+                    } finally {
+                        long duration = System.nanoTime() / 1000 - startTime;
+                        opMonitor.recordSendLatency(OpName.GET.name(), duration, TimeUnit.MICROSECONDS);
+                    }
                 }
-            }
-        }.execute(key, OpName.GET);
+            }.execute(key, OpName.GET);
+        } else {
+            return new PipelineCompressionOperation<String>() {
+                @Override
+                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
+                    return new PipelineResponse(null).apply(new Func0<Response<String>>() {
+                        @Override
+                        public Response<String> call() {
+                            return jedisPipeline.get(key);
+                        }
+                    });
+                }
+            }.execute(key, OpName.GET);
+        }
 
     }
 
@@ -318,14 +535,26 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
     @Override
     public Response<String> getSet(final String key, final String value) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.getSet(key, value);
-            }
-        }.execute(key, OpName.GETSET);
-
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<String>() {
+                @Override
+                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
+                    return jedisPipeline.getSet(key, value);
+                }
+            }.execute(key, OpName.GETSET);
+        } else {
+            return new PipelineCompressionOperation<String>() {
+                @Override
+                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
+                    return new PipelineResponse(null).apply(new Func0<Response<String>>() {
+                        @Override
+                        public Response<String> call() {
+                            return jedisPipeline.getSet(key, compressValue(value));
+                        }
+                    });
+                }
+            }.execute(key, OpName.GETSET);
+        }
     }
 
     @Override
@@ -354,13 +583,26 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
     @Override
     public Response<String> hget(final String key, final String field) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hget(key, field);
-            }
-        }.execute(key, OpName.HGET);
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<String>() {
+                @Override
+                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
+                    return jedisPipeline.hget(key, field);
+                }
+            }.execute(key, OpName.HGET);
+        } else {
+            return new PipelineCompressionOperation<String>() {
+                @Override
+                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
+                    return new PipelineResponse(null).apply(new Func0<Response<String>>() {
+                        @Override
+                        public Response<String> call() {
+                            return jedisPipeline.hget(key, field);
+                        }
+                    });
+                }
+            }.execute(key, OpName.HGET);
+        }
 
     }
 
@@ -369,18 +611,31 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
      * interface is not yet implemented.
      */
     public Response<byte[]> hget(final byte[] key, final byte[] field) {
-        return new PipelineOperation<byte[]>() {
-
-            @Override
-            Response<byte[]> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hget(key, field);
-            }
-        }.execute(key, OpName.HGET);
-
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<byte[]>() {
+                @Override
+                Response<byte[]> execute(Pipeline jedisPipeline) throws DynoException {
+                    return jedisPipeline.hget(key, field);
+                }
+            }.execute(key, OpName.HGET);
+        } else {
+            return new PipelineCompressionOperation<byte[]>() {
+                @Override
+                Response<byte[]> execute(final Pipeline jedisPipeline) throws DynoException {
+                    return new PipelineBinaryResponse(null).apply(new Func0<Response<byte[]>>() {
+                        @Override
+                        public Response<byte[]> call() {
+                            return jedisPipeline.hget(key, field);
+                        }
+                    });
+                }
+            }.execute(key, OpName.HGET);
+        }
     }
 
     @Override
     public Response<Map<String, String>> hgetAll(final String key) {
+
         return new PipelineOperation<Map<String, String>>() {
 
             @Override
@@ -403,19 +658,32 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
      * interface is not yet implemented.
      */
     public Response<Map<byte[], byte[]>> hgetAll(final byte[] key) {
-        return new PipelineOperation<Map<byte[], byte[]>>() {
-
-            @Override
-            Response<Map<byte[], byte[]>> execute(Pipeline jedisPipeline) throws DynoException {
-                long startTime = System.nanoTime() / 1000;
-                try {
-                    return jedisPipeline.hgetAll(key);
-                } finally {
-                    long duration = System.nanoTime() / 1000 - startTime;
-                    opMonitor.recordSendLatency(OpName.HGETALL.name(), duration, TimeUnit.MICROSECONDS);
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<Map<byte[], byte[]>>() {
+                @Override
+                Response<Map<byte[], byte[]>> execute(Pipeline jedisPipeline) throws DynoException {
+                    long startTime = System.nanoTime() / 1000;
+                    try {
+                        return jedisPipeline.hgetAll(key);
+                    } finally {
+                        long duration = System.nanoTime() / 1000 - startTime;
+                        opMonitor.recordSendLatency(OpName.HGETALL.name(), duration, TimeUnit.MICROSECONDS);
+                    }
                 }
-            }
-        }.execute(key, OpName.HGETALL);
+            }.execute(key, OpName.HGETALL);
+        } else {
+            return new PipelineCompressionOperation<Map<byte[], byte[]>>() {
+                @Override
+                Response<Map<byte[], byte[]>> execute(final Pipeline jedisPipeline) throws DynoException {
+                    return new PipelineBinaryMapResponse(null).apply(new Func0<Response<Map<byte[], byte[]>>>() {
+                        @Override
+                        public Response<Map<byte[], byte[]>> call() {
+                            return jedisPipeline.hgetAll(key);
+                        }
+                    });
+                }
+            }.execute(key, OpName.HGETALL);
+        }
     }
 
     @Override
@@ -486,70 +754,141 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
     @Override
     public Response<List<String>> hmget(final String key, final String... fields) {
-        return new PipelineOperation<List<String>>() {
-
-            @Override
-            Response<List<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                long startTime = System.nanoTime() / 1000;
-                try {
-                    return jedisPipeline.hmget(key, fields);
-                } finally {
-                    long duration = System.nanoTime() / 1000 - startTime;
-                    opMonitor.recordSendLatency(OpName.HMGET.name(), duration, TimeUnit.MICROSECONDS);
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<List<String>>() {
+                @Override
+                Response<List<String>> execute(Pipeline jedisPipeline) throws DynoException {
+                    long startTime = System.nanoTime() / 1000;
+                    try {
+                        return jedisPipeline.hmget(key, fields);
+                    } finally {
+                        long duration = System.nanoTime() / 1000 - startTime;
+                        opMonitor.recordSendLatency(OpName.HMGET.name(), duration, TimeUnit.MICROSECONDS);
+                    }
                 }
-            }
-        }.execute(key, OpName.HMGET);
-
+            }.execute(key, OpName.HMGET);
+        } else {
+            return new PipelineCompressionOperation<List<String>>() {
+                @Override
+                Response<List<String>> execute(final Pipeline jedisPipeline) throws DynoException {
+                    long startTime = System.nanoTime() / 1000;
+                    try {
+                        return new PipelineListResponse(null).apply(new Func0<Response<List<String>>>() {
+                            @Override
+                            public Response<List<String>> call() {
+                                return jedisPipeline.hmget(key, fields);
+                            }
+                        });
+                    } finally {
+                        long duration = System.nanoTime() / 1000 - startTime;
+                        opMonitor.recordSendLatency(OpName.HMGET.name(), duration, TimeUnit.MICROSECONDS);
+                    }
+                }
+            }.execute(key, OpName.HGET);
+        }
     }
 
     /**
      * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
-     * interface is not yet implemented.
+     * interface is not yet implemented since only a few binary commands are present.
      */
     public Response<String> hmset(final byte[] key, final Map<byte[], byte[]> hash) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                long startTime = System.nanoTime() / 1000;
-                try {
-                    return jedisPipeline.hmset(key, hash);
-                } finally {
-                    long duration = System.nanoTime() / 1000 - startTime;
-                    opMonitor.recordSendLatency(OpName.HMSET.name(), duration, TimeUnit.MICROSECONDS);
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<String>() {
+                @Override
+                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
+                    long startTime = System.nanoTime() / 1000;
+                    try {
+                        return jedisPipeline.hmset(key, hash);
+                    } finally {
+                        long duration = System.nanoTime() / 1000 - startTime;
+                        opMonitor.recordSendLatency(OpName.HMSET.name(), duration, TimeUnit.MICROSECONDS);
+                    }
                 }
-            }
-        }.execute(key, OpName.HMSET);
+            }.execute(key, OpName.HMSET);
+        } else {
+            return new PipelineCompressionOperation<String>() {
+                @Override
+                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
+                    return new PipelineResponse(null).apply(new Func0<Response<String>>() {
+                        @Override
+                        public Response<String> call() {
+                            return jedisPipeline.hmset(key,
+                                    CollectionUtils.transform(hash,
+                                            new CollectionUtils.MapEntryTransform<byte[], byte[], byte[]>() {
+                                                @Override
+                                                public byte[] get(byte[] key, byte[] val) {
+                                                    return compressValue(val);
+                                                }
+                                            }
+                                    ));
+                        }
+                    });
+                }
+            }.execute(key, OpName.HMSET);
+        }
     }
 
     @Override
     public Response<String> hmset(final String key, final Map<String, String> hash) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                long startTime = System.nanoTime() / 1000;
-                try {
-                    return jedisPipeline.hmset(key, hash);
-                } finally {
-                    long duration = System.nanoTime() / 1000 - startTime;
-                    opMonitor.recordSendLatency(OpName.HMSET.name(), duration, TimeUnit.MICROSECONDS);
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<String>() {
+                @Override
+                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
+                    long startTime = System.nanoTime() / 1000;
+                    try {
+                        return jedisPipeline.hmset(key, hash);
+                    } finally {
+                        long duration = System.nanoTime() / 1000 - startTime;
+                        opMonitor.recordSendLatency(OpName.HMSET.name(), duration, TimeUnit.MICROSECONDS);
+                    }
                 }
-            }
-        }.execute(key, OpName.HMSET);
+            }.execute(key, OpName.HMSET);
+        } else {
+            return new PipelineCompressionOperation<String>() {
+                @Override
+                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
+                    return new PipelineResponse(null).apply(new Func0<Response<String>>() {
+                        @Override
+                        public Response<String> call() {
+                            return jedisPipeline.hmset(key,
+                                    CollectionUtils.transform(hash, new CollectionUtils.MapEntryTransform<String, String, String>() {
+                                        @Override
+                                        public String get(String key, String val) {
+                                            return compressValue(val);
+                                        }
+                                    })
+                            );
+                        }
+                    });
+                }
+            }.execute(key, OpName.HMSET);
+        }
 
     }
 
     @Override
     public Response<Long> hset(final String key, final String field, final String value) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hset(key, field, value);
-            }
-        }.execute(key, OpName.HSET);
-
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<Long>() {
+                @Override
+                Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
+                    return jedisPipeline.hset(key, field, value);
+                }
+            }.execute(key, OpName.HSET);
+        } else {
+            return new PipelineCompressionOperation<Long>() {
+                @Override
+                Response<Long> execute(final Pipeline jedisPipeline) throws DynoException {
+                    return new PipelineLongResponse(null).apply(new Func0<Response<Long>>() {
+                        @Override
+                        public Response<Long> call() {
+                            return jedisPipeline.hset(key, field, compressValue(value));
+                        }
+                    });
+                }
+            }.execute(key, OpName.HSET);
+        }
     }
 
     /**
@@ -557,37 +896,74 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
      * interface is not yet implemented.
      */
     public Response<Long> hset(final byte[] key, final byte[] field, final byte[] value) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hset(key, field, value);
-            }
-        }.execute(key, OpName.HSET);
-
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<Long>() {
+                @Override
+                Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
+                    return jedisPipeline.hset(key, field, value);
+                }
+            }.execute(key, OpName.HSET);
+        } else {
+            return new PipelineCompressionOperation<Long>() {
+                @Override
+                Response<Long> execute(final Pipeline jedisPipeline) throws DynoException {
+                    return new PipelineLongResponse(null).apply(new Func0<Response<Long>>() {
+                        @Override
+                        public Response<Long> call() {
+                            return jedisPipeline.hset(key, field, compressValue(value));
+                        }
+                    });
+                }
+            }.execute(key, OpName.HSET);
+        }
     }
 
     @Override
     public Response<Long> hsetnx(final String key, final String field, final String value) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hsetnx(key, field, value);
-            }
-        }.execute(key, OpName.HSETNX);
-
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<Long>() {
+                @Override
+                Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
+                    return jedisPipeline.hsetnx(key, field, value);
+                }
+            }.execute(key, OpName.HSETNX);
+        } else {
+            return new PipelineCompressionOperation<Long>() {
+                @Override
+                Response<Long> execute(final Pipeline jedisPipeline) throws DynoException {
+                    return new PipelineLongResponse(null).apply(new Func0<Response<Long>>() {
+                        @Override
+                        public Response<Long> call() {
+                            return jedisPipeline.hsetnx(key, field, compressValue(value));
+                        }
+                    });
+                }
+            }.execute(key, OpName.HSETNX);
+        }
     }
 
     @Override
     public Response<List<String>> hvals(final String key) {
-        return new PipelineOperation<List<String>>() {
-
-            @Override
-            Response<List<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hvals(key);
-            }
-        }.execute(key, OpName.HVALS);
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<List<String>>() {
+                @Override
+                Response<List<String>> execute(Pipeline jedisPipeline) throws DynoException {
+                    return jedisPipeline.hvals(key);
+                }
+            }.execute(key, OpName.HVALS);
+        } else {
+            return new PipelineCompressionOperation<List<String>>() {
+                @Override
+                Response<List<String>> execute(final Pipeline jedisPipeline) throws DynoException {
+                    return new PipelineListResponse(null).apply(new Func0<Response<List<String>>>() {
+                        @Override
+                        public Response<List<String>> call() {
+                            return jedisPipeline.hvals(key);
+                        }
+                    });
+                }
+            }.execute(key, OpName.HVALS);
+        }
 
     }
 
@@ -891,20 +1267,39 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
     @Override
     public Response<String> set(final String key, final String value) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                long startTime = System.nanoTime() / 1000;
-                try {
-                    return jedisPipeline.set(key, value);
-                } finally {
-                    long duration = System.nanoTime() / 1000 - startTime;
-                    opMonitor.recordSendLatency(OpName.SET.name(), duration, TimeUnit.MICROSECONDS);
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<String>() {
+                @Override
+                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
+                    long startTime = System.nanoTime() / 1000;
+                    try {
+                        return jedisPipeline.set(key, value);
+                    } finally {
+                        long duration = System.nanoTime() / 1000 - startTime;
+                        opMonitor.recordSendLatency(OpName.SET.name(), duration, TimeUnit.MICROSECONDS);
+                    }
                 }
-            }
 
-        }.execute(key, OpName.SET);
+            }.execute(key, OpName.SET);
+        } else {
+            return new PipelineCompressionOperation<String>() {
+                @Override
+                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
+                    long startTime = System.nanoTime() / 1000;
+                    try {
+                        return new PipelineResponse(null).apply(new Func0<Response<String>>() {
+                            @Override
+                            public Response<String> call() {
+                                return jedisPipeline.set(key, compressValue(value));
+                            }
+                        });
+                    } finally {
+                        long duration = System.nanoTime() / 1000 - startTime;
+                        opMonitor.recordSendLatency(OpName.SET.name(), duration, TimeUnit.MICROSECONDS);
+                    }
+                }
+            }.execute(key, OpName.SET);
+        }
 
     }
 
@@ -923,28 +1318,37 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
     @Override
     public Response<String> setex(final String key, final int seconds, final String value) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.setex(key, seconds, value);
-            }
-
-        }.execute(key, OpName.SETEX);
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return new PipelineOperation<String>() {
+                @Override
+                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
+                    return jedisPipeline.setex(key, seconds, value);
+                }
+            }.execute(key, OpName.SETEX);
+        } else {
+            return new PipelineCompressionOperation<String>() {
+                @Override
+                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
+                    return new PipelineResponse(null).apply(new Func0<Response<String>>() {
+                        @Override
+                        public Response<String> call() {
+                            return jedisPipeline.setex(key, seconds, compressValue(value));
+                        }
+                    });
+                }
+            }.execute(key, OpName.SETEX);
+        }
 
     }
 
     @Override
     public Response<Long> setnx(final String key, final String value) {
         return new PipelineOperation<Long>() {
-
             @Override
             Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
                 return jedisPipeline.setnx(key, value);
             }
-
         }.execute(key, OpName.SETNX);
-
     }
 
     @Override
@@ -1533,7 +1937,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
                 connection.getContext().reset();
                 connection.getParentConnectionPool().returnConnection(connection);
                 if (pipelineEx.get() != null) {
-                    connPool.getCPHealthTracker().trackConnectionError(connection.getParentConnectionPool(), pipelineEx.get());
+                    connPool.getHealthTracker().trackConnectionError(connection.getParentConnectionPool(), pipelineEx.get());
                     pipelineEx.set(null);
                 }
                 connection = null;

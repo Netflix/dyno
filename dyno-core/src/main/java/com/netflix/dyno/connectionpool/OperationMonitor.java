@@ -32,18 +32,31 @@ public interface OperationMonitor {
 	 * @param duration
 	 * @param unit
 	 */
-	public void recordLatency(String opName, long duration, TimeUnit unit);
+	void recordLatency(String opName, long duration, TimeUnit unit);
 	
 	/**
 	 * Record success for the operation
 	 * @param opName
 	 */
-	public void recordSuccess(String opName);
+	void recordSuccess(String opName);
+
+	/**
+	 * Record success while specifying if compression has been enabled for
+	 * the operation. Note that this means that either the value was
+	 * compressed or decompressed during the operation. If compression has been
+	 * enabled but the value does not reach the threshold then this will be false.
+	 *
+	 * @param opName
+	 * @param compressionEnabled
+     */
+	void recordSuccess(String opName, boolean compressionEnabled);
 
 	/**
 	 * Record failure for the operation
 	 * @param opName
 	 * @param reason
 	 */
-	public void recordFailure(String opName, String reason);
+	void recordFailure(String opName, String reason);
+
+	void recordFailure(String opName, boolean compressionEnabled, String reason);
 }

@@ -1,3 +1,18 @@
+/*******************************************************************************
+ * Copyright 2015 Netflix
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.contrib;
 
 import com.netflix.config.DynamicStringProperty;
@@ -31,8 +46,10 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	private final DynamicBooleanProperty localDcAffinity;
 	private final DynamicIntProperty resetTimingsFrequency;
     private final DynamicStringProperty configPublisherConfig;
+    private final DynamicIntProperty compressionThreshold;
 	
 	private final LoadBalancingStrategy loadBalanceStrategy;
+	private final CompressionStrategy compressionStrategy;
 	private final ErrorRateMonitorConfig errorRateConfig;
 	private final RetryPolicyFactory retryPolicyFactory;
     private final DynamicBooleanProperty failOnStartupIfNoHosts;
@@ -53,10 +70,13 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		resetTimingsFrequency = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.metrics.resetFrequencySeconds", super.getTimingCountersResetFrequencySeconds());
         configPublisherConfig = DynamicPropertyFactory.getInstance().getStringProperty(propertyPrefix + ".config.publisher.address", super.getConfigurationPublisherConfig());
 		failOnStartupIfNoHosts = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + ".config.startup.failIfNoHosts", super.getFailOnStartupIfNoHosts());
+        compressionThreshold = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".config.compressionThreshold", super.getValueCompressionThreshold());
+
 
 		loadBalanceStrategy = parseLBStrategy(propertyPrefix);
 		errorRateConfig = parseErrorRateMonitorConfig(propertyPrefix);
 		retryPolicyFactory = parseRetryPolicyFactory(propertyPrefix);
+		compressionStrategy = parseCompressionStrategy(propertyPrefix);
 	}
 
 	
@@ -149,6 +169,26 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 
 		return lb;
 	}
+
+    private CompressionStrategy parseCompressionStrategy(String propertyPrefix) {
+
+        CompressionStrategy defaultCompStrategy = super.getCompressionStrategy();
+
+        String cfg = DynamicPropertyFactory
+                .getInstance()
+                .getStringProperty(propertyPrefix + ".compressionStrategy", defaultCompStrategy.name()).get();
+
+        CompressionStrategy cs = null;
+        try {
+            cs = CompressionStrategy.valueOf(cfg);
+        } catch (IllegalArgumentException ex) {
+            Logger.warn("Unable to parse CompressionStrategy: " + cfg + ", switching to default: " + defaultCompStrategy.name());
+            cs = defaultCompStrategy;
+        }
+
+        return cs;
+
+    }
 	
 	private ErrorRateMonitorConfig parseErrorRateMonitorConfig(String propertyPrefix) {
 		String errorRateConfig = DynamicPropertyFactory.getInstance().getStringProperty(propertyPrefix + ".errorRateConfig", null).get();

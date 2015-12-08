@@ -16,7 +16,7 @@ import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
-import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl.HostConnectionPoolFactory.Type;
+import com.netflix.dyno.connectionpool.impl.HostConnectionPoolFactory.Type;
 import com.netflix.dyno.contrib.DynoCPMonitor;
 import com.netflix.dyno.contrib.DynoOPMonitor;
 
@@ -118,6 +118,7 @@ public class DynoRedissonClient {
                     throw new RuntimeException(e);
                 }
 
+				Logger.warn("UNABLE TO START CONNECTION POOL -- IDLING");
                 pool.idle();
 			}
 			

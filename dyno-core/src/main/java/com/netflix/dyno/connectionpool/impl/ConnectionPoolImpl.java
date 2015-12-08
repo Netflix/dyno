@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
-import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl.HostConnectionPoolFactory.Type;
+import com.netflix.dyno.connectionpool.impl.HostConnectionPoolFactory.Type;
 import com.netflix.dyno.connectionpool.impl.health.ConnectionPoolHealthTracker;
 import com.netflix.dyno.connectionpool.impl.lb.HostSelectionWithFallback;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
@@ -141,7 +141,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 		return cpMonitor;
 	}
 	
-	public ConnectionPoolHealthTracker<CL> getCPHealthTracker() {
+	public ConnectionPoolHealthTracker<CL> getHealthTracker() {
 		return cpHealthTracker;
 	}
 
@@ -632,15 +632,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 		return future;
 	}
 
-	public interface HostConnectionPoolFactory<CL> {
-		
-		HostConnectionPool<CL> createHostConnectionPool(Host host, ConnectionPoolImpl<CL> parentPoolImpl);
-		
-		public enum Type {
-			Sync, Async;
-		}
-	}
-	
 	private class SyncHostConnectionPoolFactory implements HostConnectionPoolFactory<CL> {
 
 		@Override
