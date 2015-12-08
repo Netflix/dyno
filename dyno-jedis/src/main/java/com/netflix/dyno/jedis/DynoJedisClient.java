@@ -533,6 +533,42 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
         });
     }
 
+    
+    @Override
+    public ScanResult<Map.Entry<String, String>> hscan(final String key, final int cursor) {
+    	return d_hscan(key, cursor).getResult();
+    }
+    
+    public OperationResult<ScanResult<Map.Entry<String, String>>> d_hscan(final String key, final int cursor){
+    	
+    	return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
+
+            @Override
+            public ScanResult<Map.Entry<String, String>> execute(Jedis client, ConnectionContext state) {
+                return client.hscan(key,cursor);
+            }
+
+        });
+    }
+    
+    @Override
+    public ScanResult<Map.Entry<String, String>> hscan(final String key, final String cursor) {
+    	return d_hscan(key, cursor).getResult();
+    }
+    
+    public OperationResult<ScanResult<Map.Entry<String, String>>> d_hscan(final String key, final String cursor){
+    	
+    	return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
+
+            @Override
+            public ScanResult<Map.Entry<String, String>> execute(Jedis client, ConnectionContext state) {
+                return client.hscan(key,cursor);
+            }
+
+        });
+    }
+
+
     @Override
     public Long hlen(final String key) {
         return d_hlen(key).getResult();
@@ -1415,6 +1451,42 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
         });
     }
+    
+    
+    @Override
+    public ScanResult<String> sscan(final String key, final int cursor) {
+        return d_sscan(key, cursor).getResult();
+    }
+    
+    public OperationResult<ScanResult<String>> d_sscan(final String key, final int cursor) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<String>>(key, OpName.SSCAN) {
+
+            @Override
+            public ScanResult<String> execute(Jedis client, ConnectionContext state) {
+                return client.sscan(key, cursor);
+            }
+
+        });
+    }
+    
+    @Override
+    public ScanResult<String> sscan(final String key, final String cursor) {
+        return d_sscan(key, cursor).getResult();
+    }
+    
+    public OperationResult<ScanResult<String>> d_sscan(final String key, final String cursor) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<String>>(key, OpName.SSCAN) {
+
+            @Override
+            public ScanResult<String> execute(Jedis client, ConnectionContext state) {
+                return client.sscan(key, cursor);
+            }
+
+        });
+    }
+    
 
     @Override
     public Long strlen(final String key) {
@@ -1755,6 +1827,39 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
         });
     }
+    
+    @Override
+    public ScanResult<Tuple> zscan(final String key, final int cursor) {
+    	return d_zscan(key, cursor).getResult();
+    }
+    
+    public OperationResult<ScanResult<Tuple>> d_zscan(final String key, final int cursor){
+    	
+        return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Tuple>>(key, OpName.ZSCAN) {
+        	 @Override
+             public ScanResult<Tuple> execute(Jedis client, ConnectionContext state) {
+                 return client.zscan(key, cursor);
+             }
+
+         });
+    }
+    
+    @Override
+    public ScanResult<Tuple> zscan(final String key, final String cursor) {
+    	return d_zscan(key, cursor).getResult();
+    }
+    
+    public OperationResult<ScanResult<Tuple>> d_zscan(final String key, final String cursor){
+    	
+        return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Tuple>>(key, OpName.ZSCAN) {
+        	 @Override
+             public ScanResult<Tuple> execute(Jedis client, ConnectionContext state) {
+                 return client.zscan(key, cursor);
+             }
+
+         });
+    }
+
 
     @Override
     public Set<String> zrangeByScore(String key, double min, double max) {
@@ -2027,7 +2132,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
         });
     }
-
+    
     @Override
     public Long zremrangeByScore(String key, String start, String end) {
         return d_zremrangeByScore(key, start, end).getResult();
@@ -2064,6 +2169,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
         });
     }
+    
 
     @Override
     public List<String> blpop(String arg) {
@@ -2163,36 +2269,6 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     @Override
     public Long bitcount(String key, long start, long end) {
         return d_bitcount(key, start, end).getResult();
-    }
-
-    @Override
-    public ScanResult<Map.Entry<String, String>> hscan(String key, int cursor) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public ScanResult<String> sscan(String key, int cursor) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public ScanResult<Tuple> zscan(String key, int cursor) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public ScanResult<Map.Entry<String, String>> hscan(String key, String cursor) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public ScanResult<String> sscan(String key, String cursor) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public ScanResult<Tuple> zscan(String key, String cursor) {
-        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
