@@ -721,9 +721,12 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
     
  
-     public Response<ScanResult<Map.Entry<String, String>>> hscan(final String key, int cursor) {
-         throw new UnsupportedOperationException("'HSCAN' cannot be called in pipeline");
-     }
+    /**
+     * This method is not supported by the BinaryRedisPipeline interface.
+     */
+    public Response<ScanResult<Map.Entry<String, String>>> hscan(final String key, int cursor) {
+        throw new UnsupportedOperationException("'HSCAN' cannot be called in pipeline");
+    }
 
 
     @Override
@@ -1456,8 +1459,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     
 
     /**
-     * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
-     * interface is not yet implemented.
+     * This method is not supported by the BinaryRedisPipeline interface.
      */
     public Response<ScanResult<String>> sscan(final String key, final int cursor) {
         throw new UnsupportedOperationException("'SSCAN' cannot be called in pipeline");
@@ -1465,8 +1467,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
     
     /**
-     * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
-     * interface is not yet implemented.
+     * This method is not supported by the BinaryRedisPipeline interface.
      */
     public Response<ScanResult<String>> sscan(final String key, final String cursor) {
         throw new UnsupportedOperationException("'SSCAN' cannot be called in pipeline");
@@ -1837,6 +1838,9 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
     }
     
+    /**
+     * This method is not supported by the BinaryRedisPipeline interface.
+     */
     public Response<ScanResult<Tuple>> zscan(final String key, final int cursor) {
         throw new UnsupportedOperationException("'ZSCAN' cannot be called in pipeline");
     }
