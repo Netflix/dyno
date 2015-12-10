@@ -93,6 +93,8 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
      *     <li>{@link #hgetAll(String) HGETALL}</li>
      *     <li>{@link #hmget(String, String...) HMGET}</li>
      *     <li>{@link #hmset(String, Map) HMSET}</li>
+     *     <li>{@link #hscan(String, Integer) HSCAN)</li>
+     *     <li>{@link #hscan(String, String) HSCAN)</li>
      *     <li>{@link #hset(String, String, String) HSET}</li>
      *     <li>{@link #hsetnx(String, String, String) HSETNX}</li>
      *     <li>{@link #hvals(String) HVALS}</li>
@@ -433,14 +435,14 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
         return d_hgetAll(key).getResult();
     }
 
-            public OperationResult<Map<String, String>> d_hgetAll(final String key) {
-                if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-                    return connPool.executeWithFailover(new BaseKeyOperation<Map<String, String>>(key, OpName.HGETALL) {
-                        @Override
-                        public Map<String, String> execute(Jedis client, ConnectionContext state) throws DynoException {
-                            return client.hgetAll(key);
-                        }
-                    });
+    public OperationResult<Map<String, String>> d_hgetAll(final String key) {
+       if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+           return connPool.executeWithFailover(new BaseKeyOperation<Map<String, String>>(key, OpName.HGETALL) {
+                @Override
+                public Map<String, String> execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.hgetAll(key);
+                }
+           });
         } else {
             return connPool.executeWithFailover(new CompressionValueOperation<Map<String, String>>(key, OpName.HGETALL) {
                 @Override
@@ -540,32 +542,62 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     }
     
     public OperationResult<ScanResult<Map.Entry<String, String>>> d_hscan(final String key, final int cursor){
-    	
-    	return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
-
-            @Override
-            public ScanResult<Map.Entry<String, String>> execute(Jedis client, ConnectionContext state) {
-                return client.hscan(key,cursor);
-            }
-
-        });
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+        	return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
+        		@Override
+        		public ScanResult<Map.Entry<String, String>> execute(Jedis client, ConnectionContext state) {
+        			return client.hscan(key,cursor);
+        		}
+        	});
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
+            	@Override
+                public ScanResult<Map.Entry<String, String>> execute(final Jedis client, final ConnectionContext state) {
+            		return new ScanResult<Map.Entry<String,String>>(cursor, new ArrayList(CollectionUtils.transform(
+                    		client.hscan(key,cursor).getResult(),
+                            new CollectionUtils.Transform<Map.Entry<String,String>, Map.Entry<String,String>>() {
+                                @Override
+                                public Map.Entry<String,String> get(Map.Entry<String,String> entry) {
+                                	entry.setValue(decompressValue(entry.getValue(),state));
+                                    return entry;
+                                }
+                            })));
+                }
+            });
+        }
     }
     
+    
+  
     @Override
     public ScanResult<Map.Entry<String, String>> hscan(final String key, final String cursor) {
     	return d_hscan(key, cursor).getResult();
     }
     
     public OperationResult<ScanResult<Map.Entry<String, String>>> d_hscan(final String key, final String cursor){
-    	
-    	return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
-
-            @Override
-            public ScanResult<Map.Entry<String, String>> execute(Jedis client, ConnectionContext state) {
-                return client.hscan(key,cursor);
-            }
-
-        });
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+        	return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
+        		@Override
+        		public ScanResult<Map.Entry<String, String>> execute(Jedis client, ConnectionContext state) {
+        			return client.hscan(key,cursor);
+        		}
+        	});
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
+                @Override
+                public ScanResult<Map.Entry<String, String>> execute(final Jedis client, final ConnectionContext state) {
+                	return  new ScanResult<Map.Entry<String,String>>(cursor, new ArrayList(CollectionUtils.transform(
+                    		client.hscan(key,cursor).getResult(),
+                            new CollectionUtils.Transform<Map.Entry<String,String>, Map.Entry<String,String>>() {
+                                @Override
+                                public Map.Entry<String,String> get(Map.Entry<String,String> entry) {
+                                	entry.setValue(decompressValue(entry.getValue(),state));
+                                    return entry;
+                                }
+                            })));
+                }
+            });
+        }
     }
 
 
@@ -644,6 +676,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
             });
         }
     }
+
 
     @Override
     public Long hset(final String key, final String field, final String value) {

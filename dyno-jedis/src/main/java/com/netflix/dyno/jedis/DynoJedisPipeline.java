@@ -721,9 +721,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
     
  
-    /**
-     * This method is not supported by the BinaryRedisPipeline interface.
-     */
+
     public Response<ScanResult<Map.Entry<String, String>>> hscan(final String key, int cursor) {
         throw new UnsupportedOperationException("'HSCAN' cannot be called in pipeline");
     }
