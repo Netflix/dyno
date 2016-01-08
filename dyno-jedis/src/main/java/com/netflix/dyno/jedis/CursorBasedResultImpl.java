@@ -15,7 +15,7 @@
  ******************************************************************************/
 package com.netflix.dyno.jedis;
 
-import com.netflix.dyno.connectionpool.CursorBasedIterator;
+import com.netflix.dyno.connectionpool.CursorBasedResult;
 import redis.clients.jedis.ScanResult;
 
 import java.util.ArrayList;
@@ -24,12 +24,23 @@ import java.util.Map;
 
 /**
  * Encapsulates the results of performing a distributed SCAN operation.
+ * <p>
+ * Example usage
+ * <pre>
+ *    CursorBasedResult<String> cbi = null;
+ *    do {
+ *        cbi = client.dyno_scan(cbi, "regex_pattern");
+ *        .
+ *        .
+ *        .
+ *    } while (!cbi.isComplete());
+ * </pre>
  */
-public class CursorBasedIteratorImpl<T> implements CursorBasedIterator<T> {
+public class CursorBasedResultImpl<T> implements CursorBasedResult<T> {
 
     private final Map<String, ScanResult<T>> result;
 
-    public CursorBasedIteratorImpl(Map<String, ScanResult<T>> result) {
+    public CursorBasedResultImpl(Map<String, ScanResult<T>> result) {
         this.result = result;
     }
 
@@ -50,6 +61,17 @@ public class CursorBasedIteratorImpl<T> implements CursorBasedIterator<T> {
         }
 
         return null;
+    }
+
+    @Override
+    public boolean isComplete() {
+        for (ScanResult r: result.values()) {
+            if (!r.getStringCursor().equals("0")) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
 }

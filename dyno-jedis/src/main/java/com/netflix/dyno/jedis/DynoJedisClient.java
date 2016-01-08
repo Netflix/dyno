@@ -571,7 +571,7 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
         }
     }
 
-    private String getCursorValue(final ConnectionContext state, final CursorBasedIterator cursor) {
+    private String getCursorValue(final ConnectionContext state, final CursorBasedResult cursor) {
         if (state != null && state.getMetadata("host") != null && cursor != null) {
             return cursor.getCursorForHost(state.getMetadata("host").toString());
         }
@@ -579,12 +579,20 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
         return "0";
     }
 
-    private List<OperationResult<ScanResult<String>>> scatterGatherScan(final CursorBasedIterator<String> cursor) {
+    private List<OperationResult<ScanResult<String>>> scatterGatherScan(final CursorBasedResult<String> cursor, final String... pattern) {
         return new ArrayList<>(
                 connPool.executeWithRing(new BaseKeyOperation<ScanResult<String>>("SCAN", OpName.SCAN) {
                     @Override
                     public ScanResult<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                        return client.scan(getCursorValue(state, cursor));
+                        if (pattern != null) {
+                            ScanParams sp = new ScanParams();
+                            for (String s: pattern) {
+                                sp.match(s);
+                            }
+                            return client.scan(getCursorValue(state, cursor), sp);
+                        } else {
+                            return client.scan(getCursorValue(state, cursor));
+                        }
                     }
                 }));
     }
@@ -2489,29 +2497,45 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
+    /**
+     * NOT SUPPORTED ! Use {@link #dyno_scan(CursorBasedResult, String...)}
+     * instead.
+     *
+     * @param cursor
+     * @return nothing -- throws UnsupportedOperationException when invoked
+     * @see #dyno_scan(CursorBasedResult, String...)
+     */
     @Override
     public ScanResult<String> scan(int cursor) {
-        throw new UnsupportedOperationException("Not supported - use dyno_scan(String, CursorBasedIterator");
+        throw new UnsupportedOperationException("Not supported - use dyno_scan(String, CursorBasedResult");
     }
 
+    /**
+     * NOT SUPPORTED ! Use {@link #dyno_scan(CursorBasedResult, String...)}
+     * instead.
+     *
+     * @param cursor
+     * @return nothing -- throws UnsupportedOperationException when invoked
+     * @see #dyno_scan(CursorBasedResult, String...)
+     */
     @Override
     public ScanResult<String> scan(String cursor) {
-        throw new UnsupportedOperationException("Not supported - use dyno_scan(String, CursorBasedIterator");
+        throw new UnsupportedOperationException("Not supported - use dyno_scan(String, CursorBasedResult");
     }
 
-    public CursorBasedIterator<String> dyno_scan() {
-        return this.dyno_scan(null);
+    public CursorBasedResult<String> dyno_scan(String... pattern) {
+        return this.dyno_scan(null, pattern);
     }
 
-    public CursorBasedIterator<String> dyno_scan(CursorBasedIterator<String> cursor) {
+    public CursorBasedResult<String> dyno_scan(CursorBasedResult<String> cursor, String... pattern) {
         final Map<String, ScanResult<String>> results = new LinkedHashMap<>();
 
-        List<OperationResult<ScanResult<String>>> opResults = scatterGatherScan(cursor);
+        List<OperationResult<ScanResult<String>>> opResults = scatterGatherScan(cursor, pattern);
         for (OperationResult<ScanResult<String>> opResult: opResults) {
             results.put(opResult.getNode().getHostName(), opResult.getResult());
         }
 
-        return new CursorBasedIteratorImpl<>(results);
+        return new CursorBasedResultImpl<>(results);
 
     }
 
