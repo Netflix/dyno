@@ -93,7 +93,7 @@ public interface OperationResult<R> {
     /**
      * Add metadata to the OperationResult. Can be used within different layers of Dyno to add metadata about each layer. 
      * Very useful for providing insight into the operation when debugging.
-     * @param Map<String, Object>
+     * @param map
      */
     public OperationResult<R> addMetadata(Map<String, Object> map);
 }
