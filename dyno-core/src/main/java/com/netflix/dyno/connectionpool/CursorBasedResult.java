@@ -20,10 +20,12 @@ import java.util.List;
 /**
  * The result of performing a SCAN operation
  */
-public interface CursorBasedIterator<T> {
+public interface CursorBasedResult<T> {
 
     List<T> getResult();
 
     String getCursorForHost(String host);
+
+    boolean isComplete();
 
 }

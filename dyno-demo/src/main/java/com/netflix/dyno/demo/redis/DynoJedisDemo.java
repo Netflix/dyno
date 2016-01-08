@@ -34,6 +34,8 @@ import com.netflix.dyno.jedis.DynoJedisPipeline;
 
 public class DynoJedisDemo {
 
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DynoJedisDemo.class);
+
 	protected DynoJedisClient client;
 
     protected int numKeys;
@@ -180,18 +182,40 @@ public class DynoJedisDemo {
 	}
 
 	public void runKeysTest() throws Exception {
+        System.out.println("Writing 10,000 keys to dynomite...");
 
-		for (int i=0; i<10; i++) {
-			client.set("keys"+i, "bar"+i);
+		for (int i=0; i<500; i++) {
+			client.set("DynoClientTest_KEYS-TEST-key"+i, "value-"+i);
 		}
 
-		System.out.println(client.get("keys"));
-		System.out.println(client.get("keys1"));
-		System.out.println(client.get("keys2"));
-		
-		Set<String> result = client.keys("PuneetTest*");
-		System.out.println("Result: " + result);
+		System.out.println("finished writing 10000 keys, querying for keys(\"DynoClientTest_KYES-TEST*\")");
+
+		Set<String> result = client.keys("DynoClientTest_KEYS-TEST*");
+
+		System.out.println("Got " + result.size() + " results, below");
+        System.out.println(result);
 	}
+
+    public void runScanTest(boolean populateKeys) throws Exception {
+        logger.info("SCAN TEST -- begin");
+
+        if (populateKeys) {
+            for (int i=0; i<500; i++) {
+                logger.info("Writing 500 keys to " );
+                client.set("DynoClientTest_key-"+i, "value-"+i);
+            }
+        }
+
+        CursorBasedResult<String> cbi = null;
+        do {
+            cbi = client.dyno_scan(cbi, "DynoClientTest_key-*");
+
+            logger.info("result: " + cbi.getResult().toString());
+
+        } while (!cbi.isComplete());
+
+        logger.info("SCAN TEST -- done");
+    }
 	
 	public void cleanup(int nKeys) throws Exception {
 
@@ -692,6 +716,10 @@ public class DynoJedisDemo {
 					demo.runMultiThreaded();
 					break;
 				}
+                case 4: {
+                    demo.runScanTest(false);
+                    break;
+                }
 			}
 
 			//demo.runSinglePipeline();
@@ -700,7 +728,7 @@ public class DynoJedisDemo {
 			//demo.runPipelineEmptyResult();
             //demo.runSinglePipelineWithCompression(false);
 			//demo.runLongTest();
-            demo.runSandboxTest();
+            //demo.runSandboxTest();
 
 			Thread.sleep(1000);
 			
