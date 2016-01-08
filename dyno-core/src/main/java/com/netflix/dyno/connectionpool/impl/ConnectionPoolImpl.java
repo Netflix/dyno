@@ -361,7 +361,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 				retry.begin();
 
 				do {
-					try { 
+					try {
+                        connection.getContext().setMetadata("host", connection.getHost().getHostName());
 						OperationResult<R> result = connection.execute(op);
 
 						// Add context to the result from the successful execution
