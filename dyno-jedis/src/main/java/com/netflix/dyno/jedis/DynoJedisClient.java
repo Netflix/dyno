@@ -117,12 +117,12 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
         @Override
         public String compressValue(String value, ConnectionContext ctx) {
             String result = value;
-            int thresholdInKB = connPool.getConfiguration().getValueCompressionThreshold();
+            int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
 
             try {
                 // prefer speed over accuracy here so rather than using getBytes() to get the actual size
                 // just estimate using 2 bytes per character
-                if ((2 * value.length()) > (thresholdInKB * 1024)) {
+                if ((2 * value.length()) > thresholdBytes) {
                     result = ZipUtils.compressStringToBase64String(value);
                     ctx.setMetadata("compression", true);
                 }
