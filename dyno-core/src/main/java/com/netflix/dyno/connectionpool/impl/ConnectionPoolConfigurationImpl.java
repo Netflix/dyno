@@ -46,7 +46,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     private static final String DEFAULT_CONFIG_PUBLISHER_ADDRESS = null;
     private static final boolean DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS = true;
     private static final int DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS_SECONDS = 60;
-    private static final int DEFAULT_VALUE_COMPRESSION_THRESHOLD = 5; // Specified in KB; by default, compression is OFF
+    private static final int DEFAULT_VALUE_COMPRESSION_THRESHOLD_BYTES = 5 * 1024; // By default, compression is OFF
 
     private HostSupplier hostSupplier;
 	private TokenMapSupplier tokenSupplier;
@@ -69,7 +69,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     private boolean failOnStartupIfNoHosts = DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS;
     private int failOnStarupIfNoHostsSeconds = DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS_SECONDS;
     private CompressionStrategy compressionStrategy = DEFAULT_COMPRESSION_STRATEGY;
-	private int valueCompressionThreshold = DEFAULT_VALUE_COMPRESSION_THRESHOLD;
+	private int valueCompressionThreshold = DEFAULT_VALUE_COMPRESSION_THRESHOLD_BYTES;
 
 	private RetryPolicyFactory retryFactory = new RetryPolicyFactory() {
 
@@ -256,8 +256,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         return this;
     }
 
-	public ConnectionPoolConfigurationImpl setCompressionThreshold(int thresholdInKB) {
-		this.valueCompressionThreshold = thresholdInKB;
+	public ConnectionPoolConfigurationImpl setCompressionThreshold(int thresholdInBytes) {
+		this.valueCompressionThreshold = thresholdInBytes;
 		return this;
 	}
 

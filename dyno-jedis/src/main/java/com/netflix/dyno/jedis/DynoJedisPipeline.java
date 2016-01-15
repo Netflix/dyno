@@ -308,12 +308,12 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
          */
         public String compressValue(String value) {
             String result = value;
-            int thresholdInKB = connPool.getConfiguration().getValueCompressionThreshold();
+            int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
 
             try {
                 // prefer speed over accuracy here so rather than using getBytes() to get the actual size
                 // just estimate using 2 bytes per character
-                if ((2 * value.length()) > (thresholdInKB * 1024)) {
+                if ((2 * value.length()) > thresholdBytes) {
                     result = ZipUtils.compressStringToBase64String(value);
                 }
             } catch (IOException e) {
@@ -324,9 +324,9 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }
 
         public byte[] compressValue(byte[] value) {
-            int thresholdInKB = connPool.getConfiguration().getValueCompressionThreshold();
+            int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
 
-            if (value.length > thresholdInKB * 1024) {
+            if (value.length > thresholdBytes) {
                 try {
                     return ZipUtils.compressBytesNonBase64(value);
                 } catch (IOException e) {

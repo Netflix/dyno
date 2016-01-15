@@ -61,7 +61,7 @@ public class CompressionTest {
     public void before() {
         MockitoAnnotations.initMocks(this);
 
-        when(config.getValueCompressionThreshold()).thenReturn(2);
+        when(config.getValueCompressionThreshold()).thenReturn(2 * 1024);
 
         opMonitor = new LastOperationMonitor();
 
