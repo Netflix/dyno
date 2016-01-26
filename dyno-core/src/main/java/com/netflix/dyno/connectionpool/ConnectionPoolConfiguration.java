@@ -166,9 +166,9 @@ public interface ConnectionPoolConfiguration {
      * This works in conjunction with {@link #getCompressionStrategy()}. The compression strategy must be set to
      * {@link CompressionStrategy#THRESHOLD} for this to have any effect.
      * <p>
-     * The value for this configuration setting is specified in <strong>kilobytes</strong>
+     * The value for this configuration setting is specified in <strong>bytes</strong>
      *
-     * @return The final value to be used as a threshold in kilobytes.
+     * @return The final value to be used as a threshold in bytes.
      */
     int getValueCompressionThreshold();
 

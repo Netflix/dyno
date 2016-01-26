@@ -36,7 +36,9 @@ public class DynoJedisDemo {
 
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DynoJedisDemo.class);
 
-	protected DynoJedisClient client;
+    public static final String randomValue = "dcfa7d0973834e5c9f480b65de19d684dcfa7d097383dcfa7d0973834e5c9f480b65de19d684dcfa7d097383dcfa7d0973834e5c9f480b65de19d684dcfa7d097383dcfa7d0973834e5c9f480b65de19d684dcfa7d097383";
+
+    protected DynoJedisClient client;
 
     protected int numKeys;
 
@@ -102,7 +104,7 @@ public class DynoJedisDemo {
 		
 		client = new DynoJedisClient.Builder()
 		.withApplicationName("demo")
-		.withDynomiteClusterName("dyno_demo")
+		.withDynomiteClusterName("dyno_dev")
 		.withHostSupplier(hostSupplier)
 		.withCPConfig(
                 new ConnectionPoolConfigurationImpl("demo")
@@ -497,8 +499,8 @@ public class DynoJedisDemo {
 						DynoJedisPipeline pipeline = client.pipelined();
 
 						try {
-							Response<Long> resultA1 = pipeline.hset("Puneet_pipeline" + index, "a1", "v" + i);
-							Response<Long> resultA2 = pipeline.hset("Puneet_pipeline" + index, "a2", "v" + i);
+							Response<Long> resultA1 = pipeline.hset("DynoJedisDemo_pipeline-" + index, "a1", constructRandomValue(index));
+							Response<Long> resultA2 = pipeline.hset("DynoJedisDemo_pipeline-" + index, "a2", "value-" + i);
 
 							pipeline.sync();
 
@@ -522,7 +524,30 @@ public class DynoJedisDemo {
 		
 		threadPool.shutdownNow();
 	}
-	
+
+	private String constructRandomValue(int sizeInKB) {
+
+		int requriredLength = sizeInKB * 1024;
+
+		String s = randomValue;
+		int sLength = s.length();
+
+		StringBuilder sb = new StringBuilder();
+		int lengthSoFar = 0;
+
+		do {
+			sb.append(s);
+			lengthSoFar += sLength;
+		} while (lengthSoFar < requriredLength);
+
+		String ss = sb.toString();
+
+        if(ss.length()>requriredLength) {
+			ss= sb.substring(0,requriredLength);
+		}
+
+		return ss;
+	}
 	private List<Host> getHostsFromDiscovery(final String clusterName) {
 		
 		String url = "http://discovery.cloudqa.netflix.net:7001/discovery/v2/apps/" + clusterName;
@@ -718,6 +743,10 @@ public class DynoJedisDemo {
 				}
                 case 4: {
                     demo.runScanTest(false);
+                    break;
+                }
+                case 5: {
+                    demo.runPipeline();
                     break;
                 }
 			}

@@ -15,10 +15,7 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.netflix.dyno.connectionpool.*;
@@ -46,7 +43,8 @@ public class MonitorConsole implements MonitorConsoleMBean {
 	private MonitorConsole() {
 		
 	}
-	
+
+    @Override
 	public String getMonitorNames() {
 		return cpMonitors.keySet().toString();
 	}
@@ -109,10 +107,6 @@ public class MonitorConsole implements MonitorConsoleMBean {
 		 
 		 return sb.toString();
 	}
-	
-	public Collection<String> getConnectionPoolNames() {
-		return connectionPools.keySet();
-	}
 
 	public TokenPoolTopology getTopology(String cpName) {
 		ConnectionPoolImpl<?> pool = connectionPools.get(cpName);
@@ -138,6 +132,36 @@ public class MonitorConsole implements MonitorConsoleMBean {
         }
 
         return snapshot;
+    }
+
+    @Override
+    public Map<String, String> getRuntimeConfiguration(String cpName) {
+        ConnectionPoolImpl<?> pool = connectionPools.get(cpName);
+
+        if (pool != null && pool.getConfiguration() != null) {
+            final ConnectionPoolConfiguration cpConfig = pool.getConfiguration();
+
+            // Retain order for easy diffing across requests/nodes
+            final Map<String, String> config = new LinkedHashMap<>();
+
+            // Rather than use reflection to iterate and find getters, simply provide the base configuration
+            config.put("localDC", cpConfig.getLocalDC());
+            config.put("compressionStrategy", cpConfig.getCompressionStrategy().name());
+            config.put("compressionThreshold", String.valueOf(cpConfig.getValueCompressionThreshold()));
+            config.put("connectTimeout", String.valueOf(cpConfig.getConnectTimeout()));
+            config.put("failOnStartupIfNoHosts", String.valueOf(cpConfig.getFailOnStartupIfNoHosts()));
+            config.put("hostSupplier", cpConfig.getHostSupplier().toString());
+            config.put("loadBalancingStrategy", cpConfig.getLoadBalancingStrategy().name());
+            config.put("maxConnsPerHost", String.valueOf(cpConfig.getMaxConnsPerHost()));
+            config.put("port", String.valueOf(cpConfig.getPort()));
+            config.put("socketTimeout", String.valueOf(cpConfig.getSocketTimeout()));
+            config.put("timingCountersResetFrequencyInSecs",
+                    String.valueOf(cpConfig.getTimingCountersResetFrequencySeconds()));
+
+            return Collections.unmodifiableMap(config);
+        }
+
+        return null;
     }
 
     private Map<String, List<String>> getTokenStatusMap(List<TokenPoolTopology.TokenStatus> tokens) {
