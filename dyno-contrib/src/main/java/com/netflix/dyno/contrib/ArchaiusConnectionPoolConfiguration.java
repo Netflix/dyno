@@ -136,7 +136,17 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		return loadBalanceStrategy;
 	}
 
-	@Override
+    @Override
+    public CompressionStrategy getCompressionStrategy() {
+        return compressionStrategy;
+    }
+
+    @Override
+    public int getValueCompressionThreshold() {
+        return compressionThreshold.get();
+    }
+
+    @Override
 	public int getTimingCountersResetFrequencySeconds() {
 		return resetTimingsFrequency.get();
 	}
@@ -181,6 +191,7 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
         CompressionStrategy cs = null;
         try {
             cs = CompressionStrategy.valueOf(cfg);
+			Logger.info("Dyno configuration: CompressionStrategy = " + cs.name());
         } catch (IllegalArgumentException ex) {
             Logger.warn("Unable to parse CompressionStrategy: " + cfg + ", switching to default: " + defaultCompStrategy.name());
             cs = defaultCompStrategy;

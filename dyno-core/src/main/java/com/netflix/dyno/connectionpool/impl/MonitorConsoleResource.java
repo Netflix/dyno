@@ -61,12 +61,29 @@ public class MonitorConsoleResource {
 		return MonitorConsole.getInstance().getMonitorStats(monitorName);
 	}
 
+    @SuppressWarnings("unchecked")
+	@Path("/monitor/{cpName}/configuration")
+	@GET
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.APPLICATION_JSON)
+	public String getConnectionPoolConfiguration(@PathParam("cpName") String cpName) {
+		JSONObject json = new JSONObject();
+
+		Map<String, String> config = MonitorConsole.getInstance().getRuntimeConfiguration(cpName);
+		if (config != null) {
+			for (Map.Entry<String, String> entry: config.entrySet()) {
+				json.put(entry.getKey(), entry.getValue());
+			}
+		}
+		return json.toJSONString();
+	}
+
 	@Path("/topologies")
 	@GET
 	@Consumes(MediaType.TEXT_PLAIN)
 	@Produces(MediaType.TEXT_PLAIN)
 	public String getConnectionPoolNames() {
-		return MonitorConsole.getInstance().getConnectionPoolNames().toString();
+		return MonitorConsole.getInstance().getMonitorNames();
 	}
 
 	@SuppressWarnings("unchecked")

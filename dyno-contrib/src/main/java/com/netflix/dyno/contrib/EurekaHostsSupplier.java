@@ -96,4 +96,9 @@ public class EurekaHostsSupplier implements HostSupplier {
 		return hosts;
 	}
 
+	@Override
+	public String toString() {
+		return EurekaHostsSupplier.class.getName();
+	}
+
 }
