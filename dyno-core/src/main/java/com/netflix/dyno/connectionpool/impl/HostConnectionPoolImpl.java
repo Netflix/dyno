@@ -291,8 +291,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				return connection;
 			} catch (DynoConnectException e) {
 				if (Logger.isDebugEnabled()) {
-                    int divisor = cpConfig.getMaxConnsPerHost() > 0 ? cpConfig.getMaxConnsPerHost() : 100;
-                    if (monitor.getConnectionCreateFailedCount() % divisor < 11) {
+                    if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
                         Logger.error("Failed to create connection", e);
                     } else {
                         Logger.error("Failed to create connection" + e.getMessage());
@@ -302,8 +301,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				throw e;
 			} catch (RuntimeException e) {
 				if (Logger.isDebugEnabled()) {
-                    int divisor = cpConfig.getMaxConnsPerHost() > 0 ? cpConfig.getMaxConnsPerHost() : 100;
-                    if (monitor.getConnectionCreateFailedCount() % divisor < 11) {
+                    if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
                         Logger.error("Failed to create connection", e);
                     } else {
                         Logger.error("Failed to create connection" + e.getMessage());

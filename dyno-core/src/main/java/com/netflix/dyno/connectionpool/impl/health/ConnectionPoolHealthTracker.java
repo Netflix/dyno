@@ -147,8 +147,6 @@ public class ConnectionPoolHealthTracker<CL> implements HealthTracker<CL> {
 		}
 		
 		if (e != null && e instanceof FatalConnectionException) {
-
-			Logger.error("FAIL: " + e.getMessage());
 			
 			Host host = hostPool.getHost();
 			
@@ -164,6 +162,7 @@ public class ConnectionPoolHealthTracker<CL> implements HealthTracker<CL> {
 			boolean errorRateOk = errorMonitor.trackError(1);
 
 			if (!errorRateOk) {
+				Logger.error("FAIL: Attempting to reconnect pool due to exceptions =>" + e.getMessage());
 				reconnectPool(hostPool);
 			}
 		}
