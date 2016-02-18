@@ -293,8 +293,6 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				if (Logger.isDebugEnabled()) {
                     if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
                         Logger.error("Failed to create connection", e);
-                    } else {
-                        Logger.error("Failed to create connection" + e.getMessage());
                     }
 				}
 				monitor.incConnectionCreateFailed(host, e);
@@ -303,8 +301,6 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				if (Logger.isDebugEnabled()) {
                     if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
                         Logger.error("Failed to create connection", e);
-                    } else {
-                        Logger.error("Failed to create connection" + e.getMessage());
                     }
 				}
 				monitor.incConnectionCreateFailed(host, e);
