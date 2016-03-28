@@ -37,12 +37,10 @@ public class SimpleAsyncConnectionPoolImplTest {
 	private static ExecutorService threadPool;
 
 	private static ConnectionFactory<TestClient> connFactory = new ConnectionFactory<TestClient>() {
-
-		@SuppressWarnings("unchecked")
-		Connection<TestClient> connection = mock(Connection.class);
-		@Override
+        @SuppressWarnings("unchecked")
+        @Override
 		public Connection<TestClient> createConnection(HostConnectionPool<TestClient> pool, ConnectionObservor cObservor) throws DynoConnectException, ThrottledException {
-			return connection;
+			return mock(Connection.class);
 		}
 	};
 

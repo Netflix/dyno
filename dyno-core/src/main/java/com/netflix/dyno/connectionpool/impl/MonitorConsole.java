@@ -76,6 +76,8 @@ public class MonitorConsole implements MonitorConsoleMBean {
              .append(",  createFailed: "  ).append(cpMonitor.getConnectionCreateFailedCount())
              .append(",  borrowed: ").append(cpMonitor.getConnectionBorrowedCount())
              .append(",  returned: ").append(cpMonitor.getConnectionReturnedCount())
+             .append(",  borrowedLatMean: ").append(cpMonitor.getConnectionBorrowedLatMean())
+             .append(",  borrowedLatP99: ").append(cpMonitor.getConnectionBorrowedLatP99())
              
          .append("]\nOperations[")
              .append("   success=" ).append(cpMonitor.getOperationSuccessCount())
