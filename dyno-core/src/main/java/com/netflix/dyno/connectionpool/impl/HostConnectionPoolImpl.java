@@ -313,15 +313,21 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		public boolean returnConnection(Connection<CL> connection) {
 			try {
 				if (numActiveConnections.get() > cpConfig.getMaxConnsPerHost()) {
-					
-					// Just close the connection
-					return closeConnection(connection);
-					
-				} else {
-					// add connection back to the pool
-					availableConnections.add(connection);
-					return false;
+
+                    // Just close the connection
+                    return closeConnection(connection);
+
+                } else if (numActiveConnections.get() < cpConfig.getMaxConnsPerHost()) {
+
+                    // Create a connection and add it to the pool
+                    createConnectionWithRetries();
+
 				}
+
+				// Add the given connection back to the pool
+				availableConnections.add(connection);
+				return false;
+
 			} finally { 
 				monitor.incConnectionReturned(host);
 			}
