@@ -135,7 +135,7 @@ public class HostSelectionWithFallback<CL> {
                     cpMonitor.incOperationFailure(null,lastEx);
 					throw lastEx; // give up
 				} else {
-                    PoolOfflineException poe = new PoolOfflineException(hostPool.getHost(), "host pool is offline and no DCs available for fallback");
+                    PoolOfflineException poe = new PoolOfflineException(hostPool.getHost(), "host pool is offline and no Racks available for fallback");
                     cpMonitor.incOperationFailure(null, poe);
 					throw poe;
 				}
@@ -148,7 +148,7 @@ public class HostSelectionWithFallback<CL> {
         }
 		
 		if (hostPool == null) {
-			throw new NoAvailableHostsException("Found no hosts when using fallback DC");
+			throw new NoAvailableHostsException("Found no hosts when using fallback Rack");
 		}
 		
 		return hostPool.borrowConnection(duration, unit);
@@ -158,7 +158,7 @@ public class HostSelectionWithFallback<CL> {
 		
 		int numRemotes = remoteDCNames.getEntireList().size();
 		if (numRemotes == 0) {
-			throw new NoAvailableHostsException("Could not find any remote DCs for fallback");
+			throw new NoAvailableHostsException("Could not find any remote Racks for fallback");
 		}
 
 		int numTries = Math.min(numRemotes, cpConfig.getMaxFailoverCount());
@@ -198,7 +198,7 @@ public class HostSelectionWithFallback<CL> {
 		final Collection<HostToken> localZoneTokens = CollectionUtils.filter(hostTokens.values(), new Predicate<HostToken>() {
 			@Override
 			public boolean apply(HostToken x) {
-				return localRack != null ? localRack.equalsIgnoreCase(x.getHost().getRack()) : true; 
+				return localRack == null || localRack.equalsIgnoreCase(x.getHost().getRack());
 			}
 		});
 		

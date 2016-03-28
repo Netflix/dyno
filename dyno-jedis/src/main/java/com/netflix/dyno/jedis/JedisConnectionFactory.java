@@ -89,6 +89,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
                     opMonitor.recordSuccess(opName);
                 }
 				opResult = new OperationResultImpl<R>(opName, result, opMonitor);
+				opResult.addMetadata("connectionId", String.valueOf(this.hashCode()));
                 return opResult;
 				
 			} catch (JedisConnectionException ex) {

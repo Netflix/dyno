@@ -25,6 +25,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.netflix.dyno.connectionpool.*;
+import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -326,10 +327,14 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 			} catch(Throwable t) {
 				throw new RuntimeException(t);
 			} finally {
-				if (connection != null) {
-					connection.getContext().reset();
-					connection.getParentConnectionPool().returnConnection(connection);
-				}
+                if (connection != null) {
+                    if (connection.getLastException() != null && connection.getLastException() instanceof FatalConnectionException) {
+                        connection.getParentConnectionPool().closeConnection(connection);
+                    } else {
+                        connection.getContext().reset();
+                        connection.getParentConnectionPool().returnConnection(connection);
+                    }
+                }
 			}
 			
 		} while(retry.allowRetry());
