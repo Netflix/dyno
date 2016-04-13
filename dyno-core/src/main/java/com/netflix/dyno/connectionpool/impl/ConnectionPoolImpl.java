@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.netflix.dyno.connectionpool.*;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
+import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -253,7 +254,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 
 	@Override
 	public Future<Boolean> updateHosts(Collection<Host> hostsUp, Collection<Host> hostsDown) {
-		
+		Logger.debug("Updating hosts: UP=%s, DOWN=%s", hostsUp, hostsDown);
 		boolean condition = false;
 		if (hostsUp != null && !hostsUp.isEmpty()) {
 			for (Host hostUp : hostsUp) {
@@ -306,6 +307,10 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 				cpMonitor.incOperationFailure(null, e);
 
 				throw e;
+			} catch (PoolExhaustedException e) {
+                Logger.warn("Pool exhausted: " + e.getMessage());
+                cpMonitor.incOperationFailure(null, e);
+                cpHealthTracker.trackConnectionError(e.getHostConnectionPool(), e);
 			} catch(DynoException e) {
 				
 				retry.failure(e);
@@ -328,8 +333,13 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 				throw new RuntimeException(t);
 			} finally {
                 if (connection != null) {
-                    if (connection.getLastException() != null && connection.getLastException() instanceof FatalConnectionException) {
+                    if (connection.getLastException() != null &&
+                            connection.getLastException() instanceof FatalConnectionException) {
+                        Logger.warn("Received FatalConnectionException; closing connection " +
+                                connection.getContext().getAll() + " to host " +
+                                connection.getParentConnectionPool().getHost());
                         connection.getParentConnectionPool().closeConnection(connection);
+                        // note - don't increment connection closed metric here; it's done in closeConnection
                     } else {
                         connection.getContext().reset();
                         connection.getParentConnectionPool().returnConnection(connection);
@@ -586,11 +596,13 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
         final MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
             ObjectName objectName = new ObjectName(MonitorConsole.OBJECT_NAME);
-            server.registerMBean(bean, objectName);
-            Logger.info("registered mbean " + objectName);
-        } catch (MalformedObjectNameException ex) {
-            Logger.error("Unable to register MonitorConsole mbean ", ex);
-        } catch (InstanceAlreadyExistsException ex) {
+            if (!server.isRegistered(objectName)) {
+                server.registerMBean(bean, objectName);
+                Logger.info("registered mbean " + objectName);
+            } else {
+                Logger.info("mbean " + objectName + "has already been registered !");
+            }
+        } catch (MalformedObjectNameException | InstanceAlreadyExistsException ex) {
             Logger.error("Unable to register MonitorConsole mbean ", ex);
         } catch (MBeanRegistrationException ex) {
             Logger.error("Unable to register MonitorConsole mbean ", ex);
@@ -603,8 +615,10 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
         final MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
             ObjectName objectName = new ObjectName(MonitorConsole.OBJECT_NAME);
-            server.unregisterMBean(objectName);
-            Logger.info("unregistered mbean " + objectName);
+            if (server.isRegistered(objectName)) {
+                server.unregisterMBean(objectName);
+                Logger.info("unregistered mbean " + objectName);
+            }
         } catch (MalformedObjectNameException ex) {
             Logger.error("Unable to unregister MonitorConsole mbean ", ex);
         } catch (MBeanRegistrationException ex) {

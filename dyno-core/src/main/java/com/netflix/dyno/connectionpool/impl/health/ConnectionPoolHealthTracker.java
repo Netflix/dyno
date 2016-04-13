@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.netflix.dyno.connectionpool.*;
+import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -145,7 +146,18 @@ public class ConnectionPoolHealthTracker<CL> implements HealthTracker<CL> {
 			// that may just be a slowdown due to pool saturation of larger payloads
 			return; 
 		}
-		
+
+        if (e != null && e instanceof PoolExhaustedException) {
+            String hostName = "Unknown";
+            if (hostPool.getHost() != null) {
+                hostName = hostPool.getHost().getHostName();
+            }
+            Logger.error(String.format("Attempting to reconnect pool to host %s due to PoolExhaustedException: %s",
+                    e.getMessage(), hostName));
+            reconnectPool(hostPool);
+            return;
+        }
+
 		if (e != null && e instanceof FatalConnectionException) {
 			
 			Host host = hostPool.getHost();

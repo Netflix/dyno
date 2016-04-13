@@ -120,9 +120,14 @@ public class HostSelectionWithFallback<CL> {
 			try { 
 				return hostPool.borrowConnection(duration, unit);
 			} catch (DynoConnectException e) {
-				lastEx = e;
-				cpMonitor.incOperationFailure(null, e);
-				useFallback = true;
+				if (e instanceof PoolExhaustedException) {
+                    // Don't failover, re-throw so the health tracker records it
+                    throw e;
+                }
+                lastEx = e;
+                cpMonitor.incOperationFailure(null, e);
+                useFallback = true;
+
 			}
 		}
 		
