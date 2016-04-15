@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,7 +79,9 @@ public class HostSelectionWithFallback<CL> {
 
 	private final TokenMapSupplier tokenSupplier; 
 	private final ConnectionPoolConfiguration cpConfig;
-	private final ConnectionPoolMonitor cpMonitor; 
+	private final ConnectionPoolMonitor cpMonitor;
+
+    private final AtomicInteger replicationFactor = new AtomicInteger(-1);
 
 	// list of names of remote zones. Used for RoundRobin over remote zones when local zone host is down
 	private final CircularList<String> remoteDCNames = new CircularList<String>(new ArrayList<String>());
@@ -120,7 +123,7 @@ public class HostSelectionWithFallback<CL> {
 			try { 
 				return hostPool.borrowConnection(duration, unit);
 			} catch (DynoConnectException e) {
-				if (e instanceof PoolExhaustedException) {
+				if (e instanceof PoolExhaustedException && replicationFactor.get() == 3) {
                     // Don't failover, re-throw so the health tracker records it
                     throw e;
                 }
@@ -316,10 +319,12 @@ public class HostSelectionWithFallback<CL> {
 		localSelector.initWithHosts(localPools);
 
 		for (String dc : remoteDCs) {
-
 			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForDC(tokenPoolMap, dc);
 
 			HostSelectionStrategy<CL> remoteSelector = selectorFactory.vendPoolSelectionStrategy();
+			if (remoteSelector.isTokenAware()) {
+				replicationFactor.set(calculateReplicationFactor(allHostTokens));
+			}
 			remoteSelector.initWithHosts(dcPools);
 
 			remoteDCSelectors.put(dc, remoteSelector);
@@ -328,8 +333,29 @@ public class HostSelectionWithFallback<CL> {
 		remoteDCNames.swapWithList(remoteDCSelectors.keySet());
 	}
 
+    /*package private*/ int calculateReplicationFactor(List<HostToken> allHostTokens) {
+        Map<Long, Integer> groups = new HashMap<>();
 
-	public void addHost(Host host, HostConnectionPool<CL> hostPool) {
+        for (HostToken hostToken: allHostTokens) {
+            Long token = hostToken.getToken();
+            if (groups.containsKey(token)) {
+                int current = groups.get(token);
+                groups.put(token, current + 1);
+            } else {
+                groups.put(token, 1);
+            }
+        }
+
+        Set<Integer> uniqueCounts = new HashSet<>(groups.values());
+
+        if (uniqueCounts.size() > 1) {
+            throw new RuntimeException("Invalid configuration - replication factor cannot be asymmetric");
+        }
+
+        return uniqueCounts.toArray(new Integer[uniqueCounts.size()])[0];
+    }
+
+    public void addHost(Host host, HostConnectionPool<CL> hostPool) {
 		
 		HostToken hostToken = tokenSupplier.getTokenForHost(host, hostTokens.keySet());
 		if (hostToken == null) {
@@ -377,7 +403,7 @@ public class HostSelectionWithFallback<CL> {
 
 	public TokenPoolTopology getTokenPoolTopology() {
 		
-		TokenPoolTopology topology = new TokenPoolTopology();
+		TokenPoolTopology topology = new TokenPoolTopology(replicationFactor.get());
 		addTokens(topology, localRack, localSelector);
 		for (String remoteRack : remoteDCSelectors.keySet()) {
 			addTokens(topology, remoteRack, remoteDCSelectors.get(remoteRack));

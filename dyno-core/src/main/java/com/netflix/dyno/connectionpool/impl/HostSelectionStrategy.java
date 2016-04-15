@@ -42,7 +42,7 @@ public interface HostSelectionStrategy<CL> {
 	 * @return
 	 * @throws NoAvailableHostsException
 	 */
-	public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op) throws NoAvailableHostsException;
+	HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op) throws NoAvailableHostsException;
 
 	/**
 	 * 
@@ -50,20 +50,20 @@ public interface HostSelectionStrategy<CL> {
 	 * @return
 	 * @throws NoAvailableHostsException
 	 */
-	public Map<HostConnectionPool<CL>,BaseOperation<CL,?>> getPoolsForOperationBatch(Collection<BaseOperation<CL, ?>> ops) throws NoAvailableHostsException;
+	Map<HostConnectionPool<CL>,BaseOperation<CL,?>> getPoolsForOperationBatch(Collection<BaseOperation<CL, ?>> ops) throws NoAvailableHostsException;
 	
 	/**
 	 * 
 	 * @return
 	 */
-	public List<HostConnectionPool<CL>> getOrderedHostPools();
+	List<HostConnectionPool<CL>> getOrderedHostPools();
 	
 	/**
 	 * 
 	 * @param token
 	 * @return
 	 */
-	public HostConnectionPool<CL> getPoolForToken(Long token);
+	HostConnectionPool<CL> getPoolForToken(Long token);
 	
 	/**
 	 * 
@@ -71,7 +71,7 @@ public interface HostSelectionStrategy<CL> {
 	 * @param end
 	 * @return
 	 */
-	public List<HostConnectionPool<CL>> getPoolsForTokens(Long start, Long end);
+	List<HostConnectionPool<CL>> getPoolsForTokens(Long start, Long end);
 
     /**
      * Finds the server Host that owns the specified key.
@@ -86,7 +86,7 @@ public interface HostSelectionStrategy<CL> {
 	 * Init the connection pool with the set of hosts provided
 	 * @param hostPools
 	 */
-	public void initWithHosts(Map<HostToken, HostConnectionPool<CL>> hostPools);
+	void initWithHosts(Map<HostToken, HostConnectionPool<CL>> hostPools);
 	
 	/**
 	 * Add a host to the selection strategy. This is useful when the underlying dynomite topology changes.
@@ -94,14 +94,16 @@ public interface HostSelectionStrategy<CL> {
 	 * @param hostPool
 	 * @return true/false indicating whether the pool was indeed added
 	 */
-	public boolean addHostPool(HostToken host, HostConnectionPool<CL> hostPool);
+	boolean addHostPool(HostToken host, HostConnectionPool<CL> hostPool);
 	
 	/**
 	 * Remove a host from the selection strategy. This is useful when the underlying dynomite topology changes.
 	 * @param HostToken
 	 * @return true/false indicating whether the pool was indeed removed
 	 */
-	public boolean removeHostPool(HostToken host);
+	boolean removeHostPool(HostToken host);
+
+	boolean isTokenAware();
 
 	public static interface HostSelectionStrategyFactory<CL> {
 		

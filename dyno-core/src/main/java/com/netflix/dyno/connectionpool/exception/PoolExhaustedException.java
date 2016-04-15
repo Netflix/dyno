@@ -24,11 +24,11 @@ public class PoolExhaustedException extends DynoConnectException {
 
     public PoolExhaustedException(HostConnectionPool hostConnectionPool, Throwable t) {
         super(t);
-        hcp = hostConnectionPool;
+        this.hcp = hostConnectionPool;
     }
 
     public HostConnectionPool getHostConnectionPool() {
-        return hcp;
+        return this.hcp;
     }
 }
 

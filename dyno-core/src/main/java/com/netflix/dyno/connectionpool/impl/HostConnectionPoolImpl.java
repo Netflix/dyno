@@ -308,7 +308,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
                     }
 				}
 				monitor.incConnectionCreateFailed(host, e);
-				throw new DynoConnectException(e); // TODO - FatalConnectionException ?
+				throw new DynoConnectException(e);
 			}
 		}
 
@@ -370,7 +370,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				conn = availableConnections.poll(duration, unit);
 			} catch (InterruptedException e) {
 				Logger.info("Thread interrupted when waiting on connections");
-				throw new DynoConnectException(e); // TODO Change this to DynoBorrowedConnectionException(e)
+				throw new DynoConnectException(e);
 			}
 
 			long delay = System.nanoTime()/1000 - startTime;

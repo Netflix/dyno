@@ -602,14 +602,10 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
             } else {
                 Logger.info("mbean " + objectName + "has already been registered !");
             }
-        } catch (MalformedObjectNameException | InstanceAlreadyExistsException ex) {
-            Logger.error("Unable to register MonitorConsole mbean ", ex);
-        } catch (MBeanRegistrationException ex) {
-            Logger.error("Unable to register MonitorConsole mbean ", ex);
-        } catch (NotCompliantMBeanException ex) {
+        } catch (MalformedObjectNameException | InstanceAlreadyExistsException | MBeanRegistrationException | NotCompliantMBeanException ex) {
             Logger.error("Unable to register MonitorConsole mbean ", ex);
         }
-    }
+	}
 
     private void unregisterMonitorConsoleMBean() {
         final MBeanServer server = ManagementFactory.getPlatformMBeanServer();
@@ -619,15 +615,11 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
                 server.unregisterMBean(objectName);
                 Logger.info("unregistered mbean " + objectName);
             }
-        } catch (MalformedObjectNameException ex) {
-            Logger.error("Unable to unregister MonitorConsole mbean ", ex);
-        } catch (MBeanRegistrationException ex) {
-            Logger.error("Unable to unregister MonitorConsole mbean ", ex);
-        } catch (InstanceNotFoundException ex) {
+        } catch (MalformedObjectNameException | MBeanRegistrationException | InstanceNotFoundException ex) {
             Logger.error("Unable to unregister MonitorConsole mbean ", ex);
         }
 
-    }
+	}
 	
 	private HostSelectionWithFallback<CL> initSelectionStrategy() {
 		
