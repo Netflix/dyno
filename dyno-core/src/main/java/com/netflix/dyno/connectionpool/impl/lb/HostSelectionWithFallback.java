@@ -118,12 +118,16 @@ public class HostSelectionWithFallback<CL> {
 			lastEx = e;
 			useFallback = true;
 		}
-		
+
+        // For RF=2, we will not enter this code block if there are no dynomite instances in our local zone since
+        // a NoAvailableHostsException would have been thrown already
 		if (!useFallback) {
 			try { 
 				return hostPool.borrowConnection(duration, unit);
 			} catch (DynoConnectException e) {
-				if (e instanceof PoolExhaustedException && replicationFactor.get() == 3) {
+                // NOTE - if the timeout expires while borrowing the connection, a PoolTimeoutException is thrown
+                // however if there are no connections left a PoolExhaustedException is thrown.
+				if (e instanceof PoolExhaustedException) {
                     // Don't failover, re-throw so the health tracker records it
                     throw e;
                 }
