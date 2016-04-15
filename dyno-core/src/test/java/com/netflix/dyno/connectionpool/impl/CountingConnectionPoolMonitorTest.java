@@ -36,7 +36,7 @@ public class CountingConnectionPoolMonitorTest {
 		counter.incOperationFailure(host2, null);
 
 		counter.incOperationFailure(host2, new PoolTimeoutException(""));
-		counter.incOperationFailure(host2, new PoolExhaustedException(""));
+		counter.incOperationFailure(host2, new PoolExhaustedException(null, ""));
 		counter.incOperationFailure(host2, new NoAvailableHostsException(""));
 
 		// VERIFY COUNTS

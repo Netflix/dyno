@@ -142,7 +142,12 @@ public class RoundRobinSelection<CL> implements HostSelectionStrategy<CL> {
 		}
 		return prevPool != null;
 	}
-	
+
+	@Override
+	public boolean isTokenAware() {
+		return false;
+	}
+
 	public String toString() {
 		return "RoundRobinSelector: list: " + circularList.toString();
 	}
