@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -108,6 +109,9 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
 	@Override
 	public void markAsDown(DynoException reason) {
+        if (Logger.isDebugEnabled()) {
+            Logger.debug(String.format("Marking Host Connection Pool %s DOWN", getHost()));
+        }
 		
 		ConnectionPoolState<CL> currentState = cpState.get();
 		
@@ -350,7 +354,14 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		@Override
 		public Connection<CL> borrowConnection(int duration, TimeUnit unit) {
 
-			// Start recording how long it takes to get the connection - for insight/metrics
+            if (numActiveConnections.get() < 1) {
+                // Need to throw something other than DynoConnectException in order to bubble past HostSelectionWithFallback
+                // Is that the right thing to do ???
+                throw new PoolExhaustedException(HostConnectionPoolImpl.this,
+                        "Fast fail - NO ACTIVE CONNECTIONS in pool").setHost(getHost());
+            }
+
+            // Start recording how long it takes to get the connection - for insight/metrics
 			long startTime = System.nanoTime()/1000;
 
 			Connection<CL> conn = null;
@@ -365,9 +376,9 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 			long delay = System.nanoTime()/1000 - startTime;
 
 			if (conn == null) {
-				throw new PoolTimeoutException("Fast fail waiting for connection from pool")
-				.setHost(getHost())
-				.setLatency(delay);
+                throw new PoolTimeoutException("Fast fail waiting for connection from pool")
+                        .setHost(getHost())
+                        .setLatency(delay);
 			}
 
             monitor.incConnectionBorrowed(host, delay);
@@ -421,22 +432,22 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
 		@Override
 		public Connection<CL> createConnection() {
-			throw new DynoConnectException("Pool must be inited first");
+			throw new DynoConnectException("Pool must be initialized first");
 		}
 
 		@Override
 		public Connection<CL> borrowConnection(int duration, TimeUnit unit) {
-			throw new DynoConnectException("Pool must be inited first");
+			throw new DynoConnectException("Pool must be initialized first");
 		}
 
 		@Override
 		public boolean returnConnection(Connection<CL> connection) {
-			throw new DynoConnectException("Pool must be inited first");
+			throw new DynoConnectException("Pool must be initialized first");
 		}
 
 		@Override
 		public boolean closeConnection(Connection<CL> connection) {
-			throw new DynoConnectException("Pool must be inited first");
+			throw new DynoConnectException("Pool must be initialized first");
 		}
 	}
 	

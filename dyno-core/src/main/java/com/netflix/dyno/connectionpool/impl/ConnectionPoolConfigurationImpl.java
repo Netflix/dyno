@@ -33,7 +33,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	// DEFAULTS 
 	private static final int DEFAULT_PORT = 8102; 
 	private static final int DEFAULT_MAX_CONNS_PER_HOST = 3;
-	private static final int DEFAULT_MAX_TIMEOUT_WHEN_EXHAUSTED = 2000; 
+	private static final int DEFAULT_MAX_TIMEOUT_WHEN_EXHAUSTED = 800;
 	private static final int DEFAULT_MAX_FAILOVER_COUNT = 3; 
 	private static final int DEFAULT_CONNECT_TIMEOUT = 3000; 
 	private static final int DEFAULT_SOCKET_TIMEOUT = 12000; 

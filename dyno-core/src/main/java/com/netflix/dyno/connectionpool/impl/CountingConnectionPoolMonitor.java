@@ -47,7 +47,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     private final AtomicLong connectionReturnCount  = new AtomicLong();
     private final AtomicLong operationFailoverCount = new AtomicLong();
 
-    //private final AtomicLong poolTimeoutCount      = new AtomicLong();
+    private final AtomicLong poolTimeoutCount       = new AtomicLong();
     private final AtomicLong poolExhastedCount      = new AtomicLong();
     private final AtomicLong operationTimeoutCount  = new AtomicLong();
     private final AtomicLong socketTimeoutCount     = new AtomicLong();
@@ -72,7 +72,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     private void trackError(Host host, Exception reason) {
     	if (reason != null) {
     		if (reason instanceof PoolTimeoutException) {
-    			this.poolExhastedCount.incrementAndGet();
+    			this.poolTimeoutCount.incrementAndGet();
     		} else if (reason instanceof PoolExhaustedException) {
         	        this.poolExhastedCount.incrementAndGet();
     		} else if (reason instanceof TimeoutException) {

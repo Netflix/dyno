@@ -8,9 +8,10 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TokenPoolTopology {
 
 	private final ConcurrentHashMap<String, List<TokenStatus>> map = new ConcurrentHashMap<String, List<TokenStatus>>();
+	private final int replicationFactor;
 	
-	public TokenPoolTopology () {
-		
+	public TokenPoolTopology (int replicationFactor) {
+		this.replicationFactor = replicationFactor;
 	}
 	
 	public void addToken(String rack, Long token, HostConnectionPool<?> hostPool) {
@@ -27,7 +28,11 @@ public class TokenPoolTopology {
 	public ConcurrentHashMap<String, List<TokenStatus>> getAllTokens() {
 		return map;
 	}
-	
+
+	public int getReplicationFactor() {
+		return replicationFactor;
+	}
+
 	public String toString() {
 		
 		ArrayList<String> keyList = new ArrayList<String>(map.keySet());

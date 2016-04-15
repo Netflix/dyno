@@ -326,6 +326,65 @@ public class HostSelectionWithFallbackTest {
 		verifyExactly(hostnames, "h5", "h6");
 	}
 
+	@Test
+    public void testReplicationFactorOf3() {
+		cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware);
+		cpConfig.withTokenSupplier(getTokenMapSupplier());
+
+		HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
+
+        List<HostToken> hostTokens = Arrays.asList(
+                new HostToken(1111L, h1),
+                new HostToken(2222L, h2),
+                new HostToken(1111L, h3),
+                new HostToken(1111L, h4),
+                new HostToken(2222L, h5),
+                new HostToken(2222L, h6)
+        );
+
+		int rf = selection.calculateReplicationFactor(hostTokens);
+
+        Assert.assertEquals(3, rf);
+	}
+
+    @Test
+    public void testReplicationFactorOf2() {
+        cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware);
+        cpConfig.withTokenSupplier(getTokenMapSupplier());
+
+        HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
+
+        List<HostToken> hostTokens = Arrays.asList(
+                new HostToken(1111L, h1),
+                new HostToken(2222L, h2),
+                new HostToken(1111L, h3),
+                new HostToken(2222L, h5)
+        );
+
+        int rf = selection.calculateReplicationFactor(hostTokens);
+
+        Assert.assertEquals(2, rf);
+    }
+
+    @Test
+    public void testReplicationFactorOf1() {
+        cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware);
+        cpConfig.withTokenSupplier(getTokenMapSupplier());
+
+        HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
+
+        List<HostToken> hostTokens = Arrays.asList(
+                new HostToken(1111L, h1),
+                new HostToken(2222L, h2),
+                new HostToken(3333L, h3),
+                new HostToken(4444L, h4)
+        );
+
+        int rf = selection.calculateReplicationFactor(hostTokens);
+
+        Assert.assertEquals(1, rf);
+    }
+
 	private Collection<String> runConnectionsToRingTest(HostSelectionWithFallback<Integer> selection) {
 
 		Collection<Connection<Integer>> connections = selection.getConnectionsToRing(10, TimeUnit.MILLISECONDS);

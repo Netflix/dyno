@@ -44,5 +44,7 @@ public class SimpleErrorMonitorImpl implements ErrorMonitor {
 		public ErrorMonitor createErrorMonitor() {
 			return new SimpleErrorMonitorImpl(threshold);
 		}
+
+		// TODO add setter and keep error threshold in sync with maxConnsPerHost OR switch to error rate monitor
 	}
 }

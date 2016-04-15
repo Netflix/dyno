@@ -168,6 +168,7 @@ public class MonitorConsole implements MonitorConsoleMBean {
             config.put("socketTimeout", String.valueOf(cpConfig.getSocketTimeout()));
             config.put("timingCountersResetFrequencyInSecs",
                     String.valueOf(cpConfig.getTimingCountersResetFrequencySeconds()));
+            config.put("replicationFactor", String.valueOf(pool.getTopology().getReplicationFactor()));
 
             return Collections.unmodifiableMap(config);
         }
