@@ -54,8 +54,17 @@ public class MonitorConsole implements MonitorConsoleMBean {
 	}
 	
 	public void registerConnectionPool(ConnectionPoolImpl<?> cp) {
-		connectionPools.put(cp.getName(), cp);
-		addMonitorConsole(cp.getName(), cp.getMonitor());
+        ConnectionPoolImpl<?> cpImpl = connectionPools.putIfAbsent(cp.getName(), cp);
+
+        if (cpImpl != null) {
+            // Need a unique id, so append a timestamp
+            String name = cp.getName() + System.currentTimeMillis();
+            connectionPools.put(name, cp);
+            addMonitorConsole(name, cp.getMonitor());
+        } else {
+            addMonitorConsole(cp.getName(), cp.getMonitor());
+        }
+
 	}
 
     @Override
