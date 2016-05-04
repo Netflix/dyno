@@ -54,6 +54,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public ConnectionPoolImpl<Jedis> getConnPool() {
         return (ConnectionPoolImpl<Jedis>) connPool;
     }
+   
 
     private abstract class BaseKeyOperation<T> implements Operation<Jedis, T> {
 
@@ -64,6 +65,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             this.key = k;
             this.op = o;
         }
+        
 
         @Override
         public String getName() {
@@ -72,10 +74,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         @Override
         public String getKey() {
-            return key;
+            return this.key;
         }
-
+        
     }
+ 
+
 
     /**
      * The following commands are supported
@@ -97,6 +101,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
      *     <li>{@link #hset(String, String, String) HSET}</li>
      *     <li>{@link #hsetnx(String, String, String) HSETNX}</li>
      *     <li>{@link #hvals(String) HVALS}</li>
+     * </ul>
+     * 
+     * <ul>
+     *     <li>{@link #get(byte[]) GET}</li>
+     *     <li>{@link #set(byte[], byte[]) SET}</li>
+     *     <li>{@link #setex(byte[], int, byte[]) SETEX}</li>
      * </ul>
      *
      * @param <T> the parameterized type
@@ -2499,17 +2509,52 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     
     /******************* Jedis Binary Commands **************/
     @Override
-    public String set(byte[] key, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public String set(final byte[] key, final byte[] value) {
+        return d_set(key,value).getResult();
+    }
+    
+    
+    public OperationResult<String> d_set(final byte[] key, final byte[] value) {
+        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
+           @Override
+           public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                return client.set(key, value);
+           }
+         });
+    }
+    
+    @Override
+    public byte[] get(final byte[] key) {
+        return d_get(key).getResult();
+    }
+
+    public OperationResult<byte[]> d_get(final byte[] key) {
+        return connPool.executeWithFailover(new BaseKeyOperation<byte[]>(key, OpName.GET) {
+            @Override
+            public byte[] execute(Jedis client, ConnectionContext state) throws DynoException {
+                return client.get(key);
+            }
+        });
+      
+    }
+    
+    @Override
+    public String setex(final byte[] key, final int seconds, final byte[] value) {
+        return d_setex(key, seconds, value).getResult();
+    }
+
+
+    public OperationResult<String> d_setex(final byte[] key, final Integer seconds, final byte[] value) {
+        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SETEX) {
+            @Override
+            public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                 return client.setex(key, seconds, value);
+            }
+         });
     }
     
     @Override
     public String set(byte[] key, byte[] value, byte[] nxxx, byte[] expx, long time) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public byte[] get(byte[] key) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -2588,10 +2633,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         throw new UnsupportedOperationException("not yet implemented");
     }
 
-    @Override
-    public String setex(byte[] key, int seconds, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
 
     @Override
     public Long decrBy(byte[] key, long integer) {
