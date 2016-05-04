@@ -59,14 +59,21 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     private abstract class BaseKeyOperation<T> implements Operation<Jedis, T> {
 
         private final String key;
+        private final byte[] binaryKey;
         private final OpName op;
 
         private BaseKeyOperation(final String k, final OpName o) {
             this.key = k;
+            this.binaryKey = null;
             this.op = o;
         }
         
-
+        private BaseKeyOperation(final byte[] k, final OpName o) {
+        	this.key = null;
+        	this.binaryKey = null;
+        	this.op = o;
+        }
+        
         @Override
         public String getName() {
             return op.name();
@@ -75,6 +82,10 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         @Override
         public String getKey() {
             return this.key;
+        }
+        
+        public byte[] getBinaryKey() {
+        	return this.binaryKey;
         }
         
     }
