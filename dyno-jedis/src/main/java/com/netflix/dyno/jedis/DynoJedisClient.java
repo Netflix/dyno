@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.CompressionStrategy;
 
 
-public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
+public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, MultiKeyCommands {
 
     private static final Logger Logger = org.slf4j.LoggerFactory.getLogger(DynoJedisClient.class);
 
@@ -54,17 +54,26 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
     public ConnectionPoolImpl<Jedis> getConnPool() {
         return (ConnectionPoolImpl<Jedis>) connPool;
     }
+   
 
     private abstract class BaseKeyOperation<T> implements Operation<Jedis, T> {
 
         private final String key;
+        private final byte[] binaryKey;
         private final OpName op;
 
         private BaseKeyOperation(final String k, final OpName o) {
             this.key = k;
+            this.binaryKey = null;
             this.op = o;
         }
-
+        
+        private BaseKeyOperation(final byte[] k, final OpName o) {
+        	this.key = null;
+        	this.binaryKey = null;
+        	this.op = o;
+        }
+        
         @Override
         public String getName() {
             return op.name();
@@ -72,10 +81,16 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
         @Override
         public String getKey() {
-            return key;
+            return this.key;
         }
-
+        
+        public byte[] getBinaryKey() {
+        	return this.binaryKey;
+        }
+        
     }
+ 
+
 
     /**
      * The following commands are supported
@@ -97,6 +112,12 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
      *     <li>{@link #hset(String, String, String) HSET}</li>
      *     <li>{@link #hsetnx(String, String, String) HSETNX}</li>
      *     <li>{@link #hvals(String) HVALS}</li>
+     * </ul>
+     * 
+     * <ul>
+     *     <li>{@link #get(byte[]) GET}</li>
+     *     <li>{@link #set(byte[], byte[]) SET}</li>
+     *     <li>{@link #setex(byte[], int, byte[]) SETEX}</li>
      * </ul>
      *
      * @param <T> the parameterized type
@@ -2494,6 +2515,600 @@ public class DynoJedisClient implements JedisCommands, MultiKeyCommands {
 
     @Override
     public Long bitop(BitOP op, String destKey, String... srcKeys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+    
+    /******************* Jedis Binary Commands **************/
+    @Override
+    public String set(final byte[] key, final byte[] value) {
+        return d_set(key,value).getResult();
+    }
+    
+    
+    public OperationResult<String> d_set(final byte[] key, final byte[] value) {
+        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
+           @Override
+           public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                return client.set(key, value);
+           }
+         });
+    }
+    
+    @Override
+    public byte[] get(final byte[] key) {
+        return d_get(key).getResult();
+    }
+
+    public OperationResult<byte[]> d_get(final byte[] key) {
+        return connPool.executeWithFailover(new BaseKeyOperation<byte[]>(key, OpName.GET) {
+            @Override
+            public byte[] execute(Jedis client, ConnectionContext state) throws DynoException {
+                return client.get(key);
+            }
+        });
+      
+    }
+    
+    @Override
+    public String setex(final byte[] key, final int seconds, final byte[] value) {
+        return d_setex(key, seconds, value).getResult();
+    }
+
+
+    public OperationResult<String> d_setex(final byte[] key, final Integer seconds, final byte[] value) {
+        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SETEX) {
+            @Override
+            public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                 return client.setex(key, seconds, value);
+            }
+         });
+    }
+    
+    @Override
+    public String set(byte[] key, byte[] value, byte[] nxxx, byte[] expx, long time) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Boolean exists(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long persist(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public String type(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long expire(byte[] key, int seconds) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long pexpire(byte[] key, final long milliseconds) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long expireAt(byte[] key, long unixTime) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long pexpireAt(byte[] key, long millisecondsTimestamp) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long ttl(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Boolean setbit(byte[] key, long offset, boolean value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Boolean setbit(byte[] key, long offset, byte[] value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Boolean getbit(byte[] key, long offset) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long setrange(byte[] key, long offset, byte[] value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public byte[] getrange(byte[] key, long startOffset, long endOffset) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public byte[] getSet(byte[] key, byte[] value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long setnx(byte[] key, byte[] value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+
+    @Override
+    public Long decrBy(byte[] key, long integer) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long decr(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long incrBy(byte[] key, long integer) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Double incrByFloat(byte[] key, double value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long incr(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long append(byte[] key, byte[] value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public byte[] substr(byte[] key, int start, int end) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long hset(byte[] key, byte[] field, byte[] value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public byte[] hget(byte[] key, byte[] field) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long hsetnx(byte[] key, byte[] field, byte[] value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public String hmset(byte[] key, Map<byte[], byte[]> hash) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<byte[]> hmget(byte[] key, byte[]... fields) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long hincrBy(byte[] key, byte[] field, long value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Double hincrByFloat(byte[] key, byte[] field, double value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Boolean hexists(byte[] key, byte[] field) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long hdel(byte[] key, byte[]... field) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long hlen(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> hkeys(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Collection<byte[]> hvals(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Map<byte[], byte[]> hgetAll(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long rpush(byte[] key, byte[]... args) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long lpush(byte[] key, byte[]... args) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long llen(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<byte[]> lrange(byte[] key, long start, long end) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public String ltrim(byte[] key, long start, long end) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public byte[] lindex(byte[] key, long index) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public String lset(byte[] key, long index, byte[] value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long lrem(byte[] key, long count, byte[] value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public byte[] lpop(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public byte[] rpop(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long sadd(byte[] key, byte[]... member) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> smembers(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long srem(byte[] key, byte[]... member) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public byte[] spop(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> spop(byte[] key, long count) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long scard(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Boolean sismember(byte[] key, byte[] member) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public byte[] srandmember(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<byte[]> srandmember(final byte[] key, final int count){
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long strlen(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zadd(byte[] key, double score, byte[] member) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zadd(byte[] key, Map<byte[], Double> scoreMembers) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrange(byte[] key, long start, long end) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zrem(byte[] key, byte[]... member) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Double zincrby(byte[] key, double score, byte[] member) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zrank(byte[] key, byte[] member) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zrevrank(byte[] key, byte[] member) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrevrange(byte[] key, long start, long end)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<Tuple> zrangeWithScores(byte[] key, long start, long end)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<Tuple> zrevrangeWithScores(byte[] key, long start, long end)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zcard(byte[] key)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Double zscore(byte[] key, byte[] member)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<byte[]> sort(byte[] key)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<byte[]> sort(byte[] key, SortingParams sortingParameters)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zcount(byte[] key, double min, double max)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zcount(byte[] key, byte[] min, byte[] max)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrangeByScore(byte[] key, double min, double max)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrangeByScore(byte[] key, byte[] min, byte[] max)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrevrangeByScore(byte[] key, double max, double min)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrangeByScore(byte[] key, double min, double max, int offset, int count)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrevrangeByScore(byte[] key, byte[] max, byte[] min)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrangeByScore(byte[] key, byte[] min, byte[] max, int offset, int count)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrevrangeByScore(byte[] key, double max, double min, int offset, int count)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<Tuple> zrangeByScoreWithScores(byte[] key, double min, double max)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, double max, double min)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<Tuple> zrangeByScoreWithScores(byte[] key, double min, double max, int offset, int count)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrevrangeByScore(byte[] key, byte[] max, byte[] min, int offset, int count)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<Tuple> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, byte[] max, byte[] min)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<Tuple> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max, int offset, int count)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, double max, double min, int offset, int count)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, byte[] max, byte[] min, int offset, int count)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zremrangeByRank(byte[] key, long start, long end)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zremrangeByScore(byte[] key, double start, double end)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zremrangeByScore(byte[] key, byte[] start, byte[] end)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zlexcount(final byte[] key, final byte[] min, final byte[] max)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrangeByLex(final byte[] key, final byte[] min, final byte[] max)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrangeByLex(final byte[] key, final byte[] min, final byte[] max, int offset,
+        int count)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrevrangeByLex(final byte[] key, final byte[] max, final byte[] min)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrevrangeByLex(final byte[] key, final byte[] max, final byte[] min, int offset,
+        int count)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zremrangeByLex(final byte[] key, final byte[] min, final byte[] max)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long linsert(byte[] key, BinaryClient.LIST_POSITION where, byte[] pivot, byte[] value)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long lpushx(byte[] key, byte[]... arg)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long rpushx(byte[] key, byte[]... arg)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+    
+    @Override
+    public List<byte[]> blpop(byte[] arg) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<byte[]> brpop(byte[] arg) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+    
+    @Override
+    public Long del(byte[] key)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public byte[] echo(byte[] arg)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long move(byte[] key, int dbIndex)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long bitcount(final byte[] key)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long bitcount(final byte[] key, long start, long end)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long pfadd(final byte[] key, final byte[]... elements)  {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public long pfcount(final byte[] key)  {
         throw new UnsupportedOperationException("not yet implemented");
     }
 

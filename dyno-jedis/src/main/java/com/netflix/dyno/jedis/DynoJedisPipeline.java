@@ -76,7 +76,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
                         @Override
                         public String getKey() {
                             return key;
-                        }
+                        }                        
                     });
                 } catch (NoAvailableHostsException nahe) {
                     cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, nahe);

@@ -35,4 +35,5 @@ public interface BaseOperation<CL, R> {
 	 * @return String
 	 */
 	public String getKey();
+
 }
