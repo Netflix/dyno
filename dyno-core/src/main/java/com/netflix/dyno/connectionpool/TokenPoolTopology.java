@@ -33,6 +33,14 @@ public class TokenPoolTopology {
 		return replicationFactor;
 	}
 
+	public TokenStatus getTokensForRack(String rack) {
+		if (map.containsKey(rack)) {
+			map.get(rack);
+		}
+
+		return null;
+	}
+
 	public String toString() {
 		
 		ArrayList<String> keyList = new ArrayList<String>(map.keySet());
@@ -52,7 +60,7 @@ public class TokenPoolTopology {
 		
 		return sb.toString();
 	}
-	
+
 	public static class TokenStatus implements Comparable<TokenStatus> {
 		
 		private Long token; 

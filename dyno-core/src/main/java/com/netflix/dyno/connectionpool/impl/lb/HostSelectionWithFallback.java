@@ -25,7 +25,10 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
+import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
+import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,7 +69,7 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
 
 public class HostSelectionWithFallback<CL> {
 
-	private static final Logger Logger = LoggerFactory.getLogger(HostSelectionWithFallback.class);
+	private static final Logger logger = LoggerFactory.getLogger(HostSelectionWithFallback.class);
 
 	// tracks the local zone
 	private final String localRack;
@@ -82,6 +85,8 @@ public class HostSelectionWithFallback<CL> {
 	private final ConnectionPoolMonitor cpMonitor;
 
     private final AtomicInteger replicationFactor = new AtomicInteger(-1);
+
+    private final AtomicReference<TokenPoolTopology> topology = new AtomicReference<>(null);
 
 	// list of names of remote zones. Used for RoundRobin over remote zones when local zone host is down
 	private final CircularList<String> remoteDCNames = new CircularList<String>(new ArrayList<String>());
@@ -103,70 +108,63 @@ public class HostSelectionWithFallback<CL> {
 		return getConnection(op, null, duration, unit);
 	}
 
-	private Connection<CL> getConnection(BaseOperation<CL, ?> op, Long token, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
+    private Connection<CL> getConnection(BaseOperation<CL, ?> op, Long token, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException, PoolTimeoutException {
+        DynoConnectException lastEx = null;
 
-		HostConnectionPool<CL> hostPool = null; 
-		DynoConnectException lastEx = null;
-		
-		boolean useFallback = false;
-		
-		try {
-			hostPool = (op != null) ? localSelector.getPoolForOperation(op) : localSelector.getPoolForToken(token);
-			useFallback = !isConnectionPoolActive(hostPool);
-			
-		} catch (NoAvailableHostsException e) {
-			lastEx = e;
-			useFallback = true;
-		}
+        HostConnectionPool<CL> hostPool = getHostPoolForOperationOrTokenInLocalZone(op, token);
 
-        // For RF=2, we will not enter this code block if there are no dynomite instances in our local zone since
-        // a NoAvailableHostsException would have been thrown already
-		if (!useFallback) {
-			try { 
-				return hostPool.borrowConnection(duration, unit);
-			} catch (DynoConnectException e) {
-                // NOTE - if the timeout expires while borrowing the connection, a PoolTimeoutException is thrown
-                // however if there are no connections left a PoolExhaustedException is thrown.
-				if (e instanceof PoolExhaustedException) {
-                    // Don't failover, re-throw so the health tracker records it
-                    throw e;
-                }
-                lastEx = e;
-                cpMonitor.incOperationFailure(null, e);
-                useFallback = true;
-
-			}
-		}
-		
-		if (useFallback && cpConfig.getMaxFailoverCount() > 0) {
-			cpMonitor.incFailover(null, null);
-			// Check if we have any remotes to fallback to
-			int numRemotes = remoteDCNames.getEntireList().size();
-			if (numRemotes == 0) {
-				if (lastEx != null) {
-                    cpMonitor.incOperationFailure(null,lastEx);
-					throw lastEx; // give up
-				} else {
-                    PoolOfflineException poe = new PoolOfflineException(hostPool.getHost(), "host pool is offline and no Racks available for fallback");
-                    cpMonitor.incOperationFailure(null, poe);
-					throw poe;
-				}
-			} else {
-				hostPool = getFallbackHostPool(op, token);
-			}
-		} else if (useFallback && cpConfig.getMaxFailoverCount() == 0) {
-            // The client is configured not use failover, so increment the operation failure
-            cpMonitor.incOperationFailure(null, lastEx);
+        if (hostPool != null) {
+            try {
+                // Note that if a PoolExhaustedException is thrown it is caught by the calling
+                // ConnectionPoolImpl#executeXXX() method
+                return hostPool.borrowConnection(duration, unit);
+            } catch (PoolTimeoutException pte) {
+                lastEx = pte;
+                cpMonitor.incOperationFailure(null, pte);
+            }
         }
-		
-		if (hostPool == null) {
-			throw new NoAvailableHostsException("Found no hosts when using fallback Rack");
-		}
-		
-		return hostPool.borrowConnection(duration, unit);
-	}
 
-	private HostConnectionPool<CL> getFallbackHostPool(BaseOperation<CL, ?> op, Long token) {
+        if (attemptFallback()) {
+            if (topology.get().getTokensForRack(localRack) != null) {
+                cpMonitor.incFailover(null, lastEx);
+            }
+
+            hostPool = getFallbackHostPool(op, token);
+
+            if (hostPool != null) {
+                return hostPool.borrowConnection(duration, unit);
+            }
+        }
+
+        if (lastEx == null) {
+            throw new PoolOfflineException(null, "host pool is offline and no Racks available for fallback");
+        } else {
+            throw lastEx;
+        }
+    }
+
+    private HostConnectionPool<CL> getHostPoolForOperationOrTokenInLocalZone(BaseOperation<CL, ?> op, Long token) {
+        HostConnectionPool<CL> hostPool;
+        try {
+            if (!localRack.isEmpty()) {
+                hostPool = (op != null) ? localSelector.getPoolForOperation(op) : localSelector.getPoolForToken(token);
+                if (isConnectionPoolActive(hostPool)) {
+                    return hostPool;
+                }
+			}
+
+        } catch (NoAvailableHostsException e) {
+            cpMonitor.incOperationFailure(null, e);
+        }
+
+        return null;
+    }
+
+    private boolean attemptFallback() {
+        return cpConfig.getMaxFailoverCount() > 0 && remoteDCNames.getEntireList().size() > 0;
+    }
+
+    private HostConnectionPool<CL> getFallbackHostPool(BaseOperation<CL, ?> op, Long token) {
 		
 		int numRemotes = remoteDCNames.getEntireList().size();
 		if (numRemotes == 0) {
@@ -201,7 +199,7 @@ public class HostSelectionWithFallback<CL> {
 		if (lastEx != null) {
 			throw lastEx;
 		} else {
-			throw new NoAvailableHostsException("Local zone host offline and could not find any remote hosts for fallback connection");
+			throw new NoAvailableHostsException("Local rack host offline and could not find any remote hosts for fallback connection");
 		}
 	}
 
@@ -229,7 +227,7 @@ public class HostSelectionWithFallback<CL> {
 			try { 
 				connections.add(getConnection(null, token, duration, unit));
 			} catch (DynoConnectException e) {
-				Logger.warn("Failed to get connection when getting all connections from ring", e.getMessage());
+				logger.warn("Failed to get connection when getting all connections from ring", e.getMessage());
 				lastEx = e;
 				break;
 			}
@@ -335,12 +333,16 @@ public class HostSelectionWithFallback<CL> {
 		}
 
 		remoteDCNames.swapWithList(remoteDCSelectors.keySet());
+
+        topology.set(getTokenPoolTopology());
 	}
 
     /*package private*/ int calculateReplicationFactor(List<HostToken> allHostTokens) {
         Map<Long, Integer> groups = new HashMap<>();
 
-        for (HostToken hostToken: allHostTokens) {
+        Set<HostToken> uniqueHostTokens = new HashSet<>(allHostTokens);
+
+        for (HostToken hostToken: uniqueHostTokens) {
             Long token = hostToken.getToken();
             if (groups.containsKey(token)) {
                 int current = groups.get(token);
@@ -356,7 +358,13 @@ public class HostSelectionWithFallback<CL> {
             throw new RuntimeException("Invalid configuration - replication factor cannot be asymmetric");
         }
 
-        return uniqueCounts.toArray(new Integer[uniqueCounts.size()])[0];
+        int rf = uniqueCounts.toArray(new Integer[uniqueCounts.size()])[0];
+
+        if (rf > 3) {
+            logger.warn("Replication Factor is high: " + uniqueHostTokens);
+        }
+
+        return rf;
     }
 
     public void addHost(Host host, HostConnectionPool<CL> hostPool) {
@@ -371,6 +379,7 @@ public class HostSelectionWithFallback<CL> {
 		HostSelectionStrategy<CL> selector = findSelector(host);
 		if (selector != null) {
 			selector.addHostPool(hostToken, hostPool);
+            topology.set(getTokenPoolTopology());
 		}
 	}
 
@@ -381,6 +390,7 @@ public class HostSelectionWithFallback<CL> {
 			HostSelectionStrategy<CL> selector = findSelector(host);
 			if (selector != null) {
 				selector.removeHostPool(hostToken);
+                topology.set(getTokenPoolTopology());
 			}
 		}
 	}

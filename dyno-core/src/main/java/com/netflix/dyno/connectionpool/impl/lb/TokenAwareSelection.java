@@ -139,6 +139,11 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 		return true;
 	}
 
+	@Override
+	public boolean isEmpty() {
+		return tokenPools.isEmpty();
+	}
+
 	public Long getKeyHash(String key) {
 		Long keyHash = tokenMapper.hash(key);
 		return keyHash;
