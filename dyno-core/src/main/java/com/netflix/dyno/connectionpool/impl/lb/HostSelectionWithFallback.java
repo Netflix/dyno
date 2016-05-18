@@ -53,16 +53,18 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
 
 /**
- * Class that implements the {@link HostSelectionStrategy} interface. 
- * It acts as a co-ordinator over multiple HostSelectionStrategy impls where each maps to a certain "DC" in the dynomite topology.
- * Hence this class doesn't actually implement the logic (e.g Round Robin or Token Aware) to actually borrow the connections. 
- * It relies on a local HostSelectionStrategy impl and a collection of remote HostSelectionStrategy(s) 
- * It gives preference to the "local" HostSelectionStrategy but if the local dc pool is offline or hosts are down etc, then it 
- * falls back to the remote HostSelectionStrategy. Also it uses pure round robin for distributing load on the fall back HostSelectionStrategy
- * impls for even distribution of load on the remote DCs in the event of an outage in the local dc. 
- * Note that this class does not prefer any one remote HostSelectionStrategy over the other.  
+ * Acts as a coordinator over multiple HostSelectionStrategy implementations, where each maps to a particular rack.
+ * This class doesn't actually implement the logic (e.g Round Robin or Token Aware) to borrow the connections. It
+ * relies on a local HostSelectionStrategy implementation and a collection of remote HostSelectionStrategy(s).
+ * It gives preference to the "local" HostSelectionStrategy but if the local pool is offline or hosts are down etc, then
+ * it falls back to the remote HostSelectionStrategy. Also it uses pure round robin for distributing load on the fall
+ * back HostSelectionStrategy implementations for even distribution of load on the remote racks in the event of an
+ * outage in the local rack.
+ * <p>
+ * Note that this class does not prefer any one remote HostSelectionStrategy over another.
  *  
  * @author poberai
+ * @author jcacciatore
  *
  * @param <CL>
  */
@@ -86,6 +88,8 @@ public class HostSelectionWithFallback<CL> {
 
     private final AtomicInteger replicationFactor = new AtomicInteger(-1);
 
+    // Represents the *initial* topology from the token supplier. This does not affect selection of a host connection
+    // pool for traffic. It only affects metrics such as failover/fallback
     private final AtomicReference<TokenPoolTopology> topology = new AtomicReference<>(null);
 
 	// list of names of remote zones. Used for RoundRobin over remote zones when local zone host is down
@@ -379,7 +383,6 @@ public class HostSelectionWithFallback<CL> {
 		HostSelectionStrategy<CL> selector = findSelector(host);
 		if (selector != null) {
 			selector.addHostPool(hostToken, hostPool);
-            topology.set(getTokenPoolTopology());
 		}
 	}
 
@@ -390,7 +393,6 @@ public class HostSelectionWithFallback<CL> {
 			HostSelectionStrategy<CL> selector = findSelector(host);
 			if (selector != null) {
 				selector.removeHostPool(hostToken);
-                topology.set(getTokenPoolTopology());
 			}
 		}
 	}
