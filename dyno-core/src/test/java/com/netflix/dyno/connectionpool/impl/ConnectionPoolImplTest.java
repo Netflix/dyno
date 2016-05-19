@@ -9,6 +9,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
+import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -371,7 +373,7 @@ public class ConnectionPoolImplTest {
     }
 	
 	@Test
-	public void testPoolExhausted() throws Exception {
+	public void testPoolTimeout() throws Exception {
 
 		final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
 		hostSupplierHosts.add(host1);
@@ -420,6 +422,30 @@ public class ConnectionPoolImplTest {
 			pool.shutdown();
 		}
 	}
+
+	@Test(expected = PoolOfflineException.class)
+	public void testPoolOffline() {
+        final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
+        hostSupplierHosts.add(host1);
+
+        pool.start();
+
+        // The test logic is simply to throw an exception so that errors will recorded by the health tracker
+        // which will mark the pool as Down
+        final Callable<Void> testLogic = new Callable<Void>() {
+
+            @Override
+            public Void call() throws Exception {
+                throw new PoolExhaustedException(pool.getHostPool(host1), "pool exhausted");
+            }
+        };
+
+        try {
+            executeTestClientOperation(pool, testLogic);
+        } finally {
+            pool.shutdown();
+        }
+    }
 	
 	
 	@Test
@@ -554,9 +580,11 @@ public class ConnectionPoolImplTest {
 			public Integer execute(TestClient client, ConnectionContext state) throws DynoException {
 				if (customLogic != null) {
 					try {
-						customLogic.call();
+                        customLogic.call();
+                    } catch (DynoException de) {
+                        throw de;
 					} catch (Exception e) {
-						throw new RuntimeException(e);
+                        throw new RuntimeException(e);
 					}
 				}
 				client.ops.incrementAndGet();
@@ -576,8 +604,7 @@ public class ConnectionPoolImplTest {
 		});
 	}
 
-
-	private void runTest(final ConnectionPoolImpl<TestClient> pool, final Callable<Void> customTestLogic) throws Exception {
+    private void runTest(final ConnectionPoolImpl<TestClient> pool, final Callable<Void> customTestLogic) throws Exception {
 		
 		int nThreads = 1;
 		final ExecutorService threadPool = Executors.newFixedThreadPool(nThreads);

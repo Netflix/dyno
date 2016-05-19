@@ -326,6 +326,37 @@ public class HostSelectionWithFallbackTest {
 		verifyExactly(hostnames, "h5", "h6");
 	}
 
+    @Test
+    public void testReplicationFactorOf3WithDupes() {
+        cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware);
+        cpConfig.withTokenSupplier(getTokenMapSupplier());
+
+        HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
+
+        List<HostToken> hostTokens = Arrays.asList(
+                new HostToken(1383429731L, new Host("host-1", -1)), // Use -1 otherwise the port is opened which works
+                new HostToken(2815085496L, new Host("host-2", -1)), // but slows down the test
+                new HostToken(4246741261L, new Host("host-3", -1)),
+                new HostToken(1383429731L, new Host("host-4", -1)),
+                new HostToken(2815085496L, new Host("host-5", -1)),
+                new HostToken(4246741261L, new Host("host-6", -1)),
+                new HostToken(1383429731L, new Host("host-7", -1)),
+                new HostToken(2815085496L, new Host("host-8", -1)),
+                new HostToken(4246741261L, new Host("host-9", -1)),
+                new HostToken(1383429731L, new Host("host-7", -1)),
+                new HostToken(2815085496L, new Host("host-8", -1)),
+                new HostToken(4246741261L, new Host("host-9", -1)),
+                new HostToken(1383429731L, new Host("host-7", -1)),
+                new HostToken(2815085496L, new Host("host-8", -1)),
+                new HostToken(4246741261L, new Host("host-9", -1))
+
+        );
+
+        int rf = selection.calculateReplicationFactor(hostTokens);
+
+        Assert.assertEquals(3, rf);
+    }
+
 	@Test
     public void testReplicationFactorOf3() {
 		cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware);
@@ -383,6 +414,25 @@ public class HostSelectionWithFallbackTest {
         int rf = selection.calculateReplicationFactor(hostTokens);
 
         Assert.assertEquals(1, rf);
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void testIllegalReplicationFactor() {
+        cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware);
+        cpConfig.withTokenSupplier(getTokenMapSupplier());
+
+        HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
+
+        List<HostToken> hostTokens = Arrays.asList(
+                new HostToken(1111L, h1),
+                new HostToken(2222L, h2),
+                new HostToken(3333L, h3),
+                new HostToken(4444L, h4),
+                new HostToken(4444L, h5)
+        );
+
+        selection.calculateReplicationFactor(hostTokens);
+
     }
 
 	private Collection<String> runConnectionsToRingTest(HostSelectionWithFallback<Integer> selection) {

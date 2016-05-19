@@ -15,18 +15,16 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
-
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
-import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Interface that encapsulates a strategy for selecting a {@link Connection} to a {@link Host} for the given {@link BaseOperation}
@@ -90,7 +88,7 @@ public interface HostSelectionStrategy<CL> {
 	
 	/**
 	 * Add a host to the selection strategy. This is useful when the underlying dynomite topology changes.
-	 * @param HostToken
+	 * @param {@link com.netflix.dyno.connectionpool.impl.lb.HostToken}
 	 * @param hostPool
 	 * @return true/false indicating whether the pool was indeed added
 	 */
@@ -98,14 +96,16 @@ public interface HostSelectionStrategy<CL> {
 	
 	/**
 	 * Remove a host from the selection strategy. This is useful when the underlying dynomite topology changes.
-	 * @param HostToken
+	 * @param {@link com.netflix.dyno.connectionpool.impl.lb.HostToken}
 	 * @return true/false indicating whether the pool was indeed removed
 	 */
 	boolean removeHostPool(HostToken host);
 
 	boolean isTokenAware();
 
-	public static interface HostSelectionStrategyFactory<CL> {
+	boolean isEmpty();
+
+	interface HostSelectionStrategyFactory<CL> {
 		
 		/**
 		 * Create/Return a HostSelectionStrategy 
