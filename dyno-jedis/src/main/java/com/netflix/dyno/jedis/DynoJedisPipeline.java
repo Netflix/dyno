@@ -76,7 +76,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
                         @Override
                         public String getKey() {
                             return key;
-                        }                        
+                        }
                     });
                 } catch (NoAvailableHostsException nahe) {
                     cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, nahe);
@@ -1033,7 +1033,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
             @Override
             Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return linsert(key, where, pivot, value);
+                return jedisPipeline.linsert(key, where, pivot, value);
             }
 
         }.execute(key, OpName.LINSERT);
@@ -1660,7 +1660,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
             @Override
             Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return zrevrangeByScore(key, max, min);
+                return jedisPipeline.zrevrangeByScore(key, max, min);
             }
 
         }.execute(key, OpName.ZREVRANGEBYSCORE);
@@ -1686,7 +1686,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
             @Override
             Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return zrevrangeByScore(key, max, min, offset, count);
+                return jedisPipeline.zrevrangeByScore(key, max, min, offset, count);
             }
 
         }.execute(key, OpName.ZREVRANGEBYSCORE);
@@ -1712,7 +1712,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
             @Override
             Response<Set<Tuple>> execute(Pipeline jedisPipeline) throws DynoException {
-                return zrevrangeByScoreWithScores(key, max, min, offset, count);
+                return jedisPipeline.zrevrangeByScoreWithScores(key, max, min, offset, count);
             }
 
         }.execute(key, OpName.ZREVRANGEBYSCOREWITHSCORES);
@@ -1803,7 +1803,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
             @Override
             Response<Set<Tuple>> execute(Pipeline jedisPipeline) throws DynoException {
-                return zrevrangeWithScores(key, start, end);
+                return jedisPipeline.zrevrangeWithScores(key, start, end);
             }
 
         }.execute(key, OpName.ZREVRANGEWITHSCORES);
