@@ -187,7 +187,7 @@ public class ConnectionPoolHealthTracker<CL> implements HealthTracker<CL> {
 		reconnectingPools.put(host, hostPool);
 	}
 	
-	public void initialPingHealthchecksForPool(HostConnectionPool<CL> hostPool) {
+	public void initializePingHealthchecksForPool(HostConnectionPool<CL> hostPool) {
 		
 		pingingPools.putIfAbsent(hostPool.getHost(), hostPool);
 		if (startedPing.get()) {
