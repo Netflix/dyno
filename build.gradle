@@ -11,6 +11,7 @@ apply plugin: 'project-report'
 subprojects {
     apply plugin: 'nebula.netflixoss'
     apply plugin: 'java'
+    apply plugin: 'idea'
 
     sourceCompatibility = 1.7
     targetCompatibility = 1.7
@@ -22,8 +23,8 @@ subprojects {
 
     dependencies {
         compile "joda-time:joda-time:2.3"
-        compile "org.slf4j:slf4j-api:1.7.5"
-        compile "org.slf4j:slf4j-log4j12:1.7.2"
+        compile "org.slf4j:slf4j-api:1.7.6"
+        compile "org.slf4j:slf4j-log4j12:1.7.21"
         compile "com.googlecode.json-simple:json-simple:1.1"
         compile "org.apache.httpcomponents:httpclient:4.2.1"
         compile "com.sun.jersey:jersey-core:1.11"
@@ -36,7 +37,6 @@ project(':dyno-core') {
     apply plugin: 'project-report'
     
     dependencies {
-        compile "org.slf4j:slf4j-api:1.7.5"
         compile "org.apache.commons:commons-math:2.2"
         compile "commons-io:commons-io:2.4"
         compile "org.mockito:mockito-all:1.9.5"

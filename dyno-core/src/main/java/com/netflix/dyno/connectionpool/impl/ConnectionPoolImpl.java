@@ -181,11 +181,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
                         selectionStrategy.addHost(host, hostPool);
                     }
 
-                    // Initiate ping based monitoring only for async pools.
-                    // Note that sync pools get monitored based on feedback from operation executions on the pool itself
-                    if (poolType == Type.Async) {
-                        cpHealthTracker.initialPingHealthchecksForPool(hostPool);
-                    }
+					cpHealthTracker.initializePingHealthchecksForPool(hostPool);
 
                     cpMonitor.hostAdded(host, hostPool);
 

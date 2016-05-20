@@ -15,23 +15,6 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl.lb;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-
-import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
-import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
@@ -46,11 +29,26 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
+import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
 import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy;
 import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy.HostSelectionStrategyFactory;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Acts as a coordinator over multiple HostSelectionStrategy implementations, where each maps to a particular rack.
@@ -150,7 +148,7 @@ public class HostSelectionWithFallback<CL> {
     private HostConnectionPool<CL> getHostPoolForOperationOrTokenInLocalZone(BaseOperation<CL, ?> op, Long token) {
         HostConnectionPool<CL> hostPool;
         try {
-            if (!localRack.isEmpty()) {
+            if (!localSelector.isEmpty()) {
                 hostPool = (op != null) ? localSelector.getPoolForOperation(op) : localSelector.getPoolForToken(token);
                 if (isConnectionPoolActive(hostPool)) {
                     return hostPool;
@@ -324,15 +322,14 @@ public class HostSelectionWithFallback<CL> {
 		Map<HostToken, HostConnectionPool<CL>> localPools = getHostPoolsForDC(tokenPoolMap, localRack);
 		localSelector.initWithHosts(localPools);
 
+        if (localSelector.isTokenAware()) {
+            replicationFactor.set(calculateReplicationFactor(allHostTokens));
+        }
+
 		for (String dc : remoteDCs) {
 			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForDC(tokenPoolMap, dc);
-
 			HostSelectionStrategy<CL> remoteSelector = selectorFactory.vendPoolSelectionStrategy();
-			if (remoteSelector.isTokenAware()) {
-				replicationFactor.set(calculateReplicationFactor(allHostTokens));
-			}
 			remoteSelector.initWithHosts(dcPools);
-
 			remoteDCSelectors.put(dc, remoteSelector);
 		}
 
