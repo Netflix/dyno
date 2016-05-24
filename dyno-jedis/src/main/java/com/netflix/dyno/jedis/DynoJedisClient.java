@@ -26,12 +26,18 @@ import com.netflix.dyno.connectionpool.impl.lb.HttpEndpointBasedTokenMapSupplier
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
 import com.netflix.dyno.contrib.*;
+
 import org.slf4j.Logger;
+
 import redis.clients.jedis.BinaryClient.LIST_POSITION;
 import redis.clients.jedis.*;
+import redis.clients.jedis.params.geo.GeoRadiusParam;
+import redis.clients.jedis.params.sortedset.ZAddParams;
+import redis.clients.jedis.params.sortedset.ZIncrByParams;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.CompressionStrategy;
@@ -1538,6 +1544,22 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         });
     }
     
+	@Override
+	public ScanResult<String> sscan(final String key, final String cursor, final ScanParams params) {
+        return d_sscan(key, cursor, params).getResult();
+	}
+	
+    public OperationResult<ScanResult<String>> d_sscan(final String key, final String cursor, final ScanParams params) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<String>>(key, OpName.SSCAN) {
+
+            @Override
+            public ScanResult<String> execute(Jedis client, ConnectionContext state) {
+                return client.sscan(key, cursor, params);
+            }
+
+        });
+    }
 
     @Override
     public Long strlen(final String key) {
@@ -3318,4 +3340,222 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
     }
+
+	@Override
+	public Long exists(String... arg0) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public ScanResult<String> scan(String arg0, ScanParams arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Long geoadd(byte[] arg0, Map<byte[], GeoCoordinate> arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Long geoadd(byte[] arg0, double arg1, double arg2, byte[] arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Double geodist(byte[] arg0, byte[] arg1, byte[] arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Double geodist(byte[] arg0, byte[] arg1, byte[] arg2, GeoUnit arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public List<byte[]> geohash(byte[] arg0, byte[]... arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public List<GeoCoordinate> geopos(byte[] arg0, byte[]... arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public List<GeoRadiusResponse> georadius(byte[] arg0, double arg1,
+			double arg2, double arg3, GeoUnit arg4) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public List<GeoRadiusResponse> georadius(byte[] arg0, double arg1,
+			double arg2, double arg3, GeoUnit arg4, GeoRadiusParam arg5) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public List<GeoRadiusResponse> georadiusByMember(byte[] arg0, byte[] arg1,
+			double arg2, GeoUnit arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public List<GeoRadiusResponse> georadiusByMember(byte[] arg0, byte[] arg1,
+			double arg2, GeoUnit arg3, GeoRadiusParam arg4) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public ScanResult<Entry<byte[], byte[]>> hscan(byte[] arg0, byte[] arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public ScanResult<Entry<byte[], byte[]>> hscan(byte[] arg0, byte[] arg1,
+			ScanParams arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public String set(byte[] arg0, byte[] arg1, byte[] arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public ScanResult<byte[]> sscan(byte[] arg0, byte[] arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public ScanResult<byte[]> sscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Long zadd(byte[] arg0, Map<byte[], Double> arg1, ZAddParams arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Long zadd(byte[] arg0, double arg1, byte[] arg2, ZAddParams arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Double zincrby(byte[] arg0, double arg1, byte[] arg2,
+			ZIncrByParams arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public ScanResult<Tuple> zscan(byte[] arg0, byte[] arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public ScanResult<Tuple> zscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Long bitpos(String arg0, boolean arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Long bitpos(String arg0, boolean arg1, BitPosParams arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Long geoadd(String arg0, Map<String, GeoCoordinate> arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Long geoadd(String arg0, double arg1, double arg2, String arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Double geodist(String arg0, String arg1, String arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Double geodist(String arg0, String arg1, String arg2, GeoUnit arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public List<String> geohash(String arg0, String... arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public List<GeoCoordinate> geopos(String arg0, String... arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public List<GeoRadiusResponse> georadius(String arg0, double arg1,
+			double arg2, double arg3, GeoUnit arg4) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public List<GeoRadiusResponse> georadius(String arg0, double arg1,
+			double arg2, double arg3, GeoUnit arg4, GeoRadiusParam arg5) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public List<GeoRadiusResponse> georadiusByMember(String arg0, String arg1,
+			double arg2, GeoUnit arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public List<GeoRadiusResponse> georadiusByMember(String arg0, String arg1,
+			double arg2, GeoUnit arg3, GeoRadiusParam arg4) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public ScanResult<Entry<String, String>> hscan(String arg0, String arg1,
+			ScanParams arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public String psetex(String arg0, long arg1, String arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public String set(String arg0, String arg1, String arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Long zadd(String arg0, Map<String, Double> arg1, ZAddParams arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Long zadd(String arg0, double arg1, String arg2, ZAddParams arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Double zincrby(String arg0, double arg1, String arg2,
+			ZIncrByParams arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public ScanResult<Tuple> zscan(String arg0, String arg1, ScanParams arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
 }

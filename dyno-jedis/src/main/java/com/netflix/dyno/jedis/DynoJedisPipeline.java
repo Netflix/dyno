@@ -9,13 +9,20 @@ import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
 import com.netflix.dyno.jedis.JedisConnectionFactory.JedisConnection;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import redis.clients.jedis.BinaryClient.LIST_POSITION;
 import redis.clients.jedis.*;
+import redis.clients.jedis.commands.RedisPipeline;
 import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.jedis.params.geo.GeoRadiusParam;
+import redis.clients.jedis.params.sortedset.ZAddParams;
+import redis.clients.jedis.params.sortedset.ZIncrByParams;
 
 import javax.annotation.concurrent.NotThreadSafe;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -1909,6 +1916,90 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
+
+	@Override
+	public Response<Long> geoadd(String arg0, Map<String, GeoCoordinate> arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<Long> geoadd(String arg0, double arg1, double arg2,
+			String arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<Double> geodist(String arg0, String arg1, String arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<Double> geodist(String arg0, String arg1, String arg2,
+			GeoUnit arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<List<String>> geohash(String arg0, String... arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<List<GeoCoordinate>> geopos(String arg0, String... arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<List<GeoRadiusResponse>> georadius(String arg0,
+			double arg1, double arg2, double arg3, GeoUnit arg4) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<List<GeoRadiusResponse>> georadius(String arg0,
+			double arg1, double arg2, double arg3, GeoUnit arg4,
+			GeoRadiusParam arg5) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<List<GeoRadiusResponse>> georadiusByMember(String arg0,
+			String arg1, double arg2, GeoUnit arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<List<GeoRadiusResponse>> georadiusByMember(String arg0,
+			String arg1, double arg2, GeoUnit arg3, GeoRadiusParam arg4) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<Long> zadd(String arg0, Map<String, Double> arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+
+	}
+
+	@Override
+	public Response<Long> zadd(String arg0, Map<String, Double> arg1,
+			ZAddParams arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+
+	}
+
+	@Override
+	public Response<Long> zadd(String arg0, double arg1, String arg2,
+			ZAddParams arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+
+	}
+
+	@Override
+	public Response<Double> zincrby(String arg0, double arg1, String arg2,
+			ZIncrByParams arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+	}
+    
     public void sync() {
         long startTime = System.nanoTime() / 1000;
         try {
@@ -1996,4 +2087,5 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
         return "unknown";
     }
+
 }
