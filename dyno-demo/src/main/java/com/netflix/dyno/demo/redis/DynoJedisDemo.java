@@ -106,12 +106,12 @@ public class DynoJedisDemo {
 		.withApplicationName("demo")
 		.withDynomiteClusterName("dyno_dev")
 		.withHostSupplier(hostSupplier)
-		.withCPConfig(
-                new ConnectionPoolConfigurationImpl("demo")
-                        .setLocalDC(this.localDC)
+//		.withCPConfig(
+//                new ConnectionPoolConfigurationImpl("demo")
+                        //.setLocalDC(this.localDC)
                         //.setCompressionStrategy(ConnectionPoolConfiguration.CompressionStrategy.THRESHOLD)
                         //.setCompressionThreshold(2)
-        )
+//        )
 		.withPort(port)
 		.build();
 	}

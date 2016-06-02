@@ -415,14 +415,19 @@ public class HostSelectionWithFallback<CL> {
 	}
 
 	public TokenPoolTopology getTokenPoolTopology() {
-		
-		TokenPoolTopology topology = new TokenPoolTopology(replicationFactor.get());
-		addTokens(topology, localRack, localSelector);
-		for (String remoteRack : remoteDCSelectors.keySet()) {
-			addTokens(topology, remoteRack, remoteDCSelectors.get(remoteRack));
-		}
-		return topology;
-	}
+
+        TokenPoolTopology topology = new TokenPoolTopology(replicationFactor.get());
+
+        if (localRack != null) {
+            addTokens(topology, localRack, localSelector);
+            for (String remoteRack : remoteDCSelectors.keySet()) {
+                addTokens(topology, remoteRack, remoteDCSelectors.get(remoteRack));
+            }
+        }
+
+        return topology;
+
+    }
 	
 	private void addTokens(TokenPoolTopology topology, String rack, HostSelectionStrategy<CL> selectionStrategy) {
 		
