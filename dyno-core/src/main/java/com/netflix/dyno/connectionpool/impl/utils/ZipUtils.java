@@ -173,6 +173,7 @@ public final class ZipUtils {
      * @throws java.io.IOException if the byte array of String couldn't be read
      */
     public static boolean isCompressed(String input) throws IOException {
-        return Base64.isBase64(input) && isCompressed(Base64.decode(input.getBytes(StandardCharsets.UTF_8)));
+        return input != null && Base64.isBase64(input) &&
+                isCompressed(Base64.decode(input.getBytes(StandardCharsets.UTF_8)));
     }
 }
