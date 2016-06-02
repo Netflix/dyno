@@ -34,7 +34,7 @@ public class TokenPoolTopology {
 	}
 
 	public TokenStatus getTokensForRack(String rack) {
-		if (map.containsKey(rack)) {
+		if (rack != null && map.containsKey(rack)) {
 			map.get(rack);
 		}
 
