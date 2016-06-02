@@ -1,3 +1,9 @@
 language: java
-script: bash ./travis.sh
-
+install: true
+script: ./travis.sh
+env:
+  global:
+  - secure: GLRunlapijH/uL489R5wpobpQdLOKQS0oJ9Bk69K3Bee6quaaeK4bnO7aEQcSd2MSF0obFT1Hz9WWhiz18c50n9gfkwBsPxWI7AnGn3aQd+qNbJ8yacdAZ7MWq9oThMUblxnLR4figaJC6vtL48GReOVxAtqp/jGIBod5ugUW1Q=
+  - secure: UWbxxiBxHFc7zvg9bwda9hHozuHnURJWjkyTiJWMmJbXBB1fj45mX4aSkan1v0G2zSaLYnxEOeQuFNcTyN4xZdUcyfBIM0g8XbJg2sadVUMquevzpB9u/lO3KhT5hxl2V2i58pO6cUyAW3FAOgjBAd8gTbgex0AghSh2/HYR8Hs=
+  - secure: gTZNqDSkoLvEl89xxi79RIKyvFRpPYM3G5LwjBmRZYKJxJHQYk6ZC8blw4i5PklY9aeCIScqA1t5H4SGLy/HZSnY7yvUzxmZAJkxZDAp0p7HEjuzA6lz790yoeXdGo7vfSKmdnygTJPeR+fJC6aRru3xPrF8kaF1nvZ6UHV46U8=
+  - secure: F6Fipjti9Po5UgyPMvvBcJW7KTTMoHx2jsUSbLebTSwQBkyHOc7DL7pmM3xSG2FAQk5qS0arn7IKnJk2TOKToU/oEK9kvfnce/Bv340KaRpcToxaEw/4f4gUNHm98BvJJcRmYTCCQ2jYoa9Nk4RMtQB6fUYdPJ6NCgNmwjJJaHk=
