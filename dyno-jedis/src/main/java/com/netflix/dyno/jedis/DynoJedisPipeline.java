@@ -1543,6 +1543,19 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }.execute(key, OpName.ZADD);
 
     }
+    
+	@Override
+	public Response<Long> zadd(final String key, final Map<String, Double> scoreMembers) {
+		return new PipelineOperation<Long>() {
+
+            @Override
+            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
+                return jedisPipeline.zadd(key, scoreMembers);
+            }
+
+        }.execute(key, OpName.ZADD);
+
+	}
 
     @Override
     public Response<Long> zcard(final String key) {
@@ -1972,12 +1985,6 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 	public Response<List<GeoRadiusResponse>> georadiusByMember(String arg0,
 			String arg1, double arg2, GeoUnit arg3, GeoRadiusParam arg4) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
-
-	@Override
-	public Response<Long> zadd(String arg0, Map<String, Double> arg1) {
-        throw new UnsupportedOperationException("not yet implemented");
-
 	}
 
 	@Override
