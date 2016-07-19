@@ -22,6 +22,7 @@ import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancing
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
+import com.netflix.dyno.connectionpool.RetryPolicy;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.TokenPoolTopology;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
@@ -32,6 +33,7 @@ import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
 import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
 import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy;
 import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy.HostSelectionStrategyFactory;
+import com.netflix.dyno.connectionpool.impl.RunOnce;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
@@ -71,6 +73,8 @@ public class HostSelectionWithFallback<CL> {
 
 	private static final Logger logger = LoggerFactory.getLogger(HostSelectionWithFallback.class);
 
+    // Only used in calculating replication factor
+    private final String localDataCenter;
 	// tracks the local zone
 	private final String localRack;
 	// The selector for the local zone
@@ -99,21 +103,36 @@ public class HostSelectionWithFallback<CL> {
 
 		cpMonitor = monitor;
 		cpConfig = config;
-		localRack = cpConfig.getLocalDC();
+		localRack = cpConfig.getLocalRack();
+        localDataCenter = cpConfig.getLocalDataCenter();
 		tokenSupplier = cpConfig.getTokenSupplier();
 
 		selectorFactory = new DefaultSelectionFactory(cpConfig);
 		localSelector = selectorFactory.vendPoolSelectionStrategy();
+		
 	}
 
 	public Connection<CL> getConnection(BaseOperation<CL, ?> op, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
-		return getConnection(op, null, duration, unit);
+		return getConnection(op, null, duration, unit, cpConfig.getRetryPolicyFactory().getRetryPolicy());
 	}
 
-    private Connection<CL> getConnection(BaseOperation<CL, ?> op, Long token, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException, PoolTimeoutException {
-        DynoConnectException lastEx = null;
+	public Connection<CL> getConnectionUsingRetryPolicy(BaseOperation<CL, ?> op, int duration, TimeUnit unit, RetryPolicy retry) throws NoAvailableHostsException, PoolExhaustedException {
+		return getConnection(op, null, duration, unit, retry);
+	}
 
-        HostConnectionPool<CL> hostPool = getHostPoolForOperationOrTokenInLocalZone(op, token);
+	private Connection<CL> getConnection(BaseOperation<CL, ?> op, Long token, int duration, TimeUnit unit, RetryPolicy retry)
+            throws NoAvailableHostsException, PoolExhaustedException, PoolTimeoutException {
+        DynoConnectException lastEx = null;
+        HostConnectionPool<CL> hostPool = null;
+
+        if (retry.getAttemptCount() == 0 || (retry.getAttemptCount() > 0 && !retry.allowCrossZoneFallback())) {
+            // By default zone affinity is enabled; if the local rack is not known at startup it is disabled
+            if (cpConfig.localZoneAffinity()) {
+                hostPool = getHostPoolForOperationOrTokenInLocalZone(op, token);
+            } else {
+                hostPool = getFallbackHostPool(op, token);
+            }
+        }
 
         if (hostPool != null) {
             try {
@@ -163,12 +182,13 @@ public class HostSelectionWithFallback<CL> {
     }
 
     private boolean attemptFallback() {
-        return cpConfig.getMaxFailoverCount() > 0 && remoteDCNames.getEntireList().size() > 0;
+        return cpConfig.getMaxFailoverCount() > 0 &&
+                (cpConfig.localZoneAffinity() && remoteDCNames.getEntireList().size() > 0) ||
+                (!cpConfig.localZoneAffinity() && !localSelector.isEmpty());
     }
 
     private HostConnectionPool<CL> getFallbackHostPool(BaseOperation<CL, ?> op, Long token) {
-		
-		int numRemotes = remoteDCNames.getEntireList().size();
+        int numRemotes = remoteDCNames.getEntireList().size();
 		if (numRemotes == 0) {
 			throw new NoAvailableHostsException("Could not find any remote Racks for fallback");
 		}
@@ -227,7 +247,7 @@ public class HostSelectionWithFallback<CL> {
 				
 		for (Long token : tokens) {
 			try { 
-				connections.add(getConnection(null, token, duration, unit));
+				connections.add(getConnection(null, token, duration, unit, new RunOnce()));
 			} catch (DynoConnectException e) {
 				logger.warn("Failed to get connection when getting all connections from ring", e.getMessage());
 				lastEx = e;
@@ -322,7 +342,7 @@ public class HostSelectionWithFallback<CL> {
 		Map<HostToken, HostConnectionPool<CL>> localPools = getHostPoolsForDC(tokenPoolMap, localRack);
 		localSelector.initWithHosts(localPools);
 
-        if (localSelector.isTokenAware()) {
+        if (localSelector.isTokenAware() && localRack != null) {
             replicationFactor.set(calculateReplicationFactor(allHostTokens));
         }
 
@@ -343,14 +363,21 @@ public class HostSelectionWithFallback<CL> {
 
         Set<HostToken> uniqueHostTokens = new HashSet<>(allHostTokens);
 
+        String dataCenter = cpConfig.getLocalDataCenter();
+        if (dataCenter == null) {
+            dataCenter = localRack.substring(0, localRack.length() - 1);
+        }
+
         for (HostToken hostToken: uniqueHostTokens) {
-            Long token = hostToken.getToken();
-            if (groups.containsKey(token)) {
-                int current = groups.get(token);
-                groups.put(token, current + 1);
-            } else {
-                groups.put(token, 1);
-            }
+        	if (hostToken.getHost().getRack().contains(dataCenter)) {
+				Long token = hostToken.getToken();
+				if (groups.containsKey(token)) {
+					int current = groups.get(token);
+					groups.put(token, current + 1);
+				} else {
+					groups.put(token, 1);
+				}
+			}
         }
 
         Set<Integer> uniqueCounts = new HashSet<>(groups.values());

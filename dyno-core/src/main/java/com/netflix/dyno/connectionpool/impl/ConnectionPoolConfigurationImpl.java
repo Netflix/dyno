@@ -62,9 +62,10 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private int poolShutdownDelay = DEFAULT_POOL_SHUTDOWN_DELAY; 
 	private int pingFrequencySeconds = DEFAULT_PING_FREQ_SECONDS;
 	private int flushTimingsFrequencySeconds = DEFAULT_FLUSH_TIMINGS_FREQ_SECONDS;
-	private boolean localDcAffinity = DEFAULT_LOCAL_DC_AFFINITY;
+	private boolean localZoneAffinity = DEFAULT_LOCAL_DC_AFFINITY;
 	private LoadBalancingStrategy lbStrategy = DEFAULT_LB_STRATEGY; 
-	private String localDC;
+	private String localRack;
+	private String localDataCenter;
     private String configPublisherAddress = DEFAULT_CONFIG_PUBLISHER_ADDRESS;
     private boolean failOnStartupIfNoHosts = DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS;
     private int failOnStarupIfNoHostsSeconds = DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS_SECONDS;
@@ -83,7 +84,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	
 	public ConnectionPoolConfigurationImpl(String name) {
 		this.name = name;
-		this.localDC = ConfigUtils.getLocalZone();
+		this.localRack = ConfigUtils.getLocalZone();
+		this.localDataCenter = ConfigUtils.getDataCenter();
 	}
 	
 	@Override
@@ -137,8 +139,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	}
 
 	@Override
-	public boolean localDcAffinity() {
-		return localDcAffinity;
+	public boolean localZoneAffinity() {
+		return localZoneAffinity;
 	}
 
 	@Override
@@ -157,8 +159,13 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	}
 
     @Override
-    public String getLocalDC() {
-        return localDC;
+    public String getLocalRack() {
+        return localRack;
+    }
+
+    @Override
+    public String getLocalDataCenter() {
+        return localDataCenter;
     }
 
     @Override
@@ -236,8 +243,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		return this;
 	}
 
-	public ConnectionPoolConfigurationImpl setLocalDcAffinity(boolean condition) {
-		localDcAffinity = condition;
+	public ConnectionPoolConfigurationImpl setLocalZoneAffinity(boolean condition) {
+		localZoneAffinity = condition;
 		return this;
 	}
 
@@ -350,9 +357,14 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		}
 	}
 
-    public ConnectionPoolConfigurationImpl setLocalDC(String dc) {
-		this.localDC = dc;
+    public ConnectionPoolConfigurationImpl setLocalRack(String rack) {
+		this.localRack = rack;
 		return this;
 	}
+
+    public ConnectionPoolConfigurationImpl setLocalDataCenter(String dc) {
+        this.localRack = dc;
+        return this;
+    }
 
 }

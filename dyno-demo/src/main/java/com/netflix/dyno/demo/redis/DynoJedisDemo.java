@@ -27,7 +27,6 @@ import org.xml.sax.helpers.DefaultHandler;
 import redis.clients.jedis.Response;
 
 import com.netflix.dyno.connectionpool.Host.Status;
-import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.jedis.DynoJedisClient;
 import com.netflix.dyno.jedis.DynoJedisPipeline;
@@ -42,10 +41,10 @@ public class DynoJedisDemo {
 
     protected int numKeys;
 
-    protected final String localDC;
+    protected final String localRack;
 
-	public DynoJedisDemo(String localDC) {
-        this.localDC = localDC;
+	public DynoJedisDemo(String localRack) {
+        this.localRack = localRack;
     }
 
 	public void initWithLocalHost() throws Exception {
@@ -108,10 +107,10 @@ public class DynoJedisDemo {
 		.withHostSupplier(hostSupplier)
 //		.withCPConfig(
 //                new ConnectionPoolConfigurationImpl("demo")
-                        //.setLocalDC(this.localDC)
                         //.setCompressionStrategy(ConnectionPoolConfiguration.CompressionStrategy.THRESHOLD)
                         //.setCompressionThreshold(2)
-//        )
+                        //.setLocalRack(this.localRack)
+//      )
 		.withPort(port)
 		.build();
 	}

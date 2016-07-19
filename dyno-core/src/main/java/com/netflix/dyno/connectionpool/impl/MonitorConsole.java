@@ -156,7 +156,7 @@ public class MonitorConsole implements MonitorConsoleMBean {
             final Map<String, String> config = new LinkedHashMap<>();
 
             // Rather than use reflection to iterate and find getters, simply provide the base configuration
-            config.put("localRack", cpConfig.getLocalDC());
+            config.put("localRack", cpConfig.getLocalRack());
             config.put("compressionStrategy", cpConfig.getCompressionStrategy().name());
             config.put("compressionThreshold", String.valueOf(cpConfig.getValueCompressionThreshold()));
             config.put("connectTimeout", String.valueOf(cpConfig.getConnectTimeout()));
@@ -169,6 +169,8 @@ public class MonitorConsole implements MonitorConsoleMBean {
             config.put("timingCountersResetFrequencyInSecs",
                     String.valueOf(cpConfig.getTimingCountersResetFrequencySeconds()));
             config.put("replicationFactor", String.valueOf(pool.getTopology().getReplicationFactor()));
+            config.put("retryPolicy", pool.getConfiguration().getRetryPolicyFactory().getRetryPolicy().toString());
+            config.put("localRackAffinity", String.valueOf(pool.getConfiguration().localZoneAffinity()));
 
             return Collections.unmodifiableMap(config);
         }

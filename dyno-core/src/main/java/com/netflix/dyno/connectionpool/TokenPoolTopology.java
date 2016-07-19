@@ -33,9 +33,9 @@ public class TokenPoolTopology {
 		return replicationFactor;
 	}
 
-	public TokenStatus getTokensForRack(String rack) {
+	public List<TokenStatus> getTokensForRack(String rack) {
 		if (rack != null && map.containsKey(rack)) {
-			map.get(rack);
+			return map.get(rack);
 		}
 
 		return null;

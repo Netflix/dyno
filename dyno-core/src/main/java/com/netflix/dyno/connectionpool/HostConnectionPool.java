@@ -41,7 +41,7 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
  *     </ol>
  *     
  * This class is intended to be used within a collection of {@link HostConnectionPool} tracked by a
- * {@link ConnectionPool} for all the {@link Host}(s) within a cassandra cluster. 
+ * {@link ConnectionPool} for all the {@link Host}(s) within a Dynomite cluster.
  * 
  * @see {@link ConnectionPool} for references to this class.
  *  

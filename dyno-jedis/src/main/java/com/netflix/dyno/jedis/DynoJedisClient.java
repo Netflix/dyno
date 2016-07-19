@@ -3278,9 +3278,22 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             cpConfig.withHostSupplier(hostSupplier);
 
-            if (cpConfig.getTokenSupplier() == null) {
-                Logger.info("TOKEN AWARE selected and no token supplier found, using default HttpEndpointBasedTokenMapSupplier()");
-                cpConfig.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier(port));
+            if (ConnectionPoolConfiguration.LoadBalancingStrategy.TokenAware == cpConfig.getLoadBalancingStrategy()) {
+                if (cpConfig.getTokenSupplier() == null) {
+                    Logger.info("TOKEN AWARE selected and no token supplier found, using default HttpEndpointBasedTokenMapSupplier()");
+                    cpConfig.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier(port));
+                }
+
+                if (cpConfig.getLocalRack() == null && cpConfig.localZoneAffinity()) {
+                    String warningMessage =
+                            "DynoJedisClient is configured for local rack affinity but cannot determine the local rack! "+
+                            "DISABLING rack affinity for this instance. To make the client aware of the local rack either use " +
+                            "ConnectionPoolConfigurationImpl.setLocalRack() when constructing the client instance or "+
+                            "ensure EC2_AVAILABILTY_ZONE is set as an environment variable, e.g. " +
+                            "run with -DEC2_AVAILABILITY_ZONE=us-east-1c";
+                    cpConfig.setLocalZoneAffinity(false);
+                    Logger.warn(warningMessage);
+                }
             }
 
             DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);

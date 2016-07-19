@@ -131,17 +131,17 @@ public class ConnectionPoolImplTest {
 	private Host host2 = new Host("host2", 8080, Status.Up).setRack("localDC");
 	private Host host3 = new Host("host3", 8080, Status.Up).setRack("localDC");
 
+    // Used for Cross Rack fallback testing
+    private Host host4 = new Host("host4", 8080, Status.Up).setRack("remoteRack");
+    private Host host5 = new Host("host5", 8080, Status.Up).setRack("remoteRack");
+    private Host host6 = new Host("host6", 8080, Status.Up).setRack("remoteRack");
+
     private final List<Host> hostSupplierHosts = new ArrayList<Host>();
 	
 	@Before
 	public void beforeTest() {
 
 		hostSupplierHosts.clear();
-		
-//		host1 = new Host("host1", 8080, Status.Up).setRack("localDC");
-//		host2 = new Host("host2", 8080, Status.Up).setRack("localDC");
-//		host3 = new Host("host3", 8080, Status.Up).setRack("localDC");
-
 
 		client = new TestClient();
 		cpConfig = new ConnectionPoolConfigurationImpl("TestClient").setLoadBalancingStrategy(LoadBalancingStrategy.RoundRobin);
@@ -153,7 +153,7 @@ public class ConnectionPoolImplTest {
 			}
 		});
 		
-		cpConfig.setLocalDC("localDC");
+		cpConfig.setLocalRack("localDC");
 		cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.RoundRobin);
 		
 		cpConfig.withTokenSupplier(getTokenMapSupplier());
@@ -182,21 +182,25 @@ public class ConnectionPoolImplTest {
 		try {
 			runTest(pool, testLogic);
 			checkConnectionPoolMonitorStats(2);
-		
-			checkHostStats(host1);
-			checkHostStats(host2);
 		} finally {
 			pool.shutdown();
 		}
 	}
+
+    private void checkConnectionPoolMonitorStats(int numHosts)  {
+        checkConnectionPoolMonitorStats(numHosts, false);
+    }
 	
-	private void checkConnectionPoolMonitorStats(int numHosts)  {
-		
+	private void checkConnectionPoolMonitorStats(int numHosts, boolean fallback)  {
 		System.out.println("Total ops: " + client.ops.get());
 		Assert.assertTrue("Total ops: " + client.ops.get(), client.ops.get() > 0);
 
-		Assert.assertEquals(client.ops.get(), cpMonitor.getOperationSuccessCount());
-		Assert.assertEquals(0, cpMonitor.getOperationFailureCount());
+        Assert.assertEquals(client.ops.get(), cpMonitor.getOperationSuccessCount());
+
+        if (!fallback) {
+            Assert.assertEquals(0, cpMonitor.getOperationFailureCount());
+        }
+
 		Assert.assertEquals(0, cpMonitor.getOperationTimeoutCount());
 		
 		Assert.assertEquals(numHosts*cpConfig.getMaxConnsPerHost(), cpMonitor.getConnectionCreatedCount());
@@ -230,6 +234,9 @@ public class ConnectionPoolImplTest {
         tokenMap.put(host1, new HostToken(309687905L, host1));
         tokenMap.put(host2, new HostToken(1383429731L, host2));
         tokenMap.put(host3, new HostToken(2457171554L, host3));
+        tokenMap.put(host4, new HostToken(309687905L, host4));
+        tokenMap.put(host5, new HostToken(1383429731L, host5));
+        tokenMap.put(host6, new HostToken(2457171554L, host6));
 
 		return new TokenMapSupplier() {
 
@@ -516,6 +523,64 @@ public class ConnectionPoolImplTest {
 		Assert.assertEquals(cpMonitor.getOperationFailureCount(), h2Stats.getOperationErrorCount());
 
 	}
+
+	@Test
+    public void testCrossRackFailover() throws Exception {
+
+        final RetryNTimes retry = new RetryNTimes(3, true);
+        final RetryPolicyFactory rFactory = new RetryNTimes.RetryPolicyFactory() {
+            @Override
+            public RetryPolicy getRetryPolicy() {
+                return retry;
+            }
+        };
+        cpConfig.setRetryPolicyFactory(rFactory);
+        int numHosts = 6;
+
+        final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
+        hostSupplierHosts.add(host1);
+        hostSupplierHosts.add(host2);
+        hostSupplierHosts.add(host3);
+        hostSupplierHosts.add(host4);
+        hostSupplierHosts.add(host5);
+        hostSupplierHosts.add(host6);
+
+        pool.start();
+
+        final Callable<Void> testLogic = new Callable<Void>() {
+
+            Integer count = 0;
+
+            @Override
+            public Void call() throws Exception {
+                if (count == 0) {
+                    ++count;
+                    throw new DynoException("1st try - FAILURE");
+                } else {
+                    Thread.sleep(1000);
+                }
+                return null;
+            }
+        };
+
+        try {
+            executeTestClientOperation(pool, testLogic);
+
+            System.out.println("Total ops: " + client.ops.get());
+            Assert.assertTrue("Total ops: " + client.ops.get(), client.ops.get() > 0);
+
+            Assert.assertEquals(client.ops.get(), cpMonitor.getOperationSuccessCount());
+            Assert.assertEquals(1, cpMonitor.getOperationFailureCount());
+
+            Assert.assertEquals(0, cpMonitor.getOperationTimeoutCount());
+
+            Assert.assertEquals(numHosts*cpConfig.getMaxConnsPerHost(), cpMonitor.getConnectionCreatedCount());
+            Assert.assertEquals(0, cpMonitor.getConnectionCreateFailedCount());
+
+        } finally {
+            pool.shutdown();
+        }
+    }
 	
 	@Test
 	public void testWithRetries() throws Exception {
@@ -540,7 +605,8 @@ public class ConnectionPoolImplTest {
 			}
 		};
 		
-		final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(badConnectionFactory, cpConfig.setRetryPolicyFactory(rFactory), cpMonitor);
+		final ConnectionPoolImpl<TestClient> pool =
+				new ConnectionPoolImpl<TestClient>(badConnectionFactory, cpConfig.setRetryPolicyFactory(rFactory), cpMonitor);
 		hostSupplierHosts.add(host1);
 
 		pool.start();

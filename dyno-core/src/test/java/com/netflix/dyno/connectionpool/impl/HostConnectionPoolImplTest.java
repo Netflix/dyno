@@ -171,7 +171,7 @@ public class HostConnectionPoolImplTest {
 		final BasicResult result = new BasicResult();
 		final TestControl control = new TestControl(4);
 
-		for (int i=0; i<4; i++) {   // Note 4 threads .. which is more than the no of available conns .. hence we should see timeouts
+		for (int i=0; i<5; i++) {   // Note 5 threads .. which is more than the no of available conns .. hence we should see timeouts
 			threadPool.submit(new BasicWorker(result, control, 55));
 		}
 

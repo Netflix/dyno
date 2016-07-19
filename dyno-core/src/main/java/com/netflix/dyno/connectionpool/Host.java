@@ -76,8 +76,8 @@ public class Host {
 		return rack;
 	}
 	
-	public Host setRack(String datacenter) {
-		this.rack = datacenter;
+	public Host setRack(String rack) {
+		this.rack = rack;
 		return this;
 	}
 	
@@ -123,6 +123,6 @@ public class Host {
 
 	@Override
 	public String toString() {
-		return "Host [name=" + name + ", port=" + port + ", dc: " + rack + ", status: " + status.name() + "]";
+		return "Host [name=" + name + ", port=" + port + ", rack: " + rack + ", status: " + status.name() + "]";
 	}
 }
