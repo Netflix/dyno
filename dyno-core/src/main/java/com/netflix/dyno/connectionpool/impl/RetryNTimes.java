@@ -31,11 +31,11 @@ public class RetryNTimes implements RetryPolicy {
 
 	private int n; 
 	private final AtomicInteger count = new AtomicInteger(0);
-	private final boolean allowRemoteDCFallback; 
+	private final boolean allowCrossZoneFallback;
 	
 	public RetryNTimes(int n, boolean allowFallback) {
 		this.n = n;
-		this.allowRemoteDCFallback = allowFallback;
+		this.allowCrossZoneFallback = allowFallback;
 	}
 
 	@Override
@@ -63,14 +63,23 @@ public class RetryNTimes implements RetryPolicy {
 	}
 
 	@Override
-	public boolean allowRemoteDCFallback() {
-		return allowRemoteDCFallback;
+	public boolean allowCrossZoneFallback() {
+		return allowCrossZoneFallback;
 	}
-	
+
+	@Override
+	public String toString() {
+		return "RetryNTimes{" +
+				"n=" + n +
+				", count=" + count +
+				", allowCrossZoneFallback=" + allowCrossZoneFallback +
+				'}';
+	}
+
 	public static class RetryFactory implements RetryPolicyFactory {
 		
 		int n; 
-		boolean allowDCFallback;
+		boolean allowCrossZoneFallback;
 		
 		public RetryFactory(int n) {
 			this(n, true);
@@ -78,12 +87,20 @@ public class RetryNTimes implements RetryPolicy {
 		
 		public RetryFactory(int n, boolean allowFallback) {
 			this.n = n;
-			this.allowDCFallback = allowFallback;
+			this.allowCrossZoneFallback = allowFallback;
 		}
 		
 		@Override
 		public RetryPolicy getRetryPolicy() {
-			return new RetryNTimes(n, allowDCFallback);
+			return new RetryNTimes(n, allowCrossZoneFallback);
+		}
+
+		@Override
+		public String toString() {
+			return "RetryFactory{" +
+					"n=" + n +
+					", allowCrossZoneFallback=" + allowCrossZoneFallback +
+					'}';
 		}
 	}
 }

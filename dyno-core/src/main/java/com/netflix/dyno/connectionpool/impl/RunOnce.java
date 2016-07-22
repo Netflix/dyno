@@ -62,7 +62,12 @@ public class RunOnce implements RetryPolicy {
 	}
 
 	@Override
-	public boolean allowRemoteDCFallback() {
+	public boolean allowCrossZoneFallback() {
 		return false;
+	}
+
+	@Override
+	public String toString() {
+		return "RunOnce";
 	}
 }

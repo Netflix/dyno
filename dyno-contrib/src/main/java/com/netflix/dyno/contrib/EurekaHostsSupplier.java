@@ -24,7 +24,7 @@ import com.netflix.dyno.connectionpool.HostSupplier;
  * Simple class that implements {@link Supplier}<{@link List}<{@link Host}>>. It provides a List<{@link Host}>
  * using the {@link DiscoveryManager} which is the eureka client. 
  * 
- * Note that the class needs the eureka application name to discover all instances for that application. 
+ * Note that the class needs the eureka application name to discover all instances for that application.
  * 
  * @author poberai
  */
@@ -32,7 +32,7 @@ public class EurekaHostsSupplier implements HostSupplier {
 
 	private static final Logger Logger = LoggerFactory.getLogger(EurekaHostsSupplier.class);
 
-	// The C* cluster name for discovering nodes
+	// The Dynomite cluster name for discovering nodes
 	private final String applicationName;
 	private final DiscoveryClient discoveryClient;
 	

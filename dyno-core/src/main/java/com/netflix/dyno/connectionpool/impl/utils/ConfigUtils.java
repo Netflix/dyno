@@ -16,4 +16,22 @@ public class ConfigUtils {
 
         return az;
     }
+
+    public static String getDataCenter() {
+        String dc = System.getenv("EC2_REGION");
+
+        if (dc == null) {
+            dc = System.getProperty("EC2_REGION");
+        }
+
+        if (dc == null) {
+            String rack = getLocalZone();
+            if (rack != null) {
+                dc = rack.substring(0, rack.length() - 1);
+            }
+        }
+
+        return dc;
+    }
+
 }

@@ -250,7 +250,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 
 	@Override
 	public Future<Boolean> updateHosts(Collection<Host> hostsUp, Collection<Host> hostsDown) {
-		Logger.debug("Updating hosts: UP=%s, DOWN=%s", hostsUp, hostsDown);
+		Logger.debug(String.format("Updating hosts: UP=%s, DOWN=%s", hostsUp, hostsDown));
 		boolean condition = false;
 		if (hostsUp != null && !hostsUp.isEmpty()) {
 			for (Host hostUp : hostsUp) {
@@ -284,9 +284,14 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 		do  {
 			Connection<CL> connection = null;
 			
-			try { 
-					connection = 
-							selectionStrategy.getConnection(op, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
+			try {
+					connection =
+                            selectionStrategy.getConnectionUsingRetryPolicy(
+                                    op,
+                                    cpConfiguration.getMaxTimeoutWhenExhausted(),
+                                    TimeUnit.MILLISECONDS,
+                                    retry
+                            );
 
 				OperationResult<R> result = connection.execute(op);
 				

@@ -87,7 +87,7 @@ public interface ConnectionPoolConfiguration {
      * 
      * @return
      */
-    boolean localDcAffinity();
+    boolean localZoneAffinity();
     
     /**
      * 
@@ -123,7 +123,9 @@ public interface ConnectionPoolConfiguration {
      * 
      * @return
      */
-    String getLocalDC();
+    String getLocalRack();
+
+    String getLocalDataCenter();
 
     /**
      * Returns the amount of time the histogram accumulates data before it is cleared, in seconds.
