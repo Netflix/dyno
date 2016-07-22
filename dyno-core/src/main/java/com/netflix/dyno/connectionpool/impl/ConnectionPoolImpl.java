@@ -443,7 +443,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 	 * @return
 	 */
 	public <R> Connection<CL> getConnectionForOperation(BaseOperation<CL, R> baseOperation) {
-		return selectionStrategy.getConnection(baseOperation, cpConfiguration.getConnectTimeout(), TimeUnit.MILLISECONDS);
+		return selectionStrategy.getConnection(baseOperation, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
 	}
 	
 	@Override
