@@ -127,9 +127,9 @@ public class ConnectionPoolImplTest {
 		}
 	};
 	
-	private Host host1 = new Host("host1", 8080, Status.Up).setRack("localDC");
-	private Host host2 = new Host("host2", 8080, Status.Up).setRack("localDC");
-	private Host host3 = new Host("host3", 8080, Status.Up).setRack("localDC");
+	private Host host1 = new Host("host1", 8080, Status.Up).setRack("localRack");
+	private Host host2 = new Host("host2", 8080, Status.Up).setRack("localRack");
+	private Host host3 = new Host("host3", 8080, Status.Up).setRack("localRack");
 
     // Used for Cross Rack fallback testing
     private Host host4 = new Host("host4", 8080, Status.Up).setRack("remoteRack");
@@ -153,7 +153,7 @@ public class ConnectionPoolImplTest {
 			}
 		});
 		
-		cpConfig.setLocalRack("localDC");
+		cpConfig.setLocalRack("localRack");
 		cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.RoundRobin);
 		
 		cpConfig.withTokenSupplier(getTokenMapSupplier());
@@ -627,9 +627,9 @@ public class ConnectionPoolImplTest {
 
         final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
 
-        hostSupplierHosts.add(new Host("host1_down", 8080, Status.Down).setRack("localDC"));
-        hostSupplierHosts.add(new Host("host2_down", 8080, Status.Down).setRack("localDC"));
-        hostSupplierHosts.add(new Host("host3_down", 8080, Status.Down).setRack("localDC"));
+        hostSupplierHosts.add(new Host("host1_down", 8080, Status.Down).setRack("localRack"));
+        hostSupplierHosts.add(new Host("host2_down", 8080, Status.Down).setRack("localRack"));
+        hostSupplierHosts.add(new Host("host3_down", 8080, Status.Down).setRack("localRack"));
 
         pool.start();
 

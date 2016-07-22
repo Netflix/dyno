@@ -66,7 +66,16 @@ public class RetryNTimes implements RetryPolicy {
 	public boolean allowCrossZoneFallback() {
 		return allowCrossZoneFallback;
 	}
-	
+
+	@Override
+	public String toString() {
+		return "RetryNTimes{" +
+				"n=" + n +
+				", count=" + count +
+				", allowCrossZoneFallback=" + allowCrossZoneFallback +
+				'}';
+	}
+
 	public static class RetryFactory implements RetryPolicyFactory {
 		
 		int n; 

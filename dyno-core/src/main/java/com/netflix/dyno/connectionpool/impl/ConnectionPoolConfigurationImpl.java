@@ -40,7 +40,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private static final int DEFAULT_POOL_SHUTDOWN_DELAY = 60000; 
 	private static final int DEFAULT_PING_FREQ_SECONDS = 30;
 	private static final int DEFAULT_FLUSH_TIMINGS_FREQ_SECONDS = 300;
-	private static final boolean DEFAULT_LOCAL_DC_AFFINITY = true; 
+	private static final boolean DEFAULT_LOCAL_RACK_AFFINITY = true;
 	private static final LoadBalancingStrategy DEFAULT_LB_STRATEGY = LoadBalancingStrategy.TokenAware;
 	private static final CompressionStrategy DEFAULT_COMPRESSION_STRATEGY = CompressionStrategy.NONE;
     private static final String DEFAULT_CONFIG_PUBLISHER_ADDRESS = null;
@@ -62,7 +62,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private int poolShutdownDelay = DEFAULT_POOL_SHUTDOWN_DELAY; 
 	private int pingFrequencySeconds = DEFAULT_PING_FREQ_SECONDS;
 	private int flushTimingsFrequencySeconds = DEFAULT_FLUSH_TIMINGS_FREQ_SECONDS;
-	private boolean localZoneAffinity = DEFAULT_LOCAL_DC_AFFINITY;
+	private boolean localZoneAffinity = DEFAULT_LOCAL_RACK_AFFINITY;
 	private LoadBalancingStrategy lbStrategy = DEFAULT_LB_STRATEGY; 
 	private String localRack;
 	private String localDataCenter;

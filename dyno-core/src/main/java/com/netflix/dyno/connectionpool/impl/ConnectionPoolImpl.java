@@ -285,12 +285,13 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 			Connection<CL> connection = null;
 			
 			try {
-					connection = selectionStrategy.getConnectionUsingRetryPolicy(
-                            op,
-                            cpConfiguration.getMaxTimeoutWhenExhausted(),
-                            TimeUnit.MILLISECONDS,
-                            retry
-                    );
+					connection =
+                            selectionStrategy.getConnectionUsingRetryPolicy(
+                                    op,
+                                    cpConfiguration.getMaxTimeoutWhenExhausted(),
+                                    TimeUnit.MILLISECONDS,
+                                    retry
+                            );
 
 				OperationResult<R> result = connection.execute(op);
 				
