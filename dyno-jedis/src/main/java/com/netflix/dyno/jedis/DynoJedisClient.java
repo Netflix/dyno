@@ -48,19 +48,28 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     private static final Logger Logger = org.slf4j.LoggerFactory.getLogger(DynoJedisClient.class);
 
     private final String appName;
+    private final String clusterName;
     private final ConnectionPool<Jedis> connPool;
     private final AtomicReference<DynoJedisPipelineMonitor> pipelineMonitor = new AtomicReference<DynoJedisPipelineMonitor>();
     private final EnumSet<OpName> compressionOperations = EnumSet.of(OpName.APPEND);
 
-    public DynoJedisClient(String name, ConnectionPool<Jedis> pool, DynoOPMonitor operationMonitor) {
+    public DynoJedisClient(String name, String clusterName, ConnectionPool<Jedis> pool, DynoOPMonitor operationMonitor) {
         this.appName = name;
+        this.clusterName = clusterName;
         this.connPool = pool;
     }
 
     public ConnectionPoolImpl<Jedis> getConnPool() {
         return (ConnectionPoolImpl<Jedis>) connPool;
     }
-   
+
+    public String getApplicationName() {
+        return appName;
+    }
+
+    public String getClusterName() {
+        return clusterName;
+    }
 
     private abstract class BaseKeyOperation<T> implements Operation<Jedis, T> {
 
@@ -3307,6 +3316,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             final ConnectionPoolImpl<Jedis> pool = new ConnectionPoolImpl<Jedis>(connFactory, cpConfig, cpMonitor, cpConfigPublisher);
 
             try {
+                Logger.info("Starting connection pool for app " + appName);
+
                 pool.start().get();
 
                 Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
@@ -3326,7 +3337,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 throw new RuntimeException(e);
             }
 
-            final DynoJedisClient client = new DynoJedisClient(appName, pool, opMonitor);
+            final DynoJedisClient client = new DynoJedisClient(appName, clusterName, pool, opMonitor);
             return client;
         }
     }
@@ -3349,7 +3360,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         public DynoJedisClient build() {
-            return new DynoJedisClient(appName, cp, null);
+            return new DynoJedisClient(appName, "TestCluster", cp, null);
         }
 
     }

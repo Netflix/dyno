@@ -148,4 +148,6 @@ public interface ConnectionPool<CL> {
      */
     HealthTracker<CL> getHealthTracker();
 
+    boolean isIdle();
+
 }

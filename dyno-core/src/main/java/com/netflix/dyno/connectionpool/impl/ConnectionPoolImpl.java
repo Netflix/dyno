@@ -148,6 +148,11 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 	}
 
 	@Override
+	public boolean isIdle() {
+		return idling.get();
+	}
+
+	@Override
 	public boolean addHost(Host host) {
 		return addHost(host, true);
 	}
