@@ -2,9 +2,7 @@ package com.netflix.dyno.jedis;
 
 import com.netflix.dyno.connectionpool.ConnectionPool;
 import com.netflix.dyno.connectionpool.OperationResult;
-import com.netflix.dyno.contrib.DynoDualWriteCPMonitor;
 import com.netflix.dyno.contrib.DynoOPMonitor;
-import com.sun.glass.ui.MenuItem;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
@@ -27,6 +25,8 @@ public class DynoDualWriterClient extends DynoJedisClient {
     private static final Logger logger = LoggerFactory.getLogger(DynoDualWriterClient.class);
 
     private static ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+
+
 
     private final DynoJedisClient targetClient;
     private final Dial dial;
@@ -52,12 +52,12 @@ public class DynoDualWriterClient extends DynoJedisClient {
         return dial;
     }
 
-    private <R> Future<OperationResult<R>> writeAsync(String key, Callable<OperationResult<R>> func) {
+    private <R> Future<OperationResult<R>> writeAsync(final String key, Callable<OperationResult<R>> func) {
         if (sendShadowRequest(key)) {
             try {
                 return executor.submit(func);
             } catch (Throwable th) {
-                ((DynoDualWriteCPMonitor) getConnPool().getMonitor()).incShadowPoolExceptionCount();
+                opMonitor.recordFailure("shadowPool_submit", th.getMessage());
             }
 
             // if we need to do any other processing (logging, etc) now's the time...

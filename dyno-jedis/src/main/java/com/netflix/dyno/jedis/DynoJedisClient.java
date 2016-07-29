@@ -53,10 +53,13 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     private final AtomicReference<DynoJedisPipelineMonitor> pipelineMonitor = new AtomicReference<DynoJedisPipelineMonitor>();
     private final EnumSet<OpName> compressionOperations = EnumSet.of(OpName.APPEND);
 
+    protected final DynoOPMonitor opMonitor;
+
     public DynoJedisClient(String name, String clusterName, ConnectionPool<Jedis> pool, DynoOPMonitor operationMonitor) {
         this.appName = name;
         this.clusterName = clusterName;
         this.connPool = pool;
+        this.opMonitor = operationMonitor;
     }
 
     public ConnectionPoolImpl<Jedis> getConnPool() {
@@ -3321,7 +3324,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             setLoadBalancingStrategy(shadowConfig);
 
-            DynoDualWriteCPMonitor shadowCPMonitor = new DynoDualWriteCPMonitor(shadowAppName);
+            DynoCPMonitor shadowCPMonitor = new DynoCPMonitor(shadowAppName);
             DynoOPMonitor shadowOPMonitor = new DynoOPMonitor(shadowAppName);
 
             JedisConnectionFactory connFactory = new JedisConnectionFactory(shadowOPMonitor);
