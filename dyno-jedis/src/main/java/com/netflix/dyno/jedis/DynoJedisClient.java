@@ -3230,6 +3230,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         private ConnectionPoolConfigurationImpl cpConfig;
         private HostSupplier hostSupplier;
         private DiscoveryClient discoveryClient;
+        private String shadowClusterName;
+        private HostSupplier shadowHostSupplier;
 
         public Builder() {
         }
@@ -3264,8 +3266,74 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
-        public DynoJedisClient build() {
+        public Builder withShadowClusterName(String shadowCluster) {
+            shadowClusterName = shadowCluster;
+            return this;
+        }
 
+        public Builder withShadowHostSupplier(HostSupplier shadowHostSupplier) {
+            this.shadowHostSupplier = shadowHostSupplier;
+            return this;
+        }
+
+        public Builder withShadowDial(DynoDualWriterClient.Dial dial) {
+
+            return this;
+        }
+
+        public DynoJedisClient build() {
+            if (shadowClusterName == null) {
+                return buildDynoJedisClient();
+            } else {
+                return buildDynoDualWriterClient();
+            }
+        }
+
+        private DynoDualWriterClient buildDynoDualWriterClient() {
+            DynoJedisClient targetClient = buildDynoJedisClient();
+
+            String shadowAppName = appName + "-shadow";
+
+            ConnectionPoolConfigurationImpl shadowConfig;
+
+            if (cpConfig != null) {
+                shadowConfig = new ConnectionPoolConfigurationImpl(cpConfig);
+            } else {
+                shadowConfig = new ArchaiusConnectionPoolConfiguration(shadowAppName);
+            }
+
+            // Ensure that if the shadow cluster is down it will not block client application startup
+            shadowConfig.setFailOnStartupIfNoHosts(false);
+
+            if (port != -1) {
+                shadowConfig.setPort(port);
+            }
+
+            HostSupplier shadowSupplier = null;
+            if (discoveryClient != null) {
+                shadowSupplier = new EurekaHostsSupplier(shadowClusterName, discoveryClient);
+            } else if (shadowHostSupplier == null) {
+                throw new DynoConnectException("HostSupplier not provided for either target cluster or shadow cluster."+
+                        " Cannot initialize EurekaHostsSupplier since it requires a DiscoveryClient");
+            }
+
+            shadowConfig.withHostSupplier(shadowSupplier);
+
+            setLoadBalancingStrategy(shadowConfig);
+
+            DynoDualWriteCPMonitor shadowCPMonitor = new DynoDualWriteCPMonitor(shadowAppName);
+            DynoOPMonitor shadowOPMonitor = new DynoOPMonitor(shadowAppName);
+
+            JedisConnectionFactory connFactory = new JedisConnectionFactory(shadowOPMonitor);
+
+            final ConnectionPoolImpl<Jedis> pool =
+                    startConnectionPool(shadowAppName, connFactory, shadowConfig, shadowCPMonitor);
+
+            return new DynoDualWriterClient(shadowAppName, shadowClusterName, pool, shadowOPMonitor, targetClient);
+        }
+
+
+        private DynoJedisClient buildDynoJedisClient() {
             assert (appName != null);
             assert (clusterName != null);
 
@@ -3279,7 +3347,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             if (hostSupplier == null) {
                 if (discoveryClient == null) {
-                    throw new DynoConnectException("HostSupplier not provided. Cannot init EurekaHostsSupplier which needs a non null DiscoveryClient");
+                    throw new DynoConnectException("HostSupplier not provided. Cannot initialize EurekaHostsSupplier " +
+                            "which requires a DiscoveryClient");
                 } else {
                     hostSupplier = new EurekaHostsSupplier(clusterName, discoveryClient);
                 }
@@ -3287,33 +3356,23 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             cpConfig.withHostSupplier(hostSupplier);
 
-            if (ConnectionPoolConfiguration.LoadBalancingStrategy.TokenAware == cpConfig.getLoadBalancingStrategy()) {
-                if (cpConfig.getTokenSupplier() == null) {
-                    Logger.warn("TOKEN AWARE selected and no token supplier found, using default HttpEndpointBasedTokenMapSupplier()");
-                    cpConfig.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier(port));
-                }
-
-                if (cpConfig.getLocalRack() == null && cpConfig.localZoneAffinity()) {
-                    String warningMessage =
-                            "DynoJedisClient is configured for local rack affinity but cannot determine the local rack! "+
-                            "DISABLING rack affinity for this instance. To make the client aware of the local rack either use " +
-                            "ConnectionPoolConfigurationImpl.setLocalRack() when constructing the client instance or "+
-                            "ensure EC2_AVAILABILTY_ZONE is set as an environment variable, e.g. " +
-                            "run with -DEC2_AVAILABILITY_ZONE=us-east-1c";
-                    cpConfig.setLocalZoneAffinity(false);
-                    Logger.warn(warningMessage);
-                }
-            }
+            setLoadBalancingStrategy(cpConfig);
 
             DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);
             DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
 
-            // Configure cp config publisher if it is specified
-            ConnectionPoolConfigurationPublisher cpConfigPublisher = new ConnectionPoolConfigPublisherFactory().createPublisher(appName, clusterName, cpConfig);
-
             JedisConnectionFactory connFactory = new JedisConnectionFactory(opMonitor);
 
-            final ConnectionPoolImpl<Jedis> pool = new ConnectionPoolImpl<Jedis>(connFactory, cpConfig, cpMonitor, cpConfigPublisher);
+            final ConnectionPoolImpl<Jedis> pool = startConnectionPool(appName, connFactory, cpConfig, cpMonitor);
+
+            return new DynoJedisClient(appName, clusterName, pool, opMonitor);
+        }
+
+        private ConnectionPoolImpl<Jedis> startConnectionPool(String appName, JedisConnectionFactory connFactory,
+                                                              ConnectionPoolConfigurationImpl cpConfig,
+                                                              DynoCPMonitor cpMonitor) {
+
+            final ConnectionPoolImpl<Jedis> pool = new ConnectionPoolImpl<Jedis>(connFactory, cpConfig, cpMonitor);
 
             try {
                 Logger.info("Starting connection pool for app " + appName);
@@ -3332,15 +3391,38 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 }
 
                 Logger.warn("UNABLE TO START CONNECTION POOL -- IDLING");
+
                 pool.idle();
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
 
-            final DynoJedisClient client = new DynoJedisClient(appName, clusterName, pool, opMonitor);
-            return client;
+            return pool;
         }
+
+        private void setLoadBalancingStrategy(ConnectionPoolConfigurationImpl config) {
+            if (ConnectionPoolConfiguration.LoadBalancingStrategy.TokenAware == config.getLoadBalancingStrategy()) {
+                if (config.getTokenSupplier() == null) {
+                    Logger.warn("TOKEN AWARE selected and no token supplier found, using default HttpEndpointBasedTokenMapSupplier()");
+                    config.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier(port));
+                }
+
+                if (config.getLocalRack() == null && config.localZoneAffinity()) {
+                    String warningMessage =
+                            "DynoJedisClient for app=[" + config.getName() + "] is configured for local rack affinity "+
+                                    "but cannot determine the local rack! DISABLING rack affinity for this instance. " +
+                                    "To make the client aware of the local rack either use " +
+                                    "ConnectionPoolConfigurationImpl.setLocalRack() when constructing the client " +
+                                    "instance or ensure EC2_AVAILABILTY_ZONE is set as an environment variable, e.g. " +
+                                    "run with -DEC2_AVAILABILITY_ZONE=us-east-1c";
+                    config.setLocalZoneAffinity(false);
+                    Logger.warn(warningMessage);
+                }
+            }
+        }
+
     }
+
 
     /**
      * Used for unit testing ONLY

@@ -1,12 +1,12 @@
 /*******************************************************************************
  * Copyright 2011 Netflix
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -34,11 +34,11 @@ import com.netflix.dyno.connectionpool.impl.utils.EstimatedHistogram;
  *
  */
 public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
-	
+
     // Tracking operation level metrics
     private final AtomicLong operationFailureCount  = new AtomicLong();
     private final AtomicLong operationSuccessCount  = new AtomicLong();
-    
+
     // Tracking connection counts
     private final AtomicLong connectionCreateCount  = new AtomicLong();
     private final AtomicLong connectionClosedCount  = new AtomicLong();
@@ -65,10 +65,10 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     private final AtomicLong hostSupplierCount      = new AtomicLong();
 
     private final ConcurrentHashMap<Host, HostConnectionStats> hostStats = new ConcurrentHashMap<Host, HostConnectionStats>();
-    
+
     public CountingConnectionPoolMonitor() {
     }
-    
+
     private void trackError(Host host, Exception reason) {
     	if (reason != null) {
     		if (reason instanceof PoolTimeoutException) {
@@ -89,7 +89,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     	} else {
     		this.unknownErrorCount.incrementAndGet();
     	}
-    	
+
         if (host != null) {
         	getOrCreateHostStats(host).opFailure.incrementAndGet();
         }
@@ -207,7 +207,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     public long getSocketTimeoutCount() {
         return this.socketTimeoutCount.get();
     }
-    
+
     public long getOperationTimeoutCount() {
         return this.operationTimeoutCount.get();
     }
@@ -244,11 +244,6 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     public long getNumOpenConnections() {
         return this.connectionCreateCount.get() - this.connectionClosedCount.get();
     }
-    
-    @Override
-    public long getHostCount() {
-        return this.hostSupplierCount.get();
-    }
 
     public String toString() {
         // Build the complete status string
@@ -275,6 +270,11 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
                     .append( "up="        ).append(getHostUpCount())
                     .append(",down="       ).append(getHostDownCount())
                 .append("])").toString();
+    }
+
+    @Override
+    public long getHostCount() {
+        return this.hostSupplierCount.get();
     }
 
 	@Override
@@ -315,9 +315,9 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
 	public Map<Host, HostConnectionStats> getHostStats() {
 		return hostStats;
 	}
-	
+
 	public HostConnectionStatsImpl getOrCreateHostStats(Host host) {
-		
+
 		HostConnectionStatsImpl hStats = (HostConnectionStatsImpl) hostStats.get(host);
 		if (hStats != null) {
 			return hStats;
@@ -325,7 +325,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
 		hostStats.putIfAbsent(host, new HostConnectionStatsImpl(host));
 		return (HostConnectionStatsImpl) hostStats.get(host);
 	}
-	
+
 	private class HostConnectionStatsImpl implements HostConnectionStats {
 
 		private AtomicBoolean hostUp = new AtomicBoolean(true);
@@ -338,11 +338,11 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
 		private final AtomicLong createFailed = new AtomicLong();
 		private final AtomicLong borrowed  = new AtomicLong();
 		private final AtomicLong returned  = new AtomicLong();
-		    
+
 		private HostConnectionStatsImpl(Host host) {
 			this.name = host.getHostName();
 		}
-		
+
 		@Override
 		public boolean isHostUp() {
 			return hostUp.get();
@@ -382,16 +382,16 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
 		public long getOperationErrorCount() {
 			return opFailure.get();
 		}
-		
+
 		public String toString() {
-			return name + " isUp: " + hostUp.get() + 
-					", borrowed: " + borrowed.get() + 
-					", returned: " + returned.get() + 
-					", created: " + created.get() + 
-					", closed: " + closed.get() + 
-					", createFailed: " + createFailed.get() + 
-					", success: " + opSuccess.get() + 
-					", error: " + opFailure.get(); 
+			return name + " isUp: " + hostUp.get() +
+					", borrowed: " + borrowed.get() +
+					", returned: " + returned.get() +
+					", created: " + created.get() +
+					", closed: " + closed.get() +
+					", createFailed: " + createFailed.get() +
+					", success: " + opSuccess.get() +
+					", error: " + opFailure.get();
 		}
 	}
 }

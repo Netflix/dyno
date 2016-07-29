@@ -87,6 +87,29 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		this.localRack = ConfigUtils.getLocalZone();
 		this.localDataCenter = ConfigUtils.getDataCenter();
 	}
+
+	public ConnectionPoolConfigurationImpl(ConnectionPoolConfigurationImpl config) {
+	    this.name = config.getName() + "-shadow";
+
+        this.compressionStrategy = config.getCompressionStrategy();
+        this.valueCompressionThreshold = config.getValueCompressionThreshold();
+        this.connectTimeout = config.getConnectTimeout();
+        this.failOnStartupIfNoHosts = config.getFailOnStartupIfNoHosts();
+        this.lbStrategy = config.getLoadBalancingStrategy();
+        this.localDataCenter = config.getLocalDataCenter();
+        this.localRack = config.getLocalRack();
+        this.localZoneAffinity = config.localZoneAffinity;
+        this.maxConnsPerHost = config.getMaxConnsPerHost();
+        this.maxFailoverCount = config.getMaxFailoverCount();
+        this.maxTimeoutWhenExhausted = config.getMaxTimeoutWhenExhausted();
+        this.pingFrequencySeconds = config.getPingFrequencySeconds();
+        this.poolShutdownDelay = config.getPoolShutdownDelay();
+        this.port = config.getPort();
+        this.retryFactory = config.getRetryPolicyFactory();
+        this.socketTimeout = config.getSocketTimeout();
+        this.errorMonitorFactory = config.getErrorMonitorFactory();
+        this.tokenSupplier = config.getTokenSupplier();
+    }
 	
 	@Override
 	public String getName() {

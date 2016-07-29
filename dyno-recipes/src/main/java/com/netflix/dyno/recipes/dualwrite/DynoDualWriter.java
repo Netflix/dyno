@@ -130,10 +130,13 @@ public class DynoDualWriter implements JedisCommands, MultiKeyCommands {
         boolean isInRange(String key);
     }
 
+    /**
+     * Default Dial implementation that presumes no knowledge of the key value
+     * and simply uses a timestamp to determine inclusion/exclusion
+     */
     private static class TimestampDial implements Dial {
         @Override
         public boolean isInRange(String key) {
-            // ignore the key value, just use timestamp
             // TODO - proper implementation
             return true;
         }
