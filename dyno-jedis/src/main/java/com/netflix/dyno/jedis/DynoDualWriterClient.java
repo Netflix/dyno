@@ -67,8 +67,19 @@ public class DynoDualWriterClient extends DynoJedisClient {
         return null;
     }
 
+    /**
+     * Returns true if the connection pool
+     * <li>Is NOT idle</li>
+     * <li>Has active pools (the shadow cluster may disappear at any time and we don't want to bloat logs)</li>
+     * <li>The key is in range in the dial</li>
+     * <p>
+     * The idle check is necessary since there may be active host pools however the shadow client may not be able to
+     * connect to them, for example, if security groups are not configured properly.
+     */
     private boolean sendShadowRequest(String key) {
-        return !this.getConnPool().isIdle() && dial.isInRange(key);
+        return !this.getConnPool().isIdle() &&
+                this.getConnPool().getActivePools().size() > 0 &&
+                dial.isInRange(key);
     }
 
     public interface Dial {
