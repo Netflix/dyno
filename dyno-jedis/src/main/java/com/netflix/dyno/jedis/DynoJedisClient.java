@@ -3233,8 +3233,9 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         private ConnectionPoolConfigurationImpl cpConfig;
         private HostSupplier hostSupplier;
         private DiscoveryClient discoveryClient;
-        private String shadowClusterName;
-        private HostSupplier shadowHostSupplier;
+        private String dualWriteClusterName;
+        private HostSupplier dualWriteHostSupplier;
+        private DynoDualWriterClient.Dial dualWriteDial;
 
         public Builder() {
         }
@@ -3269,41 +3270,40 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
-        public Builder withShadowClusterName(String shadowCluster) {
-            shadowClusterName = shadowCluster;
+        public Builder withDualWriteClusterName(String dualWriteCluster) {
+            dualWriteClusterName = dualWriteCluster;
             return this;
         }
 
-        public Builder withShadowHostSupplier(HostSupplier shadowHostSupplier) {
-            this.shadowHostSupplier = shadowHostSupplier;
+        public Builder withDualWriteHostSupplier(HostSupplier dualWriteHostSupplier) {
+            this.dualWriteHostSupplier = dualWriteHostSupplier;
             return this;
         }
 
-        public Builder withShadowDial(DynoDualWriterClient.Dial dial) {
-
+        public Builder withDualWriteDial(DynoDualWriterClient.Dial dial) {
+            this.dualWriteDial = dial;
             return this;
         }
 
         public DynoJedisClient build() {
-            if (shadowClusterName == null) {
-                return buildDynoJedisClient();
-            } else {
+            assert (appName != null);
+            assert (clusterName != null);
+
+            if (cpConfig == null) {
+                cpConfig = new ArchaiusConnectionPoolConfiguration(appName);
+            }
+
+            if (cpConfig.isDualWriteEnabled()) {
                 return buildDynoDualWriterClient();
+            } else {
+                return buildDynoJedisClient();
             }
         }
 
         private DynoDualWriterClient buildDynoDualWriterClient() {
             DynoJedisClient targetClient = buildDynoJedisClient();
 
-            String shadowAppName = appName + "-shadow";
-
-            ConnectionPoolConfigurationImpl shadowConfig;
-
-            if (cpConfig != null) {
-                shadowConfig = new ConnectionPoolConfigurationImpl(cpConfig);
-            } else {
-                shadowConfig = new ArchaiusConnectionPoolConfiguration(shadowAppName);
-            }
+            ConnectionPoolConfigurationImpl shadowConfig = new ConnectionPoolConfigurationImpl(cpConfig);
 
             // Ensure that if the shadow cluster is down it will not block client application startup
             shadowConfig.setFailOnStartupIfNoHosts(false);
@@ -3314,8 +3314,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             HostSupplier shadowSupplier = null;
             if (discoveryClient != null) {
-                shadowSupplier = new EurekaHostsSupplier(shadowClusterName, discoveryClient);
-            } else if (shadowHostSupplier == null) {
+                if (dualWriteClusterName == null) {
+                    dualWriteClusterName = shadowConfig.getDualWriteClusterName();
+                }
+                shadowSupplier = new EurekaHostsSupplier(dualWriteClusterName, discoveryClient);
+            } else if (dualWriteHostSupplier == null) {
                 throw new DynoConnectException("HostSupplier not provided for either target cluster or shadow cluster."+
                         " Cannot initialize EurekaHostsSupplier since it requires a DiscoveryClient");
             }
@@ -3324,6 +3327,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             setLoadBalancingStrategy(shadowConfig);
 
+            String shadowAppName = shadowConfig.getName();
             DynoCPMonitor shadowCPMonitor = new DynoCPMonitor(shadowAppName);
             DynoOPMonitor shadowOPMonitor = new DynoOPMonitor(shadowAppName);
 
@@ -3332,18 +3336,20 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             final ConnectionPoolImpl<Jedis> pool =
                     startConnectionPool(shadowAppName, connFactory, shadowConfig, shadowCPMonitor);
 
-            return new DynoDualWriterClient(shadowAppName, shadowClusterName, pool, shadowOPMonitor, targetClient);
+            if (dualWriteDial != null) {
+                if (shadowConfig.getDualWritePercentage() > 0) {
+                    dualWriteDial.setRange(shadowConfig.getDualWritePercentage());
+                }
+                return new DynoDualWriterClient(shadowAppName, dualWriteClusterName, pool, shadowOPMonitor,
+                        targetClient, dualWriteDial);
+            } else {
+                return new DynoDualWriterClient(shadowAppName, dualWriteClusterName, pool, shadowOPMonitor,
+                        targetClient);
+            }
         }
 
 
         private DynoJedisClient buildDynoJedisClient() {
-            assert (appName != null);
-            assert (clusterName != null);
-
-            if (cpConfig == null) {
-                cpConfig = new ArchaiusConnectionPoolConfiguration(appName);
-            }
-
             if (port != -1) {
                 cpConfig.setPort(port);
             }

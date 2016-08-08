@@ -35,7 +35,9 @@ public class DynoDualWriterClient extends DynoJedisClient {
                                 ConnectionPool<Jedis> pool,
                                 DynoOPMonitor operationMonitor,
                                 DynoJedisClient targetClient) {
-        this(name, clusterName, pool, operationMonitor, targetClient, new TimestampDial());
+
+        this(name, clusterName, pool, operationMonitor, targetClient,
+                new TimestampDial(pool.getConfiguration().getDualWritePercentage()));
     }
 
     public DynoDualWriterClient(String name, String clusterName,
@@ -77,7 +79,8 @@ public class DynoDualWriterClient extends DynoJedisClient {
      * connect to them, for example, if security groups are not configured properly.
      */
     private boolean sendShadowRequest(String key) {
-        return !this.getConnPool().isIdle() &&
+        return  this.getConnPool().getConfiguration().isDualWriteEnabled() &&
+                !this.getConnPool().isIdle() &&
                 this.getConnPool().getActivePools().size() > 0 &&
                 dial.isInRange(key);
     }
@@ -98,6 +101,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
     private static class TimestampDial implements Dial {
 
         private final AtomicInteger range = new AtomicInteger(1);
+
+        public TimestampDial(int range) {
+            this.range.set(range);
+        }
 
         @Override
         public boolean isInRange(String key) {

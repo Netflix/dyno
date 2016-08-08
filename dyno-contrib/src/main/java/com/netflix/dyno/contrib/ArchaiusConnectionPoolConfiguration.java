@@ -54,6 +54,10 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	private final RetryPolicyFactory retryPolicyFactory;
     private final DynamicBooleanProperty failOnStartupIfNoHosts;
 
+	private final DynamicBooleanProperty isDualWriteEnabled;
+    private final DynamicStringProperty dualWriteClusterName;
+    private final DynamicIntProperty dualWritePercentage;
+
 	public ArchaiusConnectionPoolConfiguration(String name) {
 		super(name);
 		
@@ -72,11 +76,14 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		failOnStartupIfNoHosts = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + ".config.startup.failIfNoHosts", super.getFailOnStartupIfNoHosts());
         compressionThreshold = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".config.compressionThreshold", super.getValueCompressionThreshold());
 
-
 		loadBalanceStrategy = parseLBStrategy(propertyPrefix);
 		errorRateConfig = parseErrorRateMonitorConfig(propertyPrefix);
 		retryPolicyFactory = parseRetryPolicyFactory(propertyPrefix);
 		compressionStrategy = parseCompressionStrategy(propertyPrefix);
+
+        isDualWriteEnabled = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + "dualwrite.enabled", super.isDualWriteEnabled());
+        dualWriteClusterName = DynamicPropertyFactory.getInstance().getStringProperty(propertyPrefix + "dualwrite.cluster", super.getDualWriteClusterName());
+        dualWritePercentage = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + "dualwrite.percentage", super.getDualWritePercentage());
 	}
 
 	
