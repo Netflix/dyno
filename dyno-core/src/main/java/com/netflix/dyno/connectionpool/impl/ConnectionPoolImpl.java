@@ -78,14 +78,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 	private final ConnectionFactory<CL> connFactory; 
 	private final ConnectionPoolConfiguration cpConfiguration; 
 	private final ConnectionPoolMonitor cpMonitor;
-    private final ConnectionPoolConfigurationPublisher cpConfigPublisher;
-
-    private final ScheduledExecutorService configPublisherThreadPool = Executors.newScheduledThreadPool(1, new ThreadFactory() {
-        @Override
-        public Thread newThread(Runnable r) {
-            return new Thread(r, "DynoJedisConfigPublisher");
-        }
-    });
 
     private final ScheduledExecutorService idleThreadPool = Executors.newSingleThreadScheduledExecutor();
 	
@@ -99,24 +91,15 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 	
 	private Type poolType;
 
-    public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon, Type type) {
-        this(cFactory, cpConfig, cpMon, null, type);
-    }
-
 	public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon) {
-		this(cFactory, cpConfig, cpMon, null, Type.Sync);
+		this(cFactory, cpConfig, cpMon, Type.Sync);
 	}
 
-    public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon, ConnectionPoolConfigurationPublisher cpConfigPublisher) {
-        this(cFactory, cpConfig, cpMon, cpConfigPublisher, Type.Sync);
-    }
-
-    public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon, ConnectionPoolConfigurationPublisher cpConfigPublisher, Type type) {
+    public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor cpMon, Type type) {
         this.connFactory = cFactory;
         this.cpConfiguration = cpConfig;
         this.cpMonitor = cpMon;
         this.poolType = type;
-        this.cpConfigPublisher = cpConfigPublisher;
 
         this.cpHealthTracker = new ConnectionPoolHealthTracker<CL>(cpConfiguration, connPoolThreadPool);
 
@@ -145,6 +128,11 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 	
 	public ConnectionPoolHealthTracker<CL> getHealthTracker() {
 		return cpHealthTracker;
+	}
+
+	@Override
+	public boolean isIdle() {
+		return idling.get();
 	}
 
 	@Override
@@ -455,9 +443,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
             }
             cpHealthTracker.stop();
             hostsUpdater.stop();
-            configPublisherThreadPool.shutdownNow();
             connPoolThreadPool.shutdownNow();
-            unregisterMonitorConsoleMBean();
+            deregisterMonitorConsoleMBean();
         }
 	}
 
@@ -575,19 +562,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
         }
     }
 
-    private void publishRuntimeConfiguration() {
-        // Best effort attempt to publish runtime configuration once per hour. This does not
-        // affect the operation of the connection pool. The absence of a retry policy is deliberate
-        if (cpConfigPublisher != null) {
-            configPublisherThreadPool.scheduleAtFixedRate(new Runnable() {
-                @Override
-                public void run() {
-                    cpConfigPublisher.publish();
-                }
-            }, 1, 3600, TimeUnit.SECONDS);
-        }
-    }
-
     @Override
 	public ConnectionPoolConfiguration getConfiguration() {
 		return cpConfiguration;
@@ -601,23 +575,23 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
                 server.registerMBean(bean, objectName);
                 Logger.info("registered mbean " + objectName);
             } else {
-                Logger.info("mbean " + objectName + "has already been registered !");
+                Logger.info("mbean " + objectName + " has already been registered !");
             }
         } catch (MalformedObjectNameException | InstanceAlreadyExistsException | MBeanRegistrationException | NotCompliantMBeanException ex) {
             Logger.error("Unable to register MonitorConsole mbean ", ex);
         }
 	}
 
-    private void unregisterMonitorConsoleMBean() {
+    private void deregisterMonitorConsoleMBean() {
         final MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
             ObjectName objectName = new ObjectName(MonitorConsole.OBJECT_NAME);
             if (server.isRegistered(objectName)) {
                 server.unregisterMBean(objectName);
-                Logger.info("unregistered mbean " + objectName);
+                Logger.info("deregistered mbean " + objectName);
             }
         } catch (MalformedObjectNameException | MBeanRegistrationException | InstanceNotFoundException ex) {
-            Logger.error("Unable to unregister MonitorConsole mbean ", ex);
+            Logger.error("Unable to deregister MonitorConsole mbean ", ex);
         }
 
 	}

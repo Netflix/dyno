@@ -187,4 +187,10 @@ public interface ConnectionPoolConfiguration {
      */
     CompressionStrategy getCompressionStrategy();
 
+    boolean isDualWriteEnabled();
+
+    String getDualWriteClusterName();
+
+    int getDualWritePercentage();
+
 }

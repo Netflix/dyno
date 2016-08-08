@@ -47,6 +47,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     private static final boolean DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS = true;
     private static final int DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS_SECONDS = 60;
     private static final int DEFAULT_VALUE_COMPRESSION_THRESHOLD_BYTES = 5 * 1024; // By default, compression is OFF
+	private static final boolean DEFAULT_IS_DUAL_WRITE_ENABLED = false;
+    private static final int DEFAULT_DUAL_WRITE_PERCENTAGE = 0;
 
     private HostSupplier hostSupplier;
 	private TokenMapSupplier tokenSupplier;
@@ -66,13 +68,18 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private LoadBalancingStrategy lbStrategy = DEFAULT_LB_STRATEGY; 
 	private String localRack;
 	private String localDataCenter;
-    private String configPublisherAddress = DEFAULT_CONFIG_PUBLISHER_ADDRESS;
     private boolean failOnStartupIfNoHosts = DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS;
     private int failOnStarupIfNoHostsSeconds = DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS_SECONDS;
     private CompressionStrategy compressionStrategy = DEFAULT_COMPRESSION_STRATEGY;
 	private int valueCompressionThreshold = DEFAULT_VALUE_COMPRESSION_THRESHOLD_BYTES;
 
-	private RetryPolicyFactory retryFactory = new RetryPolicyFactory() {
+	// Dual Write Settings
+	private boolean isDualWriteEnabled = DEFAULT_IS_DUAL_WRITE_ENABLED;
+    private String dualWriteClusterName = null;
+    private int dualWritePercentage = DEFAULT_DUAL_WRITE_PERCENTAGE;
+
+
+    private RetryPolicyFactory retryFactory = new RetryPolicyFactory() {
 
 		@Override
 		public RetryPolicy getRetryPolicy() {
@@ -81,12 +88,45 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	};
 	
 	private ErrorMonitorFactory errorMonitorFactory = new SimpleErrorMonitorFactory();
-	
-	public ConnectionPoolConfigurationImpl(String name) {
+
+
+    public ConnectionPoolConfigurationImpl(String name) {
 		this.name = name;
 		this.localRack = ConfigUtils.getLocalZone();
 		this.localDataCenter = ConfigUtils.getDataCenter();
 	}
+
+	/**
+	 * Copy constructor used to construct a new instance of this config with mostly the same values as the given
+     * config.
+     *
+	 * @param config
+     */
+	public ConnectionPoolConfigurationImpl(ConnectionPoolConfigurationImpl config) {
+	    this.name = config.getName() + "-shadow";
+
+        this.compressionStrategy = config.getCompressionStrategy();
+        this.valueCompressionThreshold = config.getValueCompressionThreshold();
+        this.connectTimeout = config.getConnectTimeout();
+        this.failOnStartupIfNoHosts = config.getFailOnStartupIfNoHosts();
+        this.lbStrategy = config.getLoadBalancingStrategy();
+        this.localDataCenter = config.getLocalDataCenter();
+        this.localRack = config.getLocalRack();
+        this.localZoneAffinity = config.localZoneAffinity;
+        this.maxConnsPerHost = config.getMaxConnsPerHost();
+        this.maxFailoverCount = config.getMaxFailoverCount();
+        this.maxTimeoutWhenExhausted = config.getMaxTimeoutWhenExhausted();
+        this.pingFrequencySeconds = config.getPingFrequencySeconds();
+        this.poolShutdownDelay = config.getPoolShutdownDelay();
+        this.port = config.getPort();
+        this.retryFactory = config.getRetryPolicyFactory();
+        this.socketTimeout = config.getSocketTimeout();
+        this.errorMonitorFactory = config.getErrorMonitorFactory();
+        this.tokenSupplier = config.getTokenSupplier();
+        this.isDualWriteEnabled = config.isDualWriteEnabled;
+        this.dualWriteClusterName = config.dualWriteClusterName;
+        this.dualWritePercentage = config.dualWritePercentage;
+    }
 	
 	@Override
 	public String getName() {
@@ -196,8 +236,23 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     public int getDefaultFailOnStartupIfNoHostsSeconds() {
         return failOnStarupIfNoHostsSeconds;
     }
-	
-	// ALL SETTERS
+
+    @Override
+    public boolean isDualWriteEnabled() {
+        return isDualWriteEnabled;
+    }
+
+    @Override
+    public String getDualWriteClusterName() {
+        return dualWriteClusterName;
+    }
+
+    @Override
+    public int getDualWritePercentage() {
+        return dualWritePercentage;
+    }
+
+    // ALL SETTERS
 	public ConnectionPoolConfigurationImpl setMaxConnsPerHost(int maxConnsPerHost) {
 		this.maxConnsPerHost = maxConnsPerHost;
 		return this;
@@ -296,8 +351,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         hostConnectionPoolFactory = factory;
         return this;
     }
-	
-	public static class ErrorRateMonitorConfigImpl implements ErrorRateMonitorConfig {
+
+    public static class ErrorRateMonitorConfigImpl implements ErrorRateMonitorConfig {
 
 		int window = 20; 
 		int checkFrequency = 1;

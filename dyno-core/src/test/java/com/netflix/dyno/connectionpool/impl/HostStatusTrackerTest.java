@@ -54,7 +54,7 @@ public class HostStatusTrackerTest {
 		verifySet(tracker.getInactiveHosts(), "C", "H" ,"F");
 
 		// Round 2. New server 'J' shows up
-		tracker = tracker.computeNewHostStatus(getHostSet("A", "B", "E", "D", "J"), getHostSet());
+		tracker = tracker.computeNewHostStatus(getHostSet("A", "B", "E", "D", "J"), getHostSet("C", "H" ,"F"));
 
 		verifySet(tracker.getActiveHosts(), "A", "E", "D", "J", "B");
 		verifySet(tracker.getInactiveHosts(), "C", "H" ,"F");
@@ -77,41 +77,41 @@ public class HostStatusTrackerTest {
 		verifySet(tracker.getActiveHosts(), "X", "Y", "E", "J");
 		verifySet(tracker.getInactiveHosts(), "C", "A", "H", "D", "F", "B");
 
-		// Round 6. server "E" and "J" go MISSING and new server "K" show up and "A" and "C" go from inactive to active
+		// Round 6. server "E" and "J" go MISSING and new server "K" shows up and "A" and "C" go from inactive to active
 		tracker = tracker.computeNewHostStatus(getHostSet("X", "Y", "A", "K", "C"), getHostSet("D", "H", "F"));
 
 		verifySet(tracker.getActiveHosts(), "X", "Y", "A", "C", "K");
-		verifySet(tracker.getInactiveHosts(), "E", "J", "H", "D", "F", "B");
+		verifySet(tracker.getInactiveHosts(), "H", "D", "F", "E", "J");
 
 		// Round 7. all active hosts go from active to inactive
 		tracker = tracker.computeNewHostStatus(getHostSet(), getHostSet("D", "H", "F", "X", "Y", "A", "K", "C"));
 
 		verifySet(tracker.getActiveHosts(), "");
-		verifySet(tracker.getInactiveHosts(), "E", "J", "H", "D", "F", "B", "X", "Y", "A", "K", "C");
+		verifySet(tracker.getInactiveHosts(), "H", "D", "F", "X", "Y", "A", "K", "C");
 
 		// Round 8. 'X' 'Y' 'A' and 'C' go from inactive to active and 'K' disappears from down list
 		tracker = tracker.computeNewHostStatus(getHostSet("X", "Y", "A", "C"), getHostSet("D", "H", "F"));
 
 		verifySet(tracker.getActiveHosts(), "X", "Y", "A", "C");
-		verifySet(tracker.getInactiveHosts(), "E", "J", "H", "D", "F", "B",  "K");
+		verifySet(tracker.getInactiveHosts(), "H", "D", "F");
 
 		// Round 9. All inactive hosts disappear
 		tracker = tracker.computeNewHostStatus(getHostSet("X", "Y", "A", "C"), getHostSet());
 
 		verifySet(tracker.getActiveHosts(), "X", "Y", "A", "C");
-		verifySet(tracker.getInactiveHosts(), "E", "J", "H", "D", "F", "B",  "K");
+		verifySet(tracker.getInactiveHosts(), "");
 
 		// Round 9. All active hosts disappear
 		tracker = tracker.computeNewHostStatus(getHostSet(), getHostSet("K", "J"));
 
 		verifySet(tracker.getActiveHosts(), "");
-		verifySet(tracker.getInactiveHosts(), "E", "J", "H", "D", "F", "B",  "K", "X", "Y", "A", "C");
+		verifySet(tracker.getInactiveHosts(), "J", "K", "X", "Y", "A", "C");
 
 		// Round 10. All hosts disappear
 		tracker = tracker.computeNewHostStatus(getHostSet(), getHostSet());
 
 		verifySet(tracker.getActiveHosts(), "");
-		verifySet(tracker.getInactiveHosts(), "E", "J", "H", "D", "F", "B",  "K", "X", "Y", "A", "C");
+		verifySet(tracker.getInactiveHosts(), "");
 	}
 
 	private Set<Host> getHostSet(String ...names) { 

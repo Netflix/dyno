@@ -194,6 +194,11 @@ public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
         return null;
     }
 
+    @Override
+    public boolean isIdle() {
+        return false;
+    }
+
 
     @Override
     public Future<Boolean> updateHosts(Collection activeHosts, Collection inactiveHosts) {

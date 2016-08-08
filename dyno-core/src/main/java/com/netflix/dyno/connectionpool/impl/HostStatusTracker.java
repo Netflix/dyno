@@ -24,17 +24,26 @@ import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostSupplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Helper class that can be used in conjunction with a {@link HostSupplier} repeatedly to understand whether the change within the 
- * active and inactive host set. 
+ * active and inactive host set.
+ * <p>
  * Implementations of {@link ConnectionPool} can then use this utility to adapt to topology changes and hence manage the corresponding 
  * {@link HostConnectionPool} objects for the set of active hosts. 
- * 
+ * <p>
+ * Note the behavior of this class is such that if a host <em>disappears</em> and it was last known as <em>active</em>
+ * then it will be moved to <em>inactive</em>. If however it disappears and its last known state was <em>inactive</em>
+ * then it is removed from tracking altogether. This is to support terminations/node replacements.
+ *
  * @author poberai
  *
  */
 public class HostStatusTracker {
+
+    private static final Logger logger = LoggerFactory.getLogger(HostStatusTracker.class);
 	
 	// the set of active and inactive hosts
 	private final Set<Host> activeHosts = new HashSet<Host>();
@@ -139,7 +148,15 @@ public class HostStatusTracker {
 		
 		// Get the hosts that are currently down
 		Set<Host> nextInactiveHosts = new HashSet<Host>(hostsDown);
-		// add any previous hosts that were currently down
+
+        // add any previous hosts that were currently down iff they are still reported by the HostSupplier
+		Set<Host> union = new HashSet<>(hostsUp);
+        union.addAll(hostsDown);
+        if (!union.containsAll(inactiveHosts)) {
+            logger.info("REMOVING at least one inactive host from {} b/c it is no longer reported by HostSupplier",
+                    inactiveHosts);
+            inactiveHosts.retainAll(union);
+        }
 		nextInactiveHosts.addAll(inactiveHosts);
 		
 		// Now remove from the total set of inactive hosts any host that is currently up. 
