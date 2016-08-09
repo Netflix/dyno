@@ -295,12 +295,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public Long expire(final String key, final int seconds) {
         return d_expire(key, seconds).getResult();
     }
-
-    @Override
-    public Long pexpire(String key, long milliseconds) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
+    
     public OperationResult<Long> d_expire(final String key, final Integer seconds) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.EXPIRE) {
@@ -312,6 +307,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         });
     }
+
 
     @Override
     public Long expireAt(final String key, final long unixTime) {
@@ -2258,21 +2254,21 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public List<String> blpop(String arg) {
-        return d_blpop(arg).getResult();
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public List<String> blpop(int timeout, String key) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return d_blpop(timeout,key).getResult();
     }
 
-    public OperationResult<List<String>> d_blpop(final String arg) {
+    public OperationResult<List<String>> d_blpop(final int timeout, final String key) {
 
-        return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(arg, OpName.BLPOP) {
+        return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.BLPOP) {
 
             @Override
             public List<String> execute(Jedis client, ConnectionContext state) {
-                return client.blpop(arg);
+                return client.blpop(timeout,key);
             }
 
         });
@@ -2280,25 +2276,26 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public List<String> brpop(String arg) {
-        return d_brpop(arg).getResult();
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public List<String> brpop(int timeout, String key) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return d_brpop(timeout,key).getResult();
     }
 
-    public OperationResult<List<String>> d_brpop(final String arg) {
+    public OperationResult<List<String>> d_brpop(final int timeout, final String key) {
 
-        return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(arg, OpName.BRPOP) {
+        return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.BRPOP) {
 
             @Override
             public List<String> execute(Jedis client, ConnectionContext state) {
-                return client.brpop(arg);
+                return client.brpop(timeout,key);
             }
 
         });
     }
+
 
     @Override
     public String echo(String string) {
@@ -2436,6 +2433,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         });
 
         return results;
+    }
+    
+    @Override
+    public Long pexpire(String key, long milliseconds) {
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
