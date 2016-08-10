@@ -1293,7 +1293,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Boolean setbit(String key, long offset, String value) {
+    public Boolean setbit(final String key, final long offset, final String value) {
         return d_setbit(key, offset, value).getResult();
     }
 
