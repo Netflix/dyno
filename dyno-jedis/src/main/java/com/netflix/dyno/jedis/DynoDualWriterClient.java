@@ -138,7 +138,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         boolean isInRange(byte[] key);
 
-		void setRange(int range);
+        void setRange(int range);
     }
 
     /**
