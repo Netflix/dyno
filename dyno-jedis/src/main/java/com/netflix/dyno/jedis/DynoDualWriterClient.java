@@ -533,7 +533,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
     }
     
     @Override
-    public Boolean setbit(final String key, final long offset, final boolean value)  {
+    public Boolean setbit(final String key, final long offset, final boolean value) {
         writeAsync(key, new Callable<OperationResult<Boolean>>(){
             @Override
             public OperationResult<Boolean> call() throws Exception {
@@ -593,7 +593,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
     }
     
     @Override
-    public Long smove(final String srckey, final String dstkey, final String member)  {
+    public Long smove(final String srckey, final String dstkey, final String member) {
         writeAsync(srckey, new Callable<OperationResult<Long>>(){
             @Override
             public OperationResult<Long> call() throws Exception {
@@ -629,7 +629,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
     }
     
     @Override
-    public Long srem(final String key, final String... members)  {
+    public Long srem(final String key, final String... members) {
         writeAsync(key, new Callable<OperationResult<Long>>(){
             @Override
             public OperationResult<Long> call() throws Exception {
@@ -641,7 +641,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
     }
     
     @Override
-    public ScanResult<String> sscan(final String key, final String cursor)  {
+    public ScanResult<String> sscan(final String key, final String cursor) {
         writeAsync(key, new Callable<OperationResult<ScanResult<String>>>(){
             @Override
             public OperationResult<ScanResult<String>> call() throws Exception {
@@ -653,7 +653,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
     }
     
     @Override
-    public ScanResult<String> sscan(final String key, final String cursor, final ScanParams params)  {
+    public ScanResult<String> sscan(final String key, final String cursor, final ScanParams params) {
         writeAsync(key, new Callable<OperationResult<ScanResult<String>>>(){
             @Override
             public OperationResult<ScanResult<String>> call() throws Exception {
@@ -677,7 +677,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
     }   
     
     @Override
-    public Long zadd(final String key, final double score, final String member)  {
+    public Long zadd(final String key, final double score, final String member) {
         writeAsync(key, new Callable<OperationResult<Long>>(){
             @Override
             public OperationResult<Long> call() throws Exception {
@@ -689,7 +689,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
     }
     
     @Override
-    public Long zadd(final String key, final Map<String, Double> scoreMembers)  {
+    public Long zadd(final String key, final Map<String, Double> scoreMembers) {
         writeAsync(key, new Callable<OperationResult<Long>>(){
             @Override
             public OperationResult<Long> call() throws Exception {
@@ -701,7 +701,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
     }
     
     @Override
-    public Double zincrby(final String key, final double score, final String member)  {
+    public Double zincrby(final String key, final double score, final String member) {
         writeAsync(key, new Callable<OperationResult<Double>>(){
             @Override
             public OperationResult<Double> call() throws Exception {
@@ -713,7 +713,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
     }
     
     @Override
-    public Long zrem(final String key, final String... member)  {
+    public Long zrem(final String key, final String... member) {
         writeAsync(key, new Callable<OperationResult<Long>>(){
             @Override
             public OperationResult<Long> call() throws Exception {
@@ -725,7 +725,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
     }
     
     @Override
-    public List<String> blpop(final int timeout, final String key)  {
+    public List<String> blpop(final int timeout, final String key) {
         writeAsync(key, new Callable<OperationResult<List<String>>>(){
             @Override
             public OperationResult<List<String>> call() throws Exception {
@@ -737,7 +737,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
     }
     
     @Override
-    public List<String> brpop(final int timeout, final String key)  {
+    public List<String> brpop(final int timeout, final String key) {
         writeAsync(key, new Callable<OperationResult<List<String>>>(){
             @Override
             public OperationResult<List<String>> call() throws Exception {
@@ -752,7 +752,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     
     @Override
-    public String set(final byte[] key, final byte[] value)  {
+    public String set(final byte[] key, final byte[] value) {
         writeAsync(key, new Callable<OperationResult<String>>(){
             @Override
             public OperationResult<String> call() throws Exception {
@@ -763,6 +763,16 @@ public class DynoDualWriterClient extends DynoJedisClient {
         return targetClient.set(key, value);
     }
 
+    @Override
+    public String setex(final byte[] key, final int seconds, final byte[] value) {
+    writeAsync(key, new Callable<OperationResult<String>>(){
+        @Override
+        public OperationResult<String> call() throws Exception {
+            return d_setex(key, seconds, value);
+        }
+    });
 
+    return targetClient.setex(key, seconds, value);
+}
     
 }
