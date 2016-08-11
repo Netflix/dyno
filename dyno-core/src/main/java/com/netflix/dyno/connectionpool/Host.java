@@ -41,20 +41,11 @@ public class Host {
 	}
 	
 	public Host(String hostname, Status status) {
-		this.hostname = hostname;
-		this.ipAddress = null;
-		this.port = -1;
-		this.status = status;
+		this(hostname, null, -1, status);
 	}
 	
-	public Host(String name, int port, Status status) {
-		this.hostname = name;
-		this.ipAddress = null;
-		this.port = port;
-		this.status = status;
-		if (port != -1) {
-			this.socketAddress = new InetSocketAddress(name, port);
-		}
+	public Host(String hostname, int port, Status status) {
+		this(hostname, null, port, status);
 	}
 	
 	public Host(String hostname, String ipAddress, int port) {
@@ -62,10 +53,7 @@ public class Host {
 	}
 	
 	public Host(String hostname, String ipAddress, Status status) {
-		this.hostname = hostname;
-		this.ipAddress = ipAddress;
-		this.port = -1;
-		this.status = status;
+		this(hostname, ipAddress, -1, status);
 	}
 
 	public Host(String name, String ipAddress, int port, Status status) {
