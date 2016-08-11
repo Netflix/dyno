@@ -71,7 +71,7 @@ public class RedissonConnectionFactory implements ConnectionFactory<RedisAsyncCo
 			this.hostPool = hPool;
 			Host host = hostPool.getHost();
 			this.opMonitor = opMonitor;
-			this.client = new RedisClient(eventGroupLoop, host.getHostName(), host.getPort());
+			this.client = new RedisClient(eventGroupLoop, host.getHostAddress(), host.getPort());
 		}
 		
 		@Override

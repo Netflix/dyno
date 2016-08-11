@@ -109,7 +109,7 @@ public class BinarySearchTokenMapperTest {
 			final long hash = counter.get();
 
 			HostToken hToken = tokenMapper.getToken(hash);
-			if (!(hToken.getHost().getHostName().equals(expectedToken))) {
+			if (!(hToken.getHost().getHostAddress().equals(expectedToken))) {
 				failures.incrementAndGet();
 			}
 		}

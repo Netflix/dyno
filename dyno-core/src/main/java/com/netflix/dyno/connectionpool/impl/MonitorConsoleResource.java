@@ -115,7 +115,7 @@ public class MonitorConsoleResource {
 		for (TokenStatus tokenStatus : tokens) {
 			String token = tokenStatus.getToken().toString();
 			HostConnectionPool<?> hostPool = tokenStatus.getHostPool();
-			String poolStatus = hostPool.getHost().getHostName() + "__" + (hostPool.isActive() ? "UP" : "DOWN");
+			String poolStatus = hostPool.getHost().getHostAddress() + "__" + (hostPool.isActive() ? "UP" : "DOWN");
 			map.put(token, poolStatus);
 		}
 		return map;

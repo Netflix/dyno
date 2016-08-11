@@ -90,7 +90,7 @@ public class EurekaHostsSupplier implements HostSupplier {
 					public Host apply(InstanceInfo info) {
 						
 						Host.Status status = info.getStatus() == InstanceStatus.UP ? Host.Status.Up : Host.Status.Down;
-						Host host = new Host(info.getHostName(), status);
+						Host host = new Host(info.getHostName(), info.getIPAddr(), status);
 
 						try {
 							if (info.getDataCenterInfo() instanceof AmazonInfo) {
@@ -99,7 +99,7 @@ public class EurekaHostsSupplier implements HostSupplier {
 							}
 						}
 						catch (Throwable t) {
-							Logger.error("Error getting rack for host " + host.getHostName(), t);
+							Logger.error("Error getting rack for host " + host.getHostAddress(), t);
 						}
 
 						return host;

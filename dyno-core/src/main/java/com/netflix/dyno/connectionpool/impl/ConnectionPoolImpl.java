@@ -197,10 +197,10 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 			cpHealthTracker.removeHost(host);
 			cpMonitor.hostRemoved(host);
 			hostPool.shutdown();
-            Logger.info(String.format("Remove host: Successfully removed host %s from connection pool", host.getHostName()));
+            Logger.info(String.format("Remove host: Successfully removed host %s from connection pool", host.getHostAddress()));
             return true;
 		} else {
-            Logger.info(String.format("Remove host: Host %s NOT FOUND in the connection pool", host.getHostName()));
+            Logger.info(String.format("Remove host: Host %s NOT FOUND in the connection pool", host.getHostAddress()));
 			return false;
 		}
 	}
@@ -366,7 +366,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 
 				do {
 					try {
-                        connection.getContext().setMetadata("host", connection.getHost().getHostName());
+                        connection.getContext().setMetadata("host", connection.getHost().getHostAddress());
 						OperationResult<R> result = connection.execute(op);
 
 						// Add context to the result from the successful execution

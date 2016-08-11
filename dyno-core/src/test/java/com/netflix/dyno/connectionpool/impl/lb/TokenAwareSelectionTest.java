@@ -65,7 +65,7 @@ public class TokenAwareSelectionTest {
 
 			@Override
 			public int compare(HostToken o1, HostToken o2) {
-				return o1.getHost().getHostName().compareTo(o2.getHost().getHostName());
+				return o1.getHost().getHostAddress().compareTo(o2.getHost().getHostAddress());
 			}
 		});
 
@@ -108,7 +108,7 @@ public class TokenAwareSelectionTest {
 			BaseOperation<Integer, Long> op = getTestOperation(i);
 			HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op);
 
-			String hostName = pool.getHost().getHostName();
+			String hostName = pool.getHost().getHostAddress();
 
 			verifyKeyHash(op.getKey(), hostName);
 

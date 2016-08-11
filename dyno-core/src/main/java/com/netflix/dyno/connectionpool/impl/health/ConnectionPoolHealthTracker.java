@@ -150,7 +150,7 @@ public class ConnectionPoolHealthTracker<CL> implements HealthTracker<CL> {
         if (e != null && e instanceof PoolExhaustedException) {
             String hostName = "Unknown";
             if (hostPool.getHost() != null) {
-                hostName = hostPool.getHost().getHostName();
+                hostName = hostPool.getHost().getHostAddress();
             }
             Logger.error(String.format("Attempting to reconnect pool to host %s due to PoolExhaustedException: %s",
                     e.getMessage(), hostName));

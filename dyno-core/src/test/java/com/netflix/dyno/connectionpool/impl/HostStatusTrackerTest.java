@@ -157,7 +157,7 @@ public class HostStatusTrackerTest {
 
 			@Override
 			public String get(Host x) {
-				return x.getHostName();
+				return x.getHostAddress();
 			}
 		}));
 

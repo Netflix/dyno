@@ -82,7 +82,7 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 		
 		for (Host host : activeHosts) {
 			try {
-				List<HostToken> hostTokens = parseTokenListFromJson(getTopologyJsonPayload((host.getHostName())));
+				List<HostToken> hostTokens = parseTokenListFromJson(getTopologyJsonPayload((host.getHostAddress())));
 				for (HostToken hToken : hostTokens) {
 					allTokens.add(hToken);
 				}
@@ -97,7 +97,7 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 	public HostToken getTokenForHost(final Host host, final Set<Host> activeHosts) {
         String jsonPayload;
         if (activeHosts.size() == 0) {
-            jsonPayload = getTopologyJsonPayload(host.getHostName());
+            jsonPayload = getTopologyJsonPayload(host.getHostAddress());
         } else {
             try {
                 jsonPayload = getTopologyJsonPayload(activeHosts);
@@ -105,7 +105,7 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
                 // Try using the host we just primed connections to. If that fails,
                 // let the exception bubble up to ConnectionPoolImpl which will remove
                 // the host from the host-mapping
-                jsonPayload = getTopologyJsonPayload(host.getHostName());
+                jsonPayload = getTopologyJsonPayload(host.getHostAddress());
             }
         }
 		List<HostToken> hostTokens = parseTokenListFromJson(jsonPayload);
@@ -114,7 +114,7 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 
 			@Override
 			public boolean apply(HostToken x) {
-				return x.getHost().getHostName().equals(host.getHostName());
+				return x.getHost().getHostAddress().equals(host.getHostAddress());
 			}
 		});
 	}

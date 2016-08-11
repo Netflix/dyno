@@ -99,7 +99,7 @@ public class BinarySearchTokenMapper implements HashPartitioner {
 		HostToken theToken = null;
 		
 		for (HostToken token : tokenMap.values()) {
-			if (token.getHost().getHostName().equals(host.getHostName())) {
+			if (token.getHost().getHostAddress().equals(host.getHostAddress())) {
 				theToken = token;
 				break;
 			}

@@ -107,7 +107,7 @@ public class HostSelectionWithFallbackTest {
 
 		for (int i=0; i<10; i++) {
 			Connection<Integer> conn = selection.getConnection(testOperation, 1, TimeUnit.MILLISECONDS);
-			hostnames.add(conn.getHost().getHostName());
+			hostnames.add(conn.getHost().getHostAddress());
 		}
 
 		verifyExactly(hostnames, "h1", "h2");
@@ -119,7 +119,7 @@ public class HostSelectionWithFallbackTest {
 
 		for (int i=0; i<10; i++) {
 			Connection<Integer> conn = selection.getConnection(testOperation, 1, TimeUnit.MILLISECONDS);
-			hostnames.add(conn.getHost().getHostName());
+			hostnames.add(conn.getHost().getHostAddress());
 		}
 
 		verifyExactly(hostnames, "h3", "h4", "h5", "h6");
@@ -130,7 +130,7 @@ public class HostSelectionWithFallbackTest {
 
 		for (int i=0; i<10; i++) {
 			Connection<Integer> conn = selection.getConnection(testOperation, 1, TimeUnit.MILLISECONDS);
-			hostnames.add(conn.getHost().getHostName());
+			hostnames.add(conn.getHost().getHostAddress());
 		}
 
 		verifyExactly(hostnames, "h1");
@@ -140,7 +140,7 @@ public class HostSelectionWithFallbackTest {
 		hostnames.clear();
 		for (int i=0; i<10; i++) {
 			Connection<Integer> conn = selection.getConnection(testOperation, 1, TimeUnit.MILLISECONDS);
-			hostnames.add(conn.getHost().getHostName());
+			hostnames.add(conn.getHost().getHostAddress());
 		}
 
 		verifyExactly(hostnames, "h1", "h2");
@@ -164,7 +164,7 @@ public class HostSelectionWithFallbackTest {
 
 		for (int i=0; i<10; i++) {
 			Connection<Integer> conn = selection.getConnection(testOperation, 1, TimeUnit.MILLISECONDS);
-			hostnames.add(conn.getHost().getHostName());
+			hostnames.add(conn.getHost().getHostAddress());
 		}
 
 		verifyExactly(hostnames, "h1", "h2");
@@ -176,7 +176,7 @@ public class HostSelectionWithFallbackTest {
 
 		for (int i=0; i<10; i++) {
 			Connection<Integer> conn = selection.getConnection(testOperation, 1, TimeUnit.MILLISECONDS);
-			hostnames.add(conn.getHost().getHostName());
+			hostnames.add(conn.getHost().getHostAddress());
 		}
 
 		verifyExactly(hostnames, "h3", "h4", "h5", "h6");
@@ -187,7 +187,7 @@ public class HostSelectionWithFallbackTest {
 
 		for (int i=0; i<10; i++) {
 			Connection<Integer> conn = selection.getConnection(testOperation, 1, TimeUnit.MILLISECONDS);
-			hostnames.add(conn.getHost().getHostName());
+			hostnames.add(conn.getHost().getHostAddress());
 		}
 
 		System.out.println(" " + hostnames);
@@ -198,7 +198,7 @@ public class HostSelectionWithFallbackTest {
 		hostnames.clear();
 		for (int i=0; i<10; i++) {
 			Connection<Integer> conn = selection.getConnection(testOperation, 1, TimeUnit.MILLISECONDS);
-			hostnames.add(conn.getHost().getHostName());
+			hostnames.add(conn.getHost().getHostAddress());
 		}
 
 		verifyExactly(hostnames, "h1", "h2");
@@ -227,7 +227,7 @@ public class HostSelectionWithFallbackTest {
 		for (int i = 0; i < 10; i++) {
 			Connection<Integer> conn = selection.getConnectionUsingRetryPolicy(testOperation, 1, TimeUnit.MILLISECONDS,
                     retry);
-			hostnames.add(conn.getHost().getHostName());
+			hostnames.add(conn.getHost().getHostAddress());
 		}
 
 		verifyExactly(hostnames, "h1", "h2");
@@ -236,7 +236,7 @@ public class HostSelectionWithFallbackTest {
         retry.failure(new Exception("Unit Test Retry Exception"));
         Connection<Integer> conn = selection.getConnectionUsingRetryPolicy(testOperation, 1, TimeUnit.MILLISECONDS,
                 retry);
-        String fallbackHost = conn.getHost().getHostName();
+        String fallbackHost = conn.getHost().getHostAddress();
 
         Assert.assertTrue(!fallbackHost.equals("h1") && !fallbackHost.equals("h2"));
 	}
@@ -534,7 +534,7 @@ public class HostSelectionWithFallbackTest {
 		return CollectionUtils.transform(connections, new Transform<Connection<Integer>, String>() {
 			@Override
 			public String get(Connection<Integer> x) {
-				return x.getHost().getHostName();
+				return x.getHost().getHostAddress();
 			}
 		});
 

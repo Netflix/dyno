@@ -340,7 +340,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
 		private final AtomicLong returned  = new AtomicLong();
 
 		private HostConnectionStatsImpl(Host host) {
-			this.name = host.getHostName();
+			this.name = host.getHostAddress();
 		}
 
 		@Override

@@ -142,14 +142,14 @@ public class ConnectionPoolImplTest {
 		}
 	};
 	
-	private Host host1 = new Host("host1", 8080, Status.Up).setRack("localRack");
-	private Host host2 = new Host("host2", 8080, Status.Up).setRack("localRack");
-	private Host host3 = new Host("host3", 8080, Status.Up).setRack("localRack");
+	private Host host1 = new Host("host1","ipAddress1", 8080, Status.Up).setRack("localRack");
+	private Host host2 = new Host("host2","ipAddress2",  8080, Status.Up).setRack("localRack");
+	private Host host3 = new Host("host3","ipAddress3",  8080, Status.Up).setRack("localRack");
 
     // Used for Cross Rack fallback testing
-    private Host host4 = new Host("host4", 8080, Status.Up).setRack("remoteRack");
-    private Host host5 = new Host("host5", 8080, Status.Up).setRack("remoteRack");
-    private Host host6 = new Host("host6", 8080, Status.Up).setRack("remoteRack");
+    private Host host4 = new Host("host4","ipAddress4",  8080, Status.Up).setRack("remoteRack");
+    private Host host5 = new Host("host5","ipAddress5",  8080, Status.Up).setRack("remoteRack");
+    private Host host6 = new Host("host6","ipAddress6",  8080, Status.Up).setRack("remoteRack");
 
     private final List<Host> hostSupplierHosts = new ArrayList<Host>();
 	
@@ -259,7 +259,7 @@ public class ConnectionPoolImplTest {
             public List<HostToken> getTokens(Set<Host> activeHosts) {
                 if (activeHosts.size() < tokenMap.size()) {
                     List<HostToken> hostTokens = new ArrayList<HostToken>(activeHosts.size());
-                    Iterator iterator = activeHosts.iterator();
+                    Iterator<Host> iterator = activeHosts.iterator();
                     while (iterator.hasNext()) {
                         Host activeHost = (Host) iterator.next();
                         hostTokens.add(tokenMap.get(activeHost));
@@ -492,7 +492,7 @@ public class ConnectionPoolImplTest {
 
 					@Override
 					public <R> OperationResult<R> execute(Operation<TestClient, R> op) throws DynoException {
-						if (pool.getHost().getHostName().equals(badHost.get())) {
+						if (pool.getHost().getHostAddress().equals(badHost.get())) {
 							throw new FatalConnectionException("Fail for bad host");
 						}
 						return super.execute(op);
@@ -642,9 +642,9 @@ public class ConnectionPoolImplTest {
 
         final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
 
-        hostSupplierHosts.add(new Host("host1_down", 8080, Status.Down).setRack("localRack"));
-        hostSupplierHosts.add(new Host("host2_down", 8080, Status.Down).setRack("localRack"));
-        hostSupplierHosts.add(new Host("host3_down", 8080, Status.Down).setRack("localRack"));
+        hostSupplierHosts.add(new Host("host1_down", "ipAddress1_down", 8080, Status.Down).setRack("localRack"));
+        hostSupplierHosts.add(new Host("host2_down", "ipAddress2_down", 8080, Status.Down).setRack("localRack"));
+        hostSupplierHosts.add(new Host("host3_down", "ipAddress3_down", 8080, Status.Down).setRack("localRack"));
 
         pool.start();
 

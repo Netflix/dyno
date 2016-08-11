@@ -76,7 +76,7 @@ public class RoundRobinSelectionTest {
 
 			@Override
 			public int compare(HostToken o1, HostToken o2) {
-				return o1.getHost().getHostName().compareTo(o2.getHost().getHostName());
+				return o1.getHost().getHostAddress().compareTo(o2.getHost().getHostAddress());
 			}
 		});
 
@@ -111,7 +111,7 @@ public class RoundRobinSelectionTest {
 		for (int i=1; i<=iterations; i++) {
 
 			HostConnectionPool<Integer> pool = rrSelection.getPoolForOperation(testOperation);
-			String hostName = pool.getHost().getHostName();
+			String hostName = pool.getHost().getHostAddress();
 
 			Integer count = result.get(hostName);
 			if (count == null) {
