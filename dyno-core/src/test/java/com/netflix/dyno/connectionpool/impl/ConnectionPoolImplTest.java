@@ -142,14 +142,14 @@ public class ConnectionPoolImplTest {
 		}
 	};
 	
-	private Host host1 = new Host("host1","ipAddress1", 8080, Status.Up).setRack("localRack");
-	private Host host2 = new Host("host2","ipAddress2",  8080, Status.Up).setRack("localRack");
-	private Host host3 = new Host("host3","ipAddress3",  8080, Status.Up).setRack("localRack");
+	private Host host1 = new Host("host1", 8080, Status.Up).setRack("localRack");
+	private Host host2 = new Host("host2", 8080, Status.Up).setRack("localRack");
+	private Host host3 = new Host("host3", 8080, Status.Up).setRack("localRack");
 
     // Used for Cross Rack fallback testing
-    private Host host4 = new Host("host4","ipAddress4",  8080, Status.Up).setRack("remoteRack");
-    private Host host5 = new Host("host5","ipAddress5",  8080, Status.Up).setRack("remoteRack");
-    private Host host6 = new Host("host6","ipAddress6",  8080, Status.Up).setRack("remoteRack");
+    private Host host4 = new Host("host4", 8080, Status.Up).setRack("remoteRack");
+    private Host host5 = new Host("host5", 8080, Status.Up).setRack("remoteRack");
+    private Host host6 = new Host("host6", 8080, Status.Up).setRack("remoteRack");
 
     private final List<Host> hostSupplierHosts = new ArrayList<Host>();
 	
