@@ -259,7 +259,7 @@ public class ConnectionPoolImplTest {
             public List<HostToken> getTokens(Set<Host> activeHosts) {
                 if (activeHosts.size() < tokenMap.size()) {
                     List<HostToken> hostTokens = new ArrayList<HostToken>(activeHosts.size());
-                    Iterator iterator = activeHosts.iterator();
+                    Iterator<Host> iterator = activeHosts.iterator();
                     while (iterator.hasNext()) {
                         Host activeHost = (Host) iterator.next();
                         hostTokens.add(tokenMap.get(activeHost));
@@ -492,7 +492,7 @@ public class ConnectionPoolImplTest {
 
 					@Override
 					public <R> OperationResult<R> execute(Operation<TestClient, R> op) throws DynoException {
-						if (pool.getHost().getHostName().equals(badHost.get())) {
+						if (pool.getHost().getHostAddress().equals(badHost.get())) {
 							throw new FatalConnectionException("Fail for bad host");
 						}
 						return super.execute(op);

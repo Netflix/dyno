@@ -24,7 +24,8 @@ import java.net.InetSocketAddress;
  */
 public class Host {
 
-	private final String name;
+	private final String hostname;
+	private final String ipAddress;
 	private int port;
 	private Status status = Status.Down;
 	private InetSocketAddress socketAddress = null;
@@ -35,18 +36,41 @@ public class Host {
 		Up, Down;
 	}
 	
-	public Host(String name, int port) {
-		this(name, port, Status.Down);
+	public Host(String hostname, int port) {
+		this(hostname, null, port, Status.Down);
 	}
 	
-	public Host(String name, Status status) {
-		this.name = name;
+	public Host(String hostname, Status status) {
+		this.hostname = hostname;
+		this.ipAddress = null;
+		this.port = -1;
+		this.status = status;
+	}
+	
+	public Host(String name, int port, Status status) {
+		this.hostname = name;
+		this.ipAddress = null;
+		this.port = port;
+		this.status = status;
+		if (port != -1) {
+			this.socketAddress = new InetSocketAddress(name, port);
+		}
+	}
+	
+	public Host(String hostname, String ipAddress, int port) {
+		this(hostname, ipAddress, port, Status.Down);
+	}
+	
+	public Host(String hostname, String ipAddress, Status status) {
+		this.hostname = hostname;
+		this.ipAddress = ipAddress;
 		this.port = -1;
 		this.status = status;
 	}
 
-	public Host(String name, int port, Status status) {
-		this.name = name;
+	public Host(String name, String ipAddress, int port, Status status) {
+		this.hostname = name;
+		this.ipAddress = ipAddress;
 		this.port = port;
 		this.status = status;
 		if (port != -1) {
@@ -54,8 +78,15 @@ public class Host {
 		}
 	}
 
-	public String getHostName() {
-		return name;
+	public String getHostAddress() {
+		if (this.ipAddress != null) {
+			return ipAddress;
+		}
+		return hostname;
+	}
+	
+	public String getIpAddress() {
+		return ipAddress;
 	}
 	
 	public int getPort() {
@@ -64,7 +95,7 @@ public class Host {
 	
 	public Host setPort(int p) {
 		this.port = p;
-		this.socketAddress = new InetSocketAddress(name, port);
+		this.socketAddress = new InetSocketAddress(hostname, port);
 		return this;
 	}
 
@@ -94,13 +125,13 @@ public class Host {
 		return socketAddress;
 	}
 	
-	public static final Host NO_HOST = new Host("UNKNOWN", 0);
+	public static final Host NO_HOST = new Host("UNKNOWN", "UNKNOWN", 0);
 
 	@Override
 	public int hashCode() {
 		final int prime = 31;
 		int result = 1;
-		result = prime * result + ((name == null) ? 0 : name.hashCode());
+		result = prime * result + ((hostname == null) ? 0 : hostname.hashCode());
 		result = prime * result + ((rack == null) ? 0 : rack.hashCode());
 		return result;
 	}
@@ -115,7 +146,7 @@ public class Host {
 		Host other = (Host) obj;
 		boolean equals = true;
 		
-		equals &= (name != null) ? name.equals(other.name) : other.name == null;
+		equals &= (hostname != null) ? hostname.equals(other.hostname) : other.hostname == null;
 		equals &= (rack != null) ? rack.equals(other.rack) : other.rack == null;
 		
 		return equals;
@@ -123,6 +154,6 @@ public class Host {
 
 	@Override
 	public String toString() {
-		return "Host [name=" + name + ", port=" + port + ", rack: " + rack + ", status: " + status.name() + "]";
+		return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack + ", status: " + status.name() + "]";
 	}
 }

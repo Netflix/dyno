@@ -22,9 +22,9 @@ import java.util.List;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 
 /**
- * Class representing a group of hosts. This is useful for underlying conection pool implementations
+ * Class representing a group of hosts. This is useful for underlying connection pool implementations
  * where a single multiplexed connection can be used to talk to a group of hosts. 
- * e.g  spy memcached uses this apprach where there is a single selector for a group of hosts. 
+ * e.g  spy memcached uses this approach where there is a single selector for a group of hosts. 
  * 
  * @author poberai
  *
@@ -33,8 +33,8 @@ public class HostGroup extends Host {
 
 	private final List<Host> hostList = new ArrayList<Host>();
 	
-	public HostGroup(String name, int port) {
-		super(name, port);
+	public HostGroup(String hostname, String ipAddress, int port) {
+		super(hostname, ipAddress, port);
 	}
 
 	public void add(Collection<Host> hosts) {

@@ -47,7 +47,7 @@ import com.netflix.dyno.connectionpool.exception.ThrottledException;
 
 public class HostConnectionPoolImplTest {
 
-	private static final Host TestHost = new Host("TestHost", 1234);
+	private static final Host TestHost = new Host("TestHost", "TestAddress", 1234);
 
 	// TEST UTILS SETUP
 	private class TestClient {

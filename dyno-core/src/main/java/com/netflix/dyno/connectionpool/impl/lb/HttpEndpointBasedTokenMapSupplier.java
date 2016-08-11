@@ -143,6 +143,6 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 			}
 		}));
 		
-		return hostsUp.get(random.nextInt(hostsUp.size())).getHostName();
+		return hostsUp.get(random.nextInt(hostsUp.size())).getHostAddress();
 	}
 }

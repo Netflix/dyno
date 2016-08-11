@@ -100,12 +100,12 @@ public class MonitorConsole implements MonitorConsoleMBean {
 		 Map<Host, HostConnectionStats> hostStats = cpMonitor.getHostStats();
 		 for (Host host : hostStats.keySet()) {
 			 
-			 if (host.getHostName().contains("AllHosts")) {
+			 if (host.getHostAddress().contains("AllHosts")) {
 				 continue;
 			 }
 			 
 			 HostConnectionStats hStats = hostStats.get(host);
-			 sb.append("\nHost: " + host.getHostName() + ":" + host.getPort() + ":" + host.getRack() + "\t");
+			 sb.append("\nHost: " + host.getHostAddress() + ":" + host.getPort() + ":" + host.getRack() + "\t");
 			 sb.append(" borrowed: " + hStats.getConnectionsBorrowed());
 			 sb.append(" returned: " + hStats.getConnectionsReturned());
 			 sb.append(" created: " + hStats.getConnectionsCreated());
@@ -185,7 +185,7 @@ public class MonitorConsole implements MonitorConsoleMBean {
             HostConnectionPool<?> hostPool = tokenStatus.getHostPool();
 
             List<String> meta = CollectionUtils.newArrayList(
-                    hostPool.getHost().getHostName(),
+                    hostPool.getHost().getHostAddress(),
                     hostPool.isActive() ? "UP" : "DOWN"
             );
 
