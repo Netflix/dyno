@@ -642,9 +642,9 @@ public class ConnectionPoolImplTest {
 
         final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
 
-        hostSupplierHosts.add(new Host("host1_down", "ipAddress1_down", 8080, Status.Down).setRack("localRack"));
-        hostSupplierHosts.add(new Host("host2_down", "ipAddress2_down", 8080, Status.Down).setRack("localRack"));
-        hostSupplierHosts.add(new Host("host3_down", "ipAddress3_down", 8080, Status.Down).setRack("localRack"));
+        hostSupplierHosts.add(new Host("host1_down", 8080, Status.Down).setRack("localRack"));
+        hostSupplierHosts.add(new Host("host2_down", 8080, Status.Down).setRack("localRack"));
+        hostSupplierHosts.add(new Host("host3_down", 8080, Status.Down).setRack("localRack"));
 
         pool.start();
 
