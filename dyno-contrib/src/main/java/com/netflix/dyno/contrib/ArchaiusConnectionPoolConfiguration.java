@@ -81,9 +81,9 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		retryPolicyFactory = parseRetryPolicyFactory(propertyPrefix);
 		compressionStrategy = parseCompressionStrategy(propertyPrefix);
 
-        isDualWriteEnabled = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + "dualwrite.enabled", super.isDualWriteEnabled());
-        dualWriteClusterName = DynamicPropertyFactory.getInstance().getStringProperty(propertyPrefix + "dualwrite.cluster", super.getDualWriteClusterName());
-        dualWritePercentage = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + "dualwrite.percentage", super.getDualWritePercentage());
+        isDualWriteEnabled = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + ".dualwrite.enabled", super.isDualWriteEnabled());
+        dualWriteClusterName = DynamicPropertyFactory.getInstance().getStringProperty(propertyPrefix + ".dualwrite.cluster", super.getDualWriteClusterName());
+        dualWritePercentage = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".dualwrite.percentage", super.getDualWritePercentage());
 	}
 
 	
@@ -168,6 +168,46 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
         return failOnStartupIfNoHosts.get();
     }
 
+    @Override
+    public boolean isDualWriteEnabled() {
+        return isDualWriteEnabled.get();
+    }
+
+    @Override
+    public String getDualWriteClusterName() {
+        return dualWriteClusterName.get();
+    }
+
+    @Override
+    public int getDualWritePercentage() {
+        return dualWritePercentage.get();
+    }
+
+    @Override
+    public String toString() {
+        return "ArchaiusConnectionPoolConfiguration{" +
+                "name=" + getName() +
+                ", port=" + port +
+                ", maxConnsPerHost=" + maxConnsPerHost +
+                ", maxTimeoutWhenExhausted=" + maxTimeoutWhenExhausted +
+                ", maxFailoverCount=" + maxFailoverCount +
+                ", connectTimeout=" + connectTimeout +
+                ", socketTimeout=" + socketTimeout +
+                ", poolShutdownDelay=" + poolShutdownDelay +
+                ", localZoneAffinity=" + localZoneAffinity +
+                ", resetTimingsFrequency=" + resetTimingsFrequency +
+                ", configPublisherConfig=" + configPublisherConfig +
+                ", compressionThreshold=" + compressionThreshold +
+                ", loadBalanceStrategy=" + loadBalanceStrategy +
+                ", compressionStrategy=" + compressionStrategy +
+                ", errorRateConfig=" + errorRateConfig +
+                ", retryPolicyFactory=" + retryPolicyFactory +
+                ", failOnStartupIfNoHosts=" + failOnStartupIfNoHosts +
+                ", isDualWriteEnabled=" + isDualWriteEnabled +
+                ", dualWriteClusterName=" + dualWriteClusterName +
+                ", dualWritePercentage=" + dualWritePercentage +
+                '}';
+    }
 
     private LoadBalancingStrategy parseLBStrategy(String propertyPrefix) {
 		
