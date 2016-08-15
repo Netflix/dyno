@@ -296,7 +296,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_expire(key, seconds).getResult();
     }
     
-    public OperationResult<Long> d_expire(final String key, final Integer seconds) {
+    public OperationResult<Long> d_expire(final String key, final int seconds) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.EXPIRE) {
 
@@ -314,7 +314,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_expireAt(key, unixTime).getResult();
     }
 
-    public OperationResult<Long> d_expireAt(final String key, final Long unixTime) {
+    public OperationResult<Long> d_expireAt(final String key, final long unixTime) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.EXPIREAT) {
 
@@ -499,7 +499,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_hincrBy(key, field, value).getResult();
     }
 
-    public OperationResult<Long> d_hincrBy(final String key, final String field, final Long value) {
+    public OperationResult<Long> d_hincrBy(final String key, final String field, final long value) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HINCRBY) {
 
@@ -972,7 +972,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_ltrim(key, start, end).getResult();
     }
 
-    public OperationResult<String> d_ltrim(final String key, final Long start, final Long end) {
+    public OperationResult<String> d_ltrim(final String key, final long start, final long end) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.LTRIM) {
 
@@ -1001,22 +1001,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         });
     }
 
-    public Long pexpire(final String key, final int milliseconds) {
-        return d_pexpire(key, milliseconds).getResult();
-    }
-
-    public OperationResult<Long> d_pexpire(final String key, final Integer milliseconds) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.PEXPIRE) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.pexpire(key, milliseconds);
-            }
-
-        });
-    }
-
     public Long pexpireAt(final String key, final long millisecondsTimestamp) {
         return d_pexpireAt(key, millisecondsTimestamp).getResult();
     }
@@ -1033,21 +1017,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         });
     }
 
-    public String psetex(final String key, final int milliseconds, final String value) {
-        return d_psetex(key, milliseconds, value).getResult();
-    }
-
-    public OperationResult<String> d_psetex(final String key, final Integer milliseconds, final String value) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.PSETEX) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.psetex(key, milliseconds, value);
-            }
-
-        });
-    }
 
     public Long pttl(final String key) {
         return d_pttl(key).getResult();
