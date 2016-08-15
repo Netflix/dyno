@@ -1,7 +1,5 @@
-
 plugins {
     id 'nebula.netflixoss' version '3.2.3'
-    id 'nebula.maven-publish' version '4.8.1'
 }
 
 // Establish version and status
@@ -10,39 +8,19 @@ ext.githubProjectName = rootProject.name // Change if github project name is not
 apply plugin: 'osgi'
 apply plugin: 'project-report'
 
+
 subprojects {
     apply plugin: 'nebula.netflixoss'
     apply plugin: 'java'
     apply plugin: 'idea'
     apply plugin: 'eclipse'    
-//    apply plugin: 'maven-publish'
-    apply plugin: 'nebula.maven-base-publish'
-//    version = "1.4.6.1-sovrn"
 
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            from components.java
-        }
-    }
-    repositories {
-        maven {
-            // change to point to your repo, e.g. http://my.org/repo
-            url "http://192.168.1.5:8080/repository/internal"
-        }
-    }
-}
     sourceCompatibility = 1.7
     targetCompatibility = 1.7
 
     repositories {
-//        jcenter()
-	maven {
-              url "http://192.168.1.5:8080/repository/internal"
-    	}
+        jcenter()
     }
-
-
     group = "com.netflix.${githubProjectName}"
 
     dependencies {
