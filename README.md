@@ -1,4 +1,4 @@
-# Dyno [![Build Status](https://secure.travis-ci.org/Netflix/dyno.png)](http://travis-ci.org/Netflix/dyno)
+# Dyno
  
  Dyno encapsulates features necessary to scale a client application utilizing [Dynomite](https://github.com/Netflix/dynomite).
  
