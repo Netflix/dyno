@@ -77,7 +77,7 @@ public class ElasticConnectionPoolConfigurationPublisherTest {
         assertTrue(json.has("ApplicationName"));
         assertTrue(json.has("DynomiteClusterName"));
         assertTrue(json.has("MaxConnsPerHost"));
-        assertTrue(json.has("Port"));
+        //assertTrue(json.has("Port"));
 
     }
 }

@@ -19,51 +19,62 @@ import java.net.InetSocketAddress;
 
 /**
  * Class encapsulating information about a host.
+ * This is immutable except for the host status
  * @author poberai
  *
  */
-public class Host {
-
+public class Host implements Comparable<Host> {
+    public static final int DEFAULT_PORT = 8102; 
+    public static final Host NO_HOST = new Host("UNKNOWN", "UNKNOWN", 0, "UNKNOWN");
+    
 	private final String hostname;
 	private final String ipAddress;
-	private int port;
+	private final int port;
+	private final InetSocketAddress socketAddress;
+    private final String rack; 
 	private Status status = Status.Down;
-	private InetSocketAddress socketAddress = null;
+
 	
-	private String rack; 
+
 	
 	public static enum Status {
 		Up, Down;
 	}
 	
-	public Host(String hostname, int port) {
-		this(hostname, null, port, Status.Down);
+	public Host(String hostname, int port, String rack) {
+		this(hostname, null, port, rack, Status.Down);
 	}
 	
-	public Host(String hostname, Status status) {
-		this(hostname, null, -1, status);
+	public Host(String hostname, String rack, Status status) {
+		this(hostname, null, DEFAULT_PORT, rack, status);
 	}
 	
-	public Host(String hostname, int port, Status status) {
-		this(hostname, null, port, status);
+	public Host(String hostname, int port, String rack, Status status) {
+		this(hostname, null, port, rack, status);
 	}
 	
-	public Host(String hostname, String ipAddress, int port) {
-		this(hostname, ipAddress, port, Status.Down);
+	public Host(String hostname, String ipAddress, int port, String rack) {
+		this(hostname, ipAddress, port, rack, Status.Down);
 	}
 	
-	public Host(String hostname, String ipAddress, Status status) {
-		this(hostname, ipAddress, -1, status);
+	public Host(String hostname, String ipAddress, String rack, Status status) {
+		this(hostname, ipAddress, DEFAULT_PORT, rack, status);
 	}
 
-	public Host(String name, String ipAddress, int port, Status status) {
+	public Host(String name, String ipAddress, int port, String rack, Status status) {
 		this.hostname = name;
 		this.ipAddress = ipAddress;
 		this.port = port;
+		this.rack = rack;
 		this.status = status;
-		if (port != -1) {
-			this.socketAddress = new InetSocketAddress(name, port);
+		// Used for the unit tests to prevent host name resolution
+		if(port != -1) {
+		    this.socketAddress = new InetSocketAddress(name, port);
+		} else { 
+		    this.socketAddress = null;
 		}
+
+
 	}
 
 	public String getHostAddress() {
@@ -81,11 +92,6 @@ public class Host {
 		return port;
 	}
 	
-	public Host setPort(int p) {
-		this.port = p;
-		this.socketAddress = new InetSocketAddress(hostname, port);
-		return this;
-	}
 
 	public Status getStatus() {
 		return status;
@@ -95,10 +101,6 @@ public class Host {
 		return rack;
 	}
 	
-	public Host setRack(String rack) {
-		this.rack = rack;
-		return this;
-	}
 	
 	public Host setStatus(Status condition) {
 		status = condition;
@@ -113,7 +115,7 @@ public class Host {
 		return socketAddress;
 	}
 	
-	public static final Host NO_HOST = new Host("UNKNOWN", "UNKNOWN", 0);
+
 
 	@Override
 	public int hashCode() {
@@ -121,6 +123,7 @@ public class Host {
 		int result = 1;
 		result = prime * result + ((hostname == null) ? 0 : hostname.hashCode());
 		result = prime * result + ((rack == null) ? 0 : rack.hashCode());
+		result = prime * result + port;
 		return result;
 	}
 
@@ -136,6 +139,7 @@ public class Host {
 		
 		equals &= (hostname != null) ? hostname.equals(other.hostname) : other.hostname == null;
 		equals &= (rack != null) ? rack.equals(other.rack) : other.rack == null;
+		equals &= port == other.port;
 		
 		return equals;
 	}
@@ -143,5 +147,18 @@ public class Host {
 	@Override
 	public String toString() {
 		return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack + ", status: " + status.name() + "]";
+	}
+
+	@Override
+	public int compareTo(Host o) {
+	    int compared = this.hostname.compareTo(o.hostname);
+	    if( compared != 0) {
+		return compared;
+	    }
+	    compared = this.rack.compareTo(o.hostname);
+	    if( compared != 0) {
+		return compared;
+	    }
+	    return Integer.compare(this.port,o.port);
 	}
 }

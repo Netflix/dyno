@@ -31,7 +31,6 @@ import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
 public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfiguration {
 	
 	// DEFAULTS 
-	private static final int DEFAULT_PORT = 8102; 
 	private static final int DEFAULT_MAX_CONNS_PER_HOST = 3;
 	private static final int DEFAULT_MAX_TIMEOUT_WHEN_EXHAUSTED = 800;
 	private static final int DEFAULT_MAX_FAILOVER_COUNT = 3; 
@@ -55,7 +54,6 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private HostConnectionPoolFactory hostConnectionPoolFactory;
 
 	private final String name;
-	private int port = DEFAULT_PORT; 
 	private int maxConnsPerHost = DEFAULT_MAX_CONNS_PER_HOST; 
 	private int maxTimeoutWhenExhausted = DEFAULT_MAX_TIMEOUT_WHEN_EXHAUSTED; 
 	private int maxFailoverCount = DEFAULT_MAX_FAILOVER_COUNT; 
@@ -118,7 +116,6 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         this.maxTimeoutWhenExhausted = config.getMaxTimeoutWhenExhausted();
         this.pingFrequencySeconds = config.getPingFrequencySeconds();
         this.poolShutdownDelay = config.getPoolShutdownDelay();
-        this.port = config.getPort();
         this.retryFactory = config.getRetryPolicyFactory();
         this.socketTimeout = config.getSocketTimeout();
         this.errorMonitorFactory = config.getErrorMonitorFactory();
@@ -133,10 +130,6 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		return name;
 	}
 
-	@Override
-	public int getPort() {
-		return port;
-	}
 
 	@Override
 	public int getMaxConnsPerHost() {
@@ -153,10 +146,6 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		return maxFailoverCount;
 	}
 
-	public ConnectionPoolConfigurationImpl setPort(int port) {
-		this.port = port;
-		return this;
-	}
 
 	@Override
 	public int getConnectTimeout() {

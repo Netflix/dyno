@@ -45,15 +45,23 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 	private static final String DefaultServerUrl = "http://{hostname}:8080/REST/v1/admin/cluster_describe";
 	private final String serverUrl;
 	private static final Integer NumRetries = 2;
+	
 
-	public HttpEndpointBasedTokenMapSupplier(int port) {
-		this(DefaultServerUrl, port);
-	}
-
-	public HttpEndpointBasedTokenMapSupplier(String url, int port) {
+    public HttpEndpointBasedTokenMapSupplier(String url) {
+        serverUrl = url;
+    }
+    public HttpEndpointBasedTokenMapSupplier() {
+        serverUrl = DefaultServerUrl;
+    }
+    public HttpEndpointBasedTokenMapSupplier(int port) {
         super(port);
-		serverUrl = url;
-	}
+        serverUrl = DefaultServerUrl;
+        
+    }
+    public HttpEndpointBasedTokenMapSupplier(String url, int port) {
+        super(port);
+        serverUrl = url;
+    }
 
 	@Override
 	public String getTopologyJsonPayload(Set<Host> activeHosts) {

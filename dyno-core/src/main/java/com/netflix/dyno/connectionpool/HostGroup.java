@@ -33,8 +33,8 @@ public class HostGroup extends Host {
 
 	private final List<Host> hostList = new ArrayList<Host>();
 	
-	public HostGroup(String hostname, String ipAddress, int port) {
-		super(hostname, ipAddress, port);
+	public HostGroup(String hostname, String ipAddress, int port, String rack) {
+		super(hostname, ipAddress, port, rack);
 	}
 
 	public void add(Collection<Host> hosts) {

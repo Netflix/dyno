@@ -142,8 +142,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 
 	public boolean addHost(Host host, boolean refreshLoadBalancer) {
 		
-		host.setPort(cpConfiguration.getPort());
-
+		
 		HostConnectionPool<CL> connPool = cpMap.get(host);
 		
 		if (connPool != null) {
@@ -197,10 +196,10 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 			cpHealthTracker.removeHost(host);
 			cpMonitor.hostRemoved(host);
 			hostPool.shutdown();
-            Logger.info(String.format("Remove host: Successfully removed host %s from connection pool", host.getHostAddress()));
+            Logger.info(String.format("Remove host: Successfully removed host %s:%s from connection pool", host.getHostAddress(), host.getPort()));
             return true;
 		} else {
-            Logger.info(String.format("Remove host: Host %s NOT FOUND in the connection pool", host.getHostAddress()));
+            Logger.info(String.format("Remove host: Host %s:%s NOT FOUND in the connection pool", host.getHostAddress(), host.getPort()));
 			return false;
 		}
 	}
@@ -366,7 +365,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 
 				do {
 					try {
-                        connection.getContext().setMetadata("host", connection.getHost().getHostAddress());
+					    	connection.getContext().setMetadata("host", connection.getHost().getHostAddress());
+					    	connection.getContext().setMetadata("port", connection.getHost().getPort());
 						OperationResult<R> result = connection.execute(op);
 
 						// Add context to the result from the successful execution

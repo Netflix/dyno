@@ -20,7 +20,7 @@ import com.netflix.dyno.connectionpool.impl.health.ErrorMonitor.ErrorMonitorFact
 
 
 public interface ConnectionPoolConfiguration {
-	
+    
 	enum LoadBalancingStrategy {
 		RoundRobin, TokenAware;
 	}
@@ -38,11 +38,11 @@ public interface ConnectionPoolConfiguration {
      */
     String getName();
 
-    /**
-     * @return Data port to be used when no port is specified to a list of seeds or when
-     * doing a ring describe since the ring describe does not include a host
-     */
-    int getPort();
+//    /**
+//     * @return Data port to be used when no port is specified to a list of seeds or when
+//     * doing a ring describe since the ring describe does not include a host
+//     */
+//    int getPort();
 
     /**
      * @return Maximum number of connections to allocate for a single host's pool
