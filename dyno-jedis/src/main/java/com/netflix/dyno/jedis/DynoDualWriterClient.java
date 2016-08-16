@@ -174,74 +174,106 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Long append(final String key, final String value) {
+        return this.d_append(key, value).getResult();
+    }
+
+    @Override
+    public OperationResult<Long> d_append(final String key, final String value) {
         writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
-                return d_append(key, value);
+                return DynoDualWriterClient.super.d_append(key, value);
             }
         });
 
-        return targetClient.append(key, value);
+        return targetClient.d_append(key, value);
     }
 
     @Override
     public String hmset(final String key, final Map<String, String> hash) {
+        return this.d_hmset(key, hash).getResult();
+    }
+
+    @Override
+    public OperationResult<String> d_hmset(final String key, final Map<String, String> hash) {
         writeAsync(key, new Callable<OperationResult<String>>(){
             @Override
             public OperationResult<String> call() throws Exception {
-                return d_hmset(key, hash);
+                return DynoDualWriterClient.super.d_hmset(key, hash);
             }
         });
 
-        return targetClient.hmset(key, hash);
+        return targetClient.d_hmset(key, hash);
     }
 
     @Override
     public Long sadd(final String key, final String... members) {
+        return this.d_sadd(key, members).getResult();
+    }
+
+    @Override
+    public OperationResult<Long> d_sadd(final String key, final String... members) {
         writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
-                return d_sadd(key, members);
+                return DynoDualWriterClient.super.d_sadd(key, members);
             }
         });
 
-        return targetClient.sadd(key, members);
+        return targetClient.d_sadd(key, members);
+
     }
 
     @Override
     public Long hset(final String key, final String field, final String value) {
+        return this.d_hset(key, field, value).getResult();
+    }
+
+    @Override
+    public OperationResult<Long> d_hset(final String key, final String field, final String value) {
         writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
-                return d_hset(key, field, value);
+                return DynoDualWriterClient.super.d_hset(key, field, value);
             }
         });
 
-        return targetClient.hset(key, field, value);
+        return targetClient.d_hset(key, field, value);
     }
 
     @Override
     public String set(final String key, final String value) {
+        return this.d_set(key, value).getResult();
+    }
+
+    @Override
+    public OperationResult<String> d_set(final String key, final String value) {
         writeAsync(key, new Callable<OperationResult<String>>() {
             @Override
             public OperationResult<String> call() throws Exception {
-                return d_set(key, value);
+                return DynoDualWriterClient.super.d_set(key, value);
             }
         });
 
-        return targetClient.set(key, value);
+        return targetClient.d_set(key, value);
     }
 
     @Override
     public String setex(final String key, int seconds, String value) {
+        return this.d_setex(key, seconds, value).getResult();
+    }
+
+    @Override
+    public OperationResult<String> d_setex(final String key, final Integer seconds, final String value) {
         writeAsync(key, new Callable<OperationResult<String>>(){
             @Override
             public OperationResult<String> call() throws Exception {
-                return d_get(key);
+                return DynoDualWriterClient.super.d_setex(key, seconds, value);
             }
         });
 
-        return targetClient.setex(key, seconds, value);
+        return targetClient.d_setex(key, seconds, value);
+
     }
 
     @Override

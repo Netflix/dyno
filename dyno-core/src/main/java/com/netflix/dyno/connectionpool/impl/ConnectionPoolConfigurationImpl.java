@@ -101,7 +101,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	 * @param config
      */
 	public ConnectionPoolConfigurationImpl(ConnectionPoolConfigurationImpl config) {
-	    this.name = config.getName() + "-shadow";
+	    this.name = config.getName() + "_shadow";
 
         this.compressionStrategy = config.getCompressionStrategy();
         this.valueCompressionThreshold = config.getValueCompressionThreshold();
@@ -120,9 +120,9 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         this.socketTimeout = config.getSocketTimeout();
         this.errorMonitorFactory = config.getErrorMonitorFactory();
         this.tokenSupplier = config.getTokenSupplier();
-        this.isDualWriteEnabled = config.isDualWriteEnabled;
-        this.dualWriteClusterName = config.dualWriteClusterName;
-        this.dualWritePercentage = config.dualWritePercentage;
+        this.isDualWriteEnabled = config.isDualWriteEnabled();
+        this.dualWriteClusterName = config.getDualWriteClusterName();
+        this.dualWritePercentage = config.getDualWritePercentage();
     }
 	
 	@Override
@@ -241,7 +241,40 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         return dualWritePercentage;
     }
 
-    // ALL SETTERS
+	@Override
+	public String toString() {
+		return "ConnectionPoolConfigurationImpl{" +
+				"name=" + name +
+				", hostSupplier=" + hostSupplier +
+				", tokenSupplier=" + tokenSupplier +
+				", hostConnectionPoolFactory=" + hostConnectionPoolFactory +
+				", name='" + name + '\'' +
+				", port=" + port +
+				", maxConnsPerHost=" + maxConnsPerHost +
+				", maxTimeoutWhenExhausted=" + maxTimeoutWhenExhausted +
+				", maxFailoverCount=" + maxFailoverCount +
+				", connectTimeout=" + connectTimeout +
+				", socketTimeout=" + socketTimeout +
+				", poolShutdownDelay=" + poolShutdownDelay +
+				", pingFrequencySeconds=" + pingFrequencySeconds +
+				", flushTimingsFrequencySeconds=" + flushTimingsFrequencySeconds +
+				", localZoneAffinity=" + localZoneAffinity +
+				", lbStrategy=" + lbStrategy +
+				", localRack='" + localRack + '\'' +
+				", localDataCenter='" + localDataCenter + '\'' +
+				", failOnStartupIfNoHosts=" + failOnStartupIfNoHosts +
+				", failOnStarupIfNoHostsSeconds=" + failOnStarupIfNoHostsSeconds +
+				", compressionStrategy=" + compressionStrategy +
+				", valueCompressionThreshold=" + valueCompressionThreshold +
+				", isDualWriteEnabled=" + isDualWriteEnabled +
+				", dualWriteClusterName='" + dualWriteClusterName + '\'' +
+				", dualWritePercentage=" + dualWritePercentage +
+				", retryFactory=" + retryFactory +
+				", errorMonitorFactory=" + errorMonitorFactory +
+				'}';
+	}
+
+	// ALL SETTERS
 	public ConnectionPoolConfigurationImpl setMaxConnsPerHost(int maxConnsPerHost) {
 		this.maxConnsPerHost = maxConnsPerHost;
 		return this;

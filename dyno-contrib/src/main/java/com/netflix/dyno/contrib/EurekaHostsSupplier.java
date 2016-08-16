@@ -56,6 +56,10 @@ public class EurekaHostsSupplier implements HostSupplier {
 		this.discoveryClient = dClient;
 	}
 
+	public static EurekaHostsSupplier newInstance(String applicationName, EurekaHostsSupplier hostsSupplier) {
+        return new EurekaHostsSupplier(applicationName, hostsSupplier.getDiscoveryClient());
+    }
+
 	@Override
 	public List<Host> getHosts() {
 		return getUpdateFromEureka();
@@ -119,4 +123,11 @@ public class EurekaHostsSupplier implements HostSupplier {
 		return EurekaHostsSupplier.class.getName();
 	}
 
+    public String getApplicationName() {
+        return applicationName;
+    }
+
+    public DiscoveryClient getDiscoveryClient() {
+        return discoveryClient;
+    }
 }

@@ -189,7 +189,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     public TopologyView getTopologyView() {
-        return (TopologyView) this.getConnPool();
+        return this.getConnPool();
     }
 
     @Override
@@ -3288,6 +3288,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             if (cpConfig == null) {
                 cpConfig = new ArchaiusConnectionPoolConfiguration(appName);
+                Logger.info("Dyno Client runtime properties: " + cpConfig.toString());
             }
 
             if (cpConfig.isDualWriteEnabled()) {
@@ -3301,6 +3302,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             DynoJedisClient targetClient = buildDynoJedisClient();
 
             ConnectionPoolConfigurationImpl shadowConfig = new ConnectionPoolConfigurationImpl(cpConfig);
+            Logger.info("Dyno Client Shadow Config runtime properties: " + shadowConfig.toString());
 
             // Ensure that if the shadow cluster is down it will not block client application startup
             shadowConfig.setFailOnStartupIfNoHosts(false);
@@ -3308,14 +3310,18 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
            
 
             HostSupplier shadowSupplier = null;
-            if (discoveryClient != null) {
-                if (dualWriteClusterName == null) {
-                    dualWriteClusterName = shadowConfig.getDualWriteClusterName();
+            if (dualWriteHostSupplier == null) {
+                if (hostSupplier != null && hostSupplier instanceof EurekaHostsSupplier) {
+                    EurekaHostsSupplier eurekaSupplier = (EurekaHostsSupplier) hostSupplier;
+                    shadowSupplier = EurekaHostsSupplier.newInstance(shadowConfig.getDualWriteClusterName(), eurekaSupplier);
+                } else if (discoveryClient != null) {
+                    shadowSupplier = new EurekaHostsSupplier(shadowConfig.getDualWriteClusterName(), discoveryClient);
+                } else {
+                    throw new DynoConnectException("HostSupplier for DualWrite cluster is REQUIRED if you are not " +
+                        "using EurekaHostsSupplier implementation or using a DiscoveryClient");
                 }
-                shadowSupplier = new EurekaHostsSupplier(dualWriteClusterName, discoveryClient);
-            } else if (dualWriteHostSupplier == null) {
-                throw new DynoConnectException("HostSupplier not provided for either target cluster or shadow cluster."+
-                        " Cannot initialize EurekaHostsSupplier since it requires a DiscoveryClient");
+            } else {
+                shadowSupplier = dualWriteHostSupplier;
             }
 
             shadowConfig.withHostSupplier(shadowSupplier);
