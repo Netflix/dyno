@@ -249,7 +249,6 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 				", tokenSupplier=" + tokenSupplier +
 				", hostConnectionPoolFactory=" + hostConnectionPoolFactory +
 				", name='" + name + '\'' +
-				", port=" + port +
 				", maxConnsPerHost=" + maxConnsPerHost +
 				", maxTimeoutWhenExhausted=" + maxTimeoutWhenExhausted +
 				", maxFailoverCount=" + maxFailoverCount +
