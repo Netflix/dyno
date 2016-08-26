@@ -16,7 +16,6 @@
 package com.netflix.dyno.connectionpool.impl.lb;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -56,8 +55,9 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 
 	private static final Logger Logger = LoggerFactory.getLogger(AbstractTokenMapSupplier.class);
-	
+
 	private final String localZone;
+	private final String localDatacenter;
 	protected final int port;
 
     public AbstractTokenMapSupplier() {
@@ -66,6 +66,7 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 
 	public AbstractTokenMapSupplier(int port) {
 		localZone = ConfigUtils.getLocalZone();
+		localDatacenter = ConfigUtils.getDataCenter();
 		this.port = port;
 	}
 
@@ -121,9 +122,20 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 	
 	private boolean isLocalZoneHost(Host host) {
 		if (localZone == null || localZone.isEmpty()) {
+			Logger.warn("Local rack was not defined");
 			return true; // consider everything
 		}
 		return localZone.equalsIgnoreCase(host.getRack());
+	}
+	
+	private boolean isLocalDatacenterHost(Host host) {
+		
+		if (localDatacenter == null || localDatacenter.isEmpty()) {
+			Logger.warn("Local Datacenter was not defined");
+			return true;
+		}
+
+		return localDatacenter.equalsIgnoreCase(host.getDatacenter());
 	}
 
     // package-private for Test
@@ -148,9 +160,13 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 				String hostname = (String)jItem.get("hostname");
 				String zone = (String)jItem.get("zone");
 				
-				Host host = new Host(hostname, port, Status.Up).setRack(zone);
-				HostToken hostToken = new HostToken(token, host);
-				hostTokens.add(hostToken);
+				Host host = new Host(hostname, port, Status.Up);
+				host.setRack(zone);
+				
+				if(isLocalDatacenterHost(host)){				
+					HostToken hostToken = new HostToken(token, host);
+					hostTokens.add(hostToken);
+				}
 			}
 			
 		} catch (ParseException e) {

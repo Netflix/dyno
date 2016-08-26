@@ -31,6 +31,7 @@ public class Host {
 	private InetSocketAddress socketAddress = null;
 	
 	private String rack; 
+	private String datacenter;
 	
 	public static enum Status {
 		Up, Down;
@@ -97,7 +98,20 @@ public class Host {
 	
 	public Host setRack(String rack) {
 		this.rack = rack;
+        setDatacenter(rack);
 		return this;
+	}
+	
+	public String getDatacenter() {
+		return datacenter;
+	}
+	
+	/** 
+	 * Datacenter format us-east-x, us-west-x etc.
+	 * 
+	 */
+	private void setDatacenter(String rack) {
+		this.datacenter = rack.substring(0, rack.length() - 1);
 	}
 	
 	public Host setStatus(Status condition) {
@@ -142,6 +156,6 @@ public class Host {
 
 	@Override
 	public String toString() {
-		return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack + ", status: " + status.name() + "]";
+		return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack + ", datacenter: " + datacenter + ", status: " + status.name() + "]";
 	}
 }
