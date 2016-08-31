@@ -74,6 +74,11 @@ public class Host {
 		return hostname;
 	}
 	
+	public String getHostName() {
+	    return hostname;
+	}
+
+	
 	public String getIpAddress() {
 		return ipAddress;
 	}
