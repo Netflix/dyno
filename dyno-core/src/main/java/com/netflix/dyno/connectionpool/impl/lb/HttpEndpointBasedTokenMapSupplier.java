@@ -15,15 +15,12 @@
  */
 package com.netflix.dyno.connectionpool.impl.lb;
 
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.Set;
-
-import com.netflix.dyno.connectionpool.exception.DynoConnectException;
+import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.TimeoutException;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
+import com.netflix.dyno.connectionpool.impl.utils.IOUtilities;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.conn.ConnectTimeoutException;
@@ -33,18 +30,20 @@ import org.apache.http.params.HttpConnectionParams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
-import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
-import com.netflix.dyno.connectionpool.impl.utils.IOUtilities;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import java.util.Set;
 
 public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier {
 
 	private static final Logger Logger = LoggerFactory.getLogger(HttpEndpointBasedTokenMapSupplier.class);
 	
-	private static final String DefaultServerUrl = "http://{hostname}:8080/REST/v1/admin/cluster_describe";
+	private static final String DefaultServerUrl = "http://{hostname}:{port}/REST/v1/admin/cluster_describe";
 	private final String serverUrl;
 	private static final Integer NumRetries = 2;
+	private static final Integer defaultPort = 8080;
 
 	public HttpEndpointBasedTokenMapSupplier(int port) {
 		this(DefaultServerUrl, port);
@@ -52,6 +51,11 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 
 	public HttpEndpointBasedTokenMapSupplier(String url, int port) {
         super(port);
+
+		/**
+		 * If no port is passed means -1 then we will substitute to defaultPort else the passed one.
+		 */
+		url = url.replace("{port}", (port > -1) ? Integer.toString(port) : Integer.toString(defaultPort));
 		serverUrl = url;
 	}
 
