@@ -43,8 +43,8 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 
     private static final String DefaultServerUrl = "http://{hostname}:8080/REST/v1/admin/cluster_describe";
     private final String serverUrl;
-    private static final Integer NumRetriesSameNode = 2;
-    private static final Integer NumRetriesAcrossNodes = 2;
+    private static final Integer NUM_RETRIES_PER_NODE = 2;
+    private static final Integer NUM_RETRIER_ACROSS_NODES = 2;
 
     public HttpEndpointBasedTokenMapSupplier(int port) {
 	this(DefaultServerUrl, port);
@@ -60,7 +60,7 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
      */
     @Override
     public String getTopologyJsonPayload(Set<Host> activeHosts) {
-	int count = NumRetriesAcrossNodes;
+	int count = NUM_RETRIER_ACROSS_NODES;
 	String response;
 	Exception lastEx = null;
 
@@ -110,7 +110,7 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 	client.getParams().setParameter(HttpConnectionParams.CONNECTION_TIMEOUT, 2000);
 	client.getParams().setParameter(HttpConnectionParams.SO_TIMEOUT, 5000);
 
-	DefaultHttpRequestRetryHandler retryhandler = new DefaultHttpRequestRetryHandler(NumRetriesAcrossNodes, true);
+	DefaultHttpRequestRetryHandler retryhandler = new DefaultHttpRequestRetryHandler(NUM_RETRIER_ACROSS_NODES, true);
 	client.setHttpRequestRetryHandler(retryhandler);
 
 	HttpGet get = new HttpGet(url);
@@ -163,7 +163,7 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
      * @return the topology from cluster_describe
      */
     private String getTopologyWithNodeRetry(Set<Host> activeHosts) {
-	int count = NumRetriesSameNode;
+	int count = NUM_RETRIES_PER_NODE;
 	String nodeResponse;
 	Exception lastEx;
 	final String randomHost = getRandomHost(activeHosts);
