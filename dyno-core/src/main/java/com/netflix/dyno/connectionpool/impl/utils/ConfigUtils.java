@@ -16,37 +16,56 @@
 package com.netflix.dyno.connectionpool.impl.utils;
 
 /**
- * Simple helper class that provides convenience methods for configuration related tasks.
+ * Simple helper class that provides convenience methods for configuration
+ * related tasks.
  *
  * @author jcacciatore
+ * @author ipapapanagiotou
  */
 public class ConfigUtils {
 
     public static String getLocalZone() {
-        String az = System.getenv("EC2_AVAILABILITY_ZONE");
+	String az = System.getenv("EC2_AVAILABILITY_ZONE");
 
-        if (az == null) {
-            az = System.getProperty("EC2_AVAILABILITY_ZONE");
-        }
+	if (az == null) {
+	    az = System.getProperty("EC2_AVAILABILITY_ZONE");
+	}
 
-        return az;
+	return az;
     }
 
+    /**
+     * 
+     * @return the datacenter that the client is in
+     */
     public static String getDataCenter() {
-        String dc = System.getenv("EC2_REGION");
+	// first try with getEnv
+	String dc = System.getenv("EC2_REGION");
 
-        if (dc == null) {
-            dc = System.getProperty("EC2_REGION");
-        }
+	if (dc == null) {
+	    // then try with getProperty
+	    dc = System.getProperty("EC2_REGION");
+	}
 
-        if (dc == null) {
-            String rack = getLocalZone();
-            if (rack != null) {
-                dc = rack.substring(0, rack.length() - 1);
-            }
-        }
+	if (dc == null) {
+	    return getDataCenter(getLocalZone());
+	} else {
+	    return dc;
+	}
 
-        return dc;
+    }
+
+    /**
+     * 
+     * Datacenter format us-east-x, us-west-x etc.
+     * @param rack
+     * @return the datacenter based on the provided rack
+     */
+    public static String getDataCenter(String rack) {
+	if (rack != null) {
+	    return rack.substring(0, rack.length() - 1);
+	}
+	return null;
     }
 
 }

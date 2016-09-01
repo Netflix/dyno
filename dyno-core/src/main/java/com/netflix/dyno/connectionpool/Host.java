@@ -17,150 +17,153 @@ package com.netflix.dyno.connectionpool;
 
 import java.net.InetSocketAddress;
 
+import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
+
 /**
  * Class encapsulating information about a host.
+ * 
  * @author poberai
+ * @author ipapapanagiotou
  *
  */
 public class Host {
 
-	private final String hostname;
-	private final String ipAddress;
-	private int port;
-	private Status status = Status.Down;
-	private InetSocketAddress socketAddress = null;
-	
-	private String rack; 
-	private String datacenter;
-	
-	public static enum Status {
-		Up, Down;
-	}
-	
-	public Host(String hostname, int port) {
-		this(hostname, null, port, Status.Down);
-	}
-	
-	public Host(String hostname, Status status) {
-		this(hostname, null, -1, status);
-	}
-	
-	public Host(String hostname, int port, Status status) {
-		this(hostname, null, port, status);
-	}
-	
-	public Host(String hostname, String ipAddress, int port) {
-		this(hostname, ipAddress, port, Status.Down);
-	}
-	
-	public Host(String hostname, String ipAddress, Status status) {
-		this(hostname, ipAddress, -1, status);
-	}
+    private final String hostname;
+    private final String ipAddress;
+    private int port;
+    private Status status = Status.Down;
+    private InetSocketAddress socketAddress = null;
 
-	public Host(String name, String ipAddress, int port, Status status) {
-		this.hostname = name;
-		this.ipAddress = ipAddress;
-		this.port = port;
-		this.status = status;
-		if (port != -1) {
-			this.socketAddress = new InetSocketAddress(name, port);
-		}
-	}
+    private String rack;
+    private String datacenter;
 
-	public String getHostAddress() {
-		if (this.ipAddress != null) {
-			return ipAddress;
-		}
-		return hostname;
-	}
-	
-	public String getHostName() {
-	    return hostname;
-	}
+    public static enum Status {
+	Up, Down;
+    }
 
-	
-	public String getIpAddress() {
-		return ipAddress;
-	}
-	
-	public int getPort() {
-		return port;
-	}
-	
-	public Host setPort(int p) {
-		this.port = p;
-		this.socketAddress = new InetSocketAddress(hostname, port);
-		return this;
-	}
+    public Host(String hostname, int port) {
+	this(hostname, null, port, Status.Down);
+    }
 
-	public Status getStatus() {
-		return status;
-	}
+    public Host(String hostname, Status status) {
+	this(hostname, null, -1, status);
+    }
 
-	public String getRack() {
-		return rack;
-	}
-	
-	public Host setRack(String rack) {
-		this.rack = rack;
-        setDatacenter(rack);
-		return this;
-	}
-	
-	public String getDatacenter() {
-		return datacenter;
-	}
-	
-	/** 
-	 * Datacenter format us-east-x, us-west-x etc.
-	 * 
-	 */
-	private void setDatacenter(String rack) {
-		this.datacenter = rack.substring(0, rack.length() - 1);
-	}
-	
-	public Host setStatus(Status condition) {
-		status = condition;
-		return this;
-	}
-	
-	public boolean isUp() {
-		return status == Status.Up;
-	}
-	
-	public InetSocketAddress getSocketAddress() {
-		return socketAddress;
-	}
-	
-	public static final Host NO_HOST = new Host("UNKNOWN", "UNKNOWN", 0);
+    public Host(String hostname, int port, Status status) {
+	this(hostname, null, port, status);
+    }
 
-	@Override
-	public int hashCode() {
-		final int prime = 31;
-		int result = 1;
-		result = prime * result + ((hostname == null) ? 0 : hostname.hashCode());
-		result = prime * result + ((rack == null) ? 0 : rack.hashCode());
-		return result;
-	}
+    public Host(String hostname, String ipAddress, int port) {
+	this(hostname, ipAddress, port, Status.Down);
+    }
 
-	@Override
-	public boolean equals(Object obj) {
-		if (this == obj) return true;
-		if (obj == null) return false;
-		
-		if (getClass() != obj.getClass()) return false;
-		
-		Host other = (Host) obj;
-		boolean equals = true;
-		
-		equals &= (hostname != null) ? hostname.equals(other.hostname) : other.hostname == null;
-		equals &= (rack != null) ? rack.equals(other.rack) : other.rack == null;
-		
-		return equals;
-	}
+    public Host(String hostname, String ipAddress, Status status) {
+	this(hostname, ipAddress, -1, status);
+    }
 
-	@Override
-	public String toString() {
-		return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack + ", datacenter: " + datacenter + ", status: " + status.name() + "]";
+    public Host(String name, String ipAddress, int port, Status status) {
+	this.hostname = name;
+	this.ipAddress = ipAddress;
+	this.port = port;
+	this.status = status;
+	if (port != -1) {
+	    this.socketAddress = new InetSocketAddress(name, port);
 	}
+    }
+
+    public String getHostAddress() {
+	if (this.ipAddress != null) {
+	    return ipAddress;
+	}
+	return hostname;
+    }
+
+    public String getHostName() {
+	return hostname;
+    }
+
+    public String getIpAddress() {
+	return ipAddress;
+    }
+
+    public int getPort() {
+	return port;
+    }
+
+    public Host setPort(int p) {
+	this.port = p;
+	this.socketAddress = new InetSocketAddress(hostname, port);
+	return this;
+    }
+
+    public Status getStatus() {
+	return status;
+    }
+
+    public String getRack() {
+	return rack;
+    }
+
+    public Host setRack(String rack) {
+	this.rack = rack;
+	setDatacenter(rack);
+	return this;
+    }
+
+    public String getDatacenter() {
+	return datacenter;
+    }
+
+    private void setDatacenter(String rack) {
+	this.datacenter = ConfigUtils.getDataCenter(rack);
+    }
+
+    public Host setStatus(Status condition) {
+	status = condition;
+	return this;
+    }
+
+    public boolean isUp() {
+	return status == Status.Up;
+    }
+
+    public InetSocketAddress getSocketAddress() {
+	return socketAddress;
+    }
+
+    public static final Host NO_HOST = new Host("UNKNOWN", "UNKNOWN", 0);
+
+    @Override
+    public int hashCode() {
+	final int prime = 31;
+	int result = 1;
+	result = prime * result + ((hostname == null) ? 0 : hostname.hashCode());
+	result = prime * result + ((rack == null) ? 0 : rack.hashCode());
+	return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+	if (this == obj)
+	    return true;
+	if (obj == null)
+	    return false;
+
+	if (getClass() != obj.getClass())
+	    return false;
+
+	Host other = (Host) obj;
+	boolean equals = true;
+
+	equals &= (hostname != null) ? hostname.equals(other.hostname) : other.hostname == null;
+	equals &= (rack != null) ? rack.equals(other.rack) : other.rack == null;
+
+	return equals;
+    }
+
+    @Override
+    public String toString() {
+	return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack
+		+ ", datacenter: " + datacenter + ", status: " + status.name() + "]";
+    }
 }
