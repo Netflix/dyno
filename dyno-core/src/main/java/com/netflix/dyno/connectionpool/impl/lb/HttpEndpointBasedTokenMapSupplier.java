@@ -15,14 +15,12 @@
  */
 package com.netflix.dyno.connectionpool.impl.lb;
 
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.Set;
-
+import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.TimeoutException;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
+import com.netflix.dyno.connectionpool.impl.utils.IOUtilities;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.conn.ConnectTimeoutException;
@@ -32,10 +30,11 @@ import org.apache.http.params.HttpConnectionParams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
-import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
-import com.netflix.dyno.connectionpool.impl.utils.IOUtilities;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Random;
+import java.util.Set;
 
 public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier {
 
@@ -45,6 +44,7 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
     private final String serverUrl;
     private static final Integer NUM_RETRIES_PER_NODE = 2;
     private static final Integer NUM_RETRIER_ACROSS_NODES = 2;
+    private static final Integer defaultPort = 8080;
 
     public HttpEndpointBasedTokenMapSupplier(int port) {
 	this(DefaultServerUrl, port);
@@ -52,7 +52,22 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 
     public HttpEndpointBasedTokenMapSupplier(String url, int port) {
 	super(port);
+
+	/**
+	 * If no port is passed means -1 then we will substitute to defaultPort
+	 * else the passed one.
+	 */
+	url = url.replace("{port}", (port > -1) ? Integer.toString(port) : Integer.toString(defaultPort));
 	serverUrl = url;
+    }
+
+    @Override
+    public String getTopologyJsonPayload(String hostname) {
+	try {
+	    return getResponseViaHttp(hostname);
+	} catch (Exception e) {
+	    throw new RuntimeException(e);
+	}
     }
 
     /**
@@ -88,15 +103,6 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 
     }
 
-    @Override
-    public String getTopologyJsonPayload(String hostname) {
-	try {
-	    return getResponseViaHttp(hostname);
-	} catch (Exception e) {
-	    throw new RuntimeException(e);
-	}
-    }
-
     private String getResponseViaHttp(String hostname) throws Exception {
 
 	String url = serverUrl;
@@ -110,7 +116,8 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 	client.getParams().setParameter(HttpConnectionParams.CONNECTION_TIMEOUT, 2000);
 	client.getParams().setParameter(HttpConnectionParams.SO_TIMEOUT, 5000);
 
-	DefaultHttpRequestRetryHandler retryhandler = new DefaultHttpRequestRetryHandler(NUM_RETRIER_ACROSS_NODES, true);
+	DefaultHttpRequestRetryHandler retryhandler = new DefaultHttpRequestRetryHandler(NUM_RETRIER_ACROSS_NODES,
+		true);
 	client.setHttpRequestRetryHandler(retryhandler);
 
 	HttpGet get = new HttpGet(url);
@@ -195,4 +202,5 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 	}
 
     }
+
 }
