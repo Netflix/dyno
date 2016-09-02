@@ -15,28 +15,29 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 
 /**
- * Interface for supplying the list of {@link HostToken} that represent the dynomite server topology
+ * Interface for supplying the list of {@link HostToken} that represent the
+ * dynomite server topology
+ * 
  * @author poberai
  *
  */
 public interface TokenMapSupplier {
 
-	/**
-	 * @return List<HostToken>
-	 */
-	public List<HostToken> getTokens(Set<Host> activeHosts);
-	
-	/**
-	 * 
-	 * @param host
-	 * @return
-	 */
-	public HostToken getTokenForHost(final Host host, final Set<Host> activeHosts);
+    /**
+     * @return List<HostToken>
+     */
+    public List<HostToken> getTokens(Set<Host> activeHosts);
+
+    /**
+     * 
+     * @param host
+     * @return
+     */
+    public HostToken getTokenForHost(final Host host, final Set<Host> activeHosts);
 }
