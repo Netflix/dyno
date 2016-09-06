@@ -40,7 +40,7 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 
     private static final Logger Logger = LoggerFactory.getLogger(HttpEndpointBasedTokenMapSupplier.class);
 
-    private static final String DefaultServerUrl = "http://{hostname}:8080/REST/v1/admin/cluster_describe";
+    private static final String DefaultServerUrl = "http://{hostname}:{port}/REST/v1/admin/cluster_describe";
     private final String serverUrl;
     private static final Integer NUM_RETRIES_PER_NODE = 2;
     private static final Integer NUM_RETRIER_ACROSS_NODES = 2;
