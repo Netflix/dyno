@@ -18,3 +18,34 @@
 + Insight into connection pool metrics
 + Highly configurable and pluggable connection pool components for implementing your advanced features.
  
+## Build
+
+Dyno comes with a Gradle wrapper.
+
+```bash
+git clone https://github.com/Netflix/dyno.git
+
+cd dyno
+
+./gradlew clean build
+```
+
+The `gradlew` script will download all dependencies automatically and then build Dyno.
+
+## Contributing
+
+Thank you for your interest in contributing to the Dyno project. Please see the [Contributing](./CONTRIBUTING.md) file for instructions on how to submit a pull request.
+
+> Tip: It is always a good idea to submit an issue to discuss a proposed feature before writing code.
+
+## Help
+
+Need some help with either getting up and going or some problems with the code?
+
+- [Submit an issue](./issues)
+- Chat with us on [![Dev chat at https://gitter.im/Netflix/dynomite](https://badges.gitter.im/Netflix/dynomite.svg)](https://gitter.im/Netflix/dynomite?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
+
+## License
+
+Licensed under the [Apache License, Version 2.0](./LICENSE)
