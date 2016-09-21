@@ -3282,8 +3282,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         private DynoDualWriterClient buildDynoDualWriterClient() {
-            DynoJedisClient targetClient = buildDynoJedisClient();
-
             ConnectionPoolConfigurationImpl shadowConfig = new ConnectionPoolConfigurationImpl(cpConfig);
             Logger.info("Dyno Client Shadow Config runtime properties: " + shadowConfig.toString());
 
@@ -3319,23 +3317,37 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             JedisConnectionFactory connFactory = new JedisConnectionFactory(shadowOPMonitor);
 
-            final ConnectionPoolImpl<Jedis> pool =
+            final ConnectionPoolImpl<Jedis> shadowPool =
                     startConnectionPool(shadowAppName, connFactory, shadowConfig, shadowCPMonitor);
+
+            // Construct a connection pool with the shadow cluster settings
+            DynoJedisClient shadowClient = new DynoJedisClient(shadowAppName, dualWriteClusterName, shadowPool, shadowOPMonitor);
+
+            // Construct an instance of our DualWriter client
+            DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
+            final ConnectionPoolImpl<Jedis> pool = createConnectionPool(appName, opMonitor);
 
             if (dualWriteDial != null) {
                 if (shadowConfig.getDualWritePercentage() > 0) {
                     dualWriteDial.setRange(shadowConfig.getDualWritePercentage());
                 }
-                return new DynoDualWriterClient(shadowAppName, dualWriteClusterName, pool, shadowOPMonitor,
-                        targetClient, dualWriteDial);
+
+                return new DynoDualWriterClient(appName, clusterName, pool, opMonitor, shadowClient, dualWriteDial);
             } else {
-                return new DynoDualWriterClient(shadowAppName, dualWriteClusterName, pool, shadowOPMonitor,
-                        targetClient);
+                return new DynoDualWriterClient(appName, clusterName, pool, opMonitor, shadowClient);
             }
         }
 
 
         private DynoJedisClient buildDynoJedisClient() {
+            DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
+
+            final ConnectionPoolImpl<Jedis> pool = createConnectionPool(appName, opMonitor);
+
+            return new DynoJedisClient(appName, clusterName, pool, opMonitor);
+        }
+
+        private ConnectionPoolImpl<Jedis> createConnectionPool(String appName, DynoOPMonitor opMonitor) {
             if (port != -1) {
                 cpConfig.setPort(port);
             }
@@ -3353,15 +3365,22 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             setLoadBalancingStrategy(cpConfig);
 
+<<<<<<< HEAD
             ConnectionPoolMonitor cpMonitor = (this.cpMonitor == null) ? new DynoCPMonitor(appName) : this.cpMonitor;
 
             DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
+=======
+            DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);
+>>>>>>> Netflix/master
+
 
             JedisConnectionFactory connFactory = new JedisConnectionFactory(opMonitor);
 
-            final ConnectionPoolImpl<Jedis> pool = startConnectionPool(appName, connFactory, cpConfig, cpMonitor);
-
+<<<<<<< HEAD
             return new DynoJedisClient(appName, clusterName, pool, opMonitor, cpMonitor);
+=======
+            return startConnectionPool(appName, connFactory, cpConfig, cpMonitor);
+>>>>>>> Netflix/master
         }
 
         private ConnectionPoolImpl<Jedis> startConnectionPool(String appName, JedisConnectionFactory connFactory,

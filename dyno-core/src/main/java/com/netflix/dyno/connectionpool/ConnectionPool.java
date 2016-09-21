@@ -17,11 +17,9 @@ package com.netflix.dyno.connectionpool;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Future;
 
 import com.netflix.dyno.connectionpool.exception.DynoException;
-import com.netflix.dyno.connectionpool.impl.lb.HostSelectionWithFallback;
 
 /**
  * Base interface for a pool of connections. A concrete connection pool will
