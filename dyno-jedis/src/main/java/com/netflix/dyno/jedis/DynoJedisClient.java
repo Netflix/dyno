@@ -3365,22 +3365,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             setLoadBalancingStrategy(cpConfig);
 
-<<<<<<< HEAD
             ConnectionPoolMonitor cpMonitor = (this.cpMonitor == null) ? new DynoCPMonitor(appName) : this.cpMonitor;
-
-            DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
-=======
-            DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);
->>>>>>> Netflix/master
-
 
             JedisConnectionFactory connFactory = new JedisConnectionFactory(opMonitor);
 
-<<<<<<< HEAD
-            return new DynoJedisClient(appName, clusterName, pool, opMonitor, cpMonitor);
-=======
             return startConnectionPool(appName, connFactory, cpConfig, cpMonitor);
->>>>>>> Netflix/master
         }
 
         private ConnectionPoolImpl<Jedis> startConnectionPool(String appName, JedisConnectionFactory connFactory,
