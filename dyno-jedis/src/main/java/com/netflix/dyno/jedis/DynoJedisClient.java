@@ -3325,16 +3325,18 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             // Construct an instance of our DualWriter client
             DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
-            final ConnectionPoolImpl<Jedis> pool = createConnectionPool(appName, opMonitor, null);
+            ConnectionPoolMonitor cpMonitor = (this.cpMonitor == null) ? new DynoCPMonitor(appName) : this.cpMonitor;
+
+            final ConnectionPoolImpl<Jedis> pool = createConnectionPool(appName, opMonitor, cpMonitor);
 
             if (dualWriteDial != null) {
                 if (shadowConfig.getDualWritePercentage() > 0) {
                     dualWriteDial.setRange(shadowConfig.getDualWritePercentage());
                 }
 
-                return new DynoDualWriterClient(appName, clusterName, pool, opMonitor, shadowClient, dualWriteDial);
+                return new DynoDualWriterClient(appName, clusterName, pool, opMonitor, cpMonitor, shadowClient, dualWriteDial);
             } else {
-                return new DynoDualWriterClient(appName, clusterName, pool, opMonitor, shadowClient);
+                return new DynoDualWriterClient(appName, clusterName, pool, opMonitor, cpMonitor, shadowClient);
             }
         }
 
