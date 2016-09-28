@@ -32,6 +32,13 @@ subprojects {
         compile "com.sun.jersey:jersey-core:1.11"
         testCompile "junit:junit:4.11"
     }
+
+    project.tasks.withType(Javadoc) {
+        if (JavaVersion.current().isJava8Compatible()) {
+            options.addStringOption('Xdoclint:none', '-quiet')
+        }
+    }
+
 }
 
 project(':dyno-core') {
