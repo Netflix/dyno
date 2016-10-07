@@ -32,6 +32,7 @@ subprojects {
         compileApi "org.apache.httpcomponents:httpclient:4.2.1"
         compileApi "com.sun.jersey:jersey-core:1.11"
         testCompile "junit:junit:4.11"
+        testCompile "org.mockito:mockito-all:1.9.5"
     }
 
     project.tasks.withType(Javadoc) {
@@ -41,7 +42,6 @@ subprojects {
     }
 
 }
-
 project(':dyno-core') {
     apply plugin: 'osgi'
     apply plugin: 'project-report'
@@ -49,8 +49,6 @@ project(':dyno-core') {
     dependencies {
         compileApi "org.apache.commons:commons-math:2.2"
         compileApi "commons-io:commons-io:2.4"
-        compileApi "org.mockito:mockito-all:1.9.5"
-        testCompile "junit:junit:4.11"
     }
 }
 
