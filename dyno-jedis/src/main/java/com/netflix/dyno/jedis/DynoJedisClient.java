@@ -1644,6 +1644,23 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
+	public Long zadd(String key, double score, String member, ZAddParams params) {
+		return d_zadd(key, score, member, params).getResult();
+	}
+    
+    public OperationResult<Long> d_zadd(final String key, final double score, final String member, final ZAddParams params) {
+    	
+    	return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZADD) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+            	return client.zadd(key, score, member, params);
+            }
+
+        });
+    }
+    
+    @Override
     public Long zcard(final String key) {
         return d_zcard(key).getResult();
     }
@@ -3650,11 +3667,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
 	@Override
 	public Long zadd(String arg0, Map<String, Double> arg1, ZAddParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-	}
-
-	@Override
-	public Long zadd(String arg0, double arg1, String arg2, ZAddParams arg3) {
         throw new UnsupportedOperationException("not yet implemented");
 	}
 
