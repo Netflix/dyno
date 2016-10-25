@@ -67,19 +67,28 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 
     private static final Logger Logger = LoggerFactory.getLogger(AbstractTokenMapSupplier.class);
-
     private final String localZone;
     private final String localDatacenter;
-    protected final int port;
+    private int unsuppliedPort = -1;
 
-    public AbstractTokenMapSupplier() {
-	this(8080);
+    public AbstractTokenMapSupplier(String localRack) {
+        this.localZone = localRack;
+        localDatacenter = ConfigUtils.getDataCenter();
+    }
+    public AbstractTokenMapSupplier(String localRack, int port){
+        this.localZone = localRack;
+        localDatacenter = ConfigUtils.getDataCenter();
+        unsuppliedPort = port;
     }
 
+    public AbstractTokenMapSupplier() {
+        localZone = ConfigUtils.getLocalZone();
+        localDatacenter = ConfigUtils.getDataCenter();
+    }
     public AbstractTokenMapSupplier(int port) {
-	localZone = ConfigUtils.getLocalZone();
-	localDatacenter = ConfigUtils.getDataCenter();
-	this.port = port;
+        localZone = ConfigUtils.getLocalZone();
+        localDatacenter = ConfigUtils.getDataCenter();
+        unsuppliedPort = port;
     }
 
     public abstract String getTopologyJsonPayload(Set<Host> activeHosts);
@@ -174,10 +183,14 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 		Long token = Long.parseLong((String) jItem.get("token"));
 		String hostname = (String) jItem.get("hostname");
 		String zone = (String) jItem.get("zone");
+		String portStr = (String) jItem.get("port");
+                int port = unsuppliedPort;
+                if(portStr != null){
+                    port = Integer.valueOf(portStr);
+                }
 
-		Host host = new Host(hostname, port, Status.Up);
-		host.setRack(zone);
-		
+		Host host = new Host(hostname, port, zone,  Status.Up);
+
 		if (isLocalDatacenterHost(host)) {
 		    HostToken hostToken = new HostToken(token, host);
 		    hostTokens.add(hostToken);

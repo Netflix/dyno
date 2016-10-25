@@ -3220,7 +3220,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         private String appName;
         private String clusterName;
-        private int port = -1;
         private ConnectionPoolConfigurationImpl cpConfig;
         private HostSupplier hostSupplier;
         private DiscoveryClient discoveryClient;
@@ -3252,10 +3251,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
-        public Builder withPort(int suppliedPort) {
-            port = suppliedPort;
-            return this;
-        }
 
         public Builder withDiscoveryClient(DiscoveryClient client) {
             discoveryClient = client;
@@ -3305,9 +3300,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             // Ensure that if the shadow cluster is down it will not block client application startup
             shadowConfig.setFailOnStartupIfNoHosts(false);
 
-            if (port != -1) {
-                shadowConfig.setPort(port);
-            }
+           
 
             HostSupplier shadowSupplier = null;
             if (dualWriteHostSupplier == null) {
@@ -3368,9 +3361,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         private ConnectionPoolImpl<Jedis> createConnectionPool(String appName, DynoOPMonitor opMonitor, ConnectionPoolMonitor cpMonitor) {
-            if (port != -1) {
-                cpConfig.setPort(port);
-            }
 
             if (hostSupplier == null) {
                 if (discoveryClient == null) {
@@ -3426,7 +3416,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             if (ConnectionPoolConfiguration.LoadBalancingStrategy.TokenAware == config.getLoadBalancingStrategy()) {
                 if (config.getTokenSupplier() == null) {
                     Logger.warn("TOKEN AWARE selected and no token supplier found, using default HttpEndpointBasedTokenMapSupplier()");
-                    config.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier(port));
+                    config.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier());
                 }
 
                 if (config.getLocalRack() == null && config.localZoneAffinity()) {

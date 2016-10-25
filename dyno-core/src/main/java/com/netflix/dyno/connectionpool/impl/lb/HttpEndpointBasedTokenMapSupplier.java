@@ -38,14 +38,20 @@ import java.util.Set;
 
 public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier {
 
+
     private static final Logger Logger = LoggerFactory.getLogger(HttpEndpointBasedTokenMapSupplier.class);
 
     private static final String DefaultServerUrl = "http://{hostname}:{port}/REST/v1/admin/cluster_describe";
-    private final String serverUrl;
     private static final Integer NUM_RETRIES_PER_NODE = 2;
     private static final Integer NUM_RETRIER_ACROSS_NODES = 2;
     private static final Integer defaultPort = 8080;
 
+    private final String serverUrl;
+
+    public HttpEndpointBasedTokenMapSupplier() {
+        this(DefaultServerUrl, defaultPort);
+    }
+    
     public HttpEndpointBasedTokenMapSupplier(int port) {
 	this(DefaultServerUrl, port);
     }
