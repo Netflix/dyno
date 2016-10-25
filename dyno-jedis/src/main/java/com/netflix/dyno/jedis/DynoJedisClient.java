@@ -55,11 +55,14 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     protected final DynoOPMonitor opMonitor;
 
-    public DynoJedisClient(String name, String clusterName, ConnectionPool<Jedis> pool, DynoOPMonitor operationMonitor) {
+    protected final ConnectionPoolMonitor cpMonitor;
+
+    public DynoJedisClient(String name, String clusterName, ConnectionPool<Jedis> pool, DynoOPMonitor operationMonitor, ConnectionPoolMonitor cpMonitor) {
         this.appName = name;
         this.clusterName = clusterName;
         this.connPool = pool;
         this.opMonitor = operationMonitor;
+        this.cpMonitor = cpMonitor;
     }
 
     public ConnectionPoolImpl<Jedis> getConnPool() {
@@ -296,7 +299,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_expire(key, seconds).getResult();
     }
     
-    public OperationResult<Long> d_expire(final String key, final Integer seconds) {
+    public OperationResult<Long> d_expire(final String key, final int seconds) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.EXPIRE) {
 
@@ -314,7 +317,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_expireAt(key, unixTime).getResult();
     }
 
-    public OperationResult<Long> d_expireAt(final String key, final Long unixTime) {
+    public OperationResult<Long> d_expireAt(final String key, final long unixTime) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.EXPIREAT) {
 
@@ -499,7 +502,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_hincrBy(key, field, value).getResult();
     }
 
-    public OperationResult<Long> d_hincrBy(final String key, final String field, final Long value) {
+    public OperationResult<Long> d_hincrBy(final String key, final String field, final long value) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HINCRBY) {
 
@@ -972,7 +975,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_ltrim(key, start, end).getResult();
     }
 
-    public OperationResult<String> d_ltrim(final String key, final Long start, final Long end) {
+    public OperationResult<String> d_ltrim(final String key, final long start, final long end) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.LTRIM) {
 
@@ -1001,22 +1004,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         });
     }
 
-    public Long pexpire(final String key, final int milliseconds) {
-        return d_pexpire(key, milliseconds).getResult();
-    }
-
-    public OperationResult<Long> d_pexpire(final String key, final Integer milliseconds) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.PEXPIRE) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.pexpire(key, milliseconds);
-            }
-
-        });
-    }
-
     public Long pexpireAt(final String key, final long millisecondsTimestamp) {
         return d_pexpireAt(key, millisecondsTimestamp).getResult();
     }
@@ -1033,21 +1020,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         });
     }
 
-    public String psetex(final String key, final int milliseconds, final String value) {
-        return d_psetex(key, milliseconds, value).getResult();
-    }
-
-    public OperationResult<String> d_psetex(final String key, final Integer milliseconds, final String value) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.PSETEX) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.psetex(key, milliseconds, value);
-            }
-
-        });
-    }
 
     public Long pttl(final String key) {
         return d_pttl(key).getResult();
@@ -1671,6 +1643,23 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         });
     }
 
+    @Override
+	public Long zadd(String key, double score, String member, ZAddParams params) {
+		return d_zadd(key, score, member, params).getResult();
+	}
+    
+    public OperationResult<Long> d_zadd(final String key, final double score, final String member, final ZAddParams params) {
+    	
+    	return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZADD) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+            	return client.zadd(key, score, member, params);
+            }
+
+        });
+    }
+    
     @Override
     public Long zcard(final String key) {
         return d_zcard(key).getResult();
@@ -3237,6 +3226,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         private String dualWriteClusterName;
         private HostSupplier dualWriteHostSupplier;
         private DynoDualWriterClient.Dial dualWriteDial;
+        private ConnectionPoolMonitor cpMonitor;
 
         public Builder() {
         }
@@ -3282,6 +3272,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
+        public Builder withConnectionPoolMonitor(ConnectionPoolMonitor cpMonitor){
+            this.cpMonitor = cpMonitor;
+            return this;
+        }
+
         public DynoJedisClient build() {
             assert (appName != null);
             assert (clusterName != null);
@@ -3299,8 +3294,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         private DynoDualWriterClient buildDynoDualWriterClient() {
-            DynoJedisClient targetClient = buildDynoJedisClient();
-
             ConnectionPoolConfigurationImpl shadowConfig = new ConnectionPoolConfigurationImpl(cpConfig);
             Logger.info("Dyno Client Shadow Config runtime properties: " + shadowConfig.toString());
 
@@ -3334,23 +3327,40 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             JedisConnectionFactory connFactory = new JedisConnectionFactory(shadowOPMonitor);
 
-            final ConnectionPoolImpl<Jedis> pool =
+            final ConnectionPoolImpl<Jedis> shadowPool =
                     startConnectionPool(shadowAppName, connFactory, shadowConfig, shadowCPMonitor);
+
+            // Construct a connection pool with the shadow cluster settings
+            DynoJedisClient shadowClient = new DynoJedisClient(shadowAppName, dualWriteClusterName, shadowPool, shadowOPMonitor, shadowCPMonitor);
+
+            // Construct an instance of our DualWriter client
+            DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
+            ConnectionPoolMonitor cpMonitor = (this.cpMonitor == null) ? new DynoCPMonitor(appName) : this.cpMonitor;
+
+            final ConnectionPoolImpl<Jedis> pool = createConnectionPool(appName, opMonitor, cpMonitor);
 
             if (dualWriteDial != null) {
                 if (shadowConfig.getDualWritePercentage() > 0) {
                     dualWriteDial.setRange(shadowConfig.getDualWritePercentage());
                 }
-                return new DynoDualWriterClient(shadowAppName, dualWriteClusterName, pool, shadowOPMonitor,
-                        targetClient, dualWriteDial);
+
+                return new DynoDualWriterClient(appName, clusterName, pool, opMonitor, cpMonitor, shadowClient, dualWriteDial);
             } else {
-                return new DynoDualWriterClient(shadowAppName, dualWriteClusterName, pool, shadowOPMonitor,
-                        targetClient);
+                return new DynoDualWriterClient(appName, clusterName, pool, opMonitor, cpMonitor, shadowClient);
             }
         }
 
 
         private DynoJedisClient buildDynoJedisClient() {
+            DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
+            ConnectionPoolMonitor cpMonitor = (this.cpMonitor == null) ? new DynoCPMonitor(appName) : this.cpMonitor;
+
+            final ConnectionPoolImpl<Jedis> pool = createConnectionPool(appName, opMonitor, cpMonitor);
+
+            return new DynoJedisClient(appName, clusterName, pool, opMonitor, cpMonitor);
+        }
+
+        private ConnectionPoolImpl<Jedis> createConnectionPool(String appName, DynoOPMonitor opMonitor, ConnectionPoolMonitor cpMonitor) {
 
             if (hostSupplier == null) {
                 if (discoveryClient == null) {
@@ -3365,19 +3375,14 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             setLoadBalancingStrategy(cpConfig);
 
-            DynoCPMonitor cpMonitor = new DynoCPMonitor(appName);
-            DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
-
             JedisConnectionFactory connFactory = new JedisConnectionFactory(opMonitor);
 
-            final ConnectionPoolImpl<Jedis> pool = startConnectionPool(appName, connFactory, cpConfig, cpMonitor);
-
-            return new DynoJedisClient(appName, clusterName, pool, opMonitor);
+            return startConnectionPool(appName, connFactory, cpConfig, cpMonitor);
         }
 
         private ConnectionPoolImpl<Jedis> startConnectionPool(String appName, JedisConnectionFactory connFactory,
                                                               ConnectionPoolConfigurationImpl cpConfig,
-                                                              DynoCPMonitor cpMonitor) {
+                                                              ConnectionPoolMonitor cpMonitor) {
 
             final ConnectionPoolImpl<Jedis> pool = new ConnectionPoolImpl<Jedis>(connFactory, cpConfig, cpMonitor);
 
@@ -3449,7 +3454,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         public DynoJedisClient build() {
-            return new DynoJedisClient(appName, "TestCluster", cp, null);
+            return new DynoJedisClient(appName, "TestCluster", cp, null, null);
         }
 
     }
@@ -3652,11 +3657,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
 	@Override
 	public Long zadd(String arg0, Map<String, Double> arg1, ZAddParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-	}
-
-	@Override
-	public Long zadd(String arg0, double arg1, String arg2, ZAddParams arg3) {
         throw new UnsupportedOperationException("not yet implemented");
 	}
 

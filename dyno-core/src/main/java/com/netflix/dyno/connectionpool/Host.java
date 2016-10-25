@@ -17,21 +17,28 @@ package com.netflix.dyno.connectionpool;
 
 import java.net.InetSocketAddress;
 
+import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
+
 /**
  * Class encapsulating information about a host.
+ *
  * This is immutable except for the host status
+ *
  * @author poberai
+ * @author ipapapanagiotou
  *
  */
+
 public class Host implements Comparable<Host> {
-    public static final int DEFAULT_PORT = 8102; 
-    public static final Host NO_HOST = new Host("UNKNOWN", "UNKNOWN", 0, "UNKNOWN");
+        public static final int DEFAULT_PORT = 8102; 
+        public static final Host NO_HOST = new Host("UNKNOWN", "UNKNOWN", 0, "UNKNOWN");
     
 	private final String hostname;
 	private final String ipAddress;
 	private final int port;
 	private final InetSocketAddress socketAddress;
-    private final String rack; 
+        private final String rack; 
+        private final String datacenter;
 	private Status status = Status.Down;
 
 	
@@ -42,38 +49,41 @@ public class Host implements Comparable<Host> {
 	}
 	
 	public Host(String hostname, int port, String rack) {
-		this(hostname, null, port, rack, Status.Down);
+		this(hostname, null, port, rack, rack, Status.Down);
 	}
 	
 	public Host(String hostname, String rack, Status status) {
-		this(hostname, null, DEFAULT_PORT, rack, status);
+		this(hostname, null, DEFAULT_PORT, rack, rack, status);
 	}
 	
 	public Host(String hostname, int port, String rack, Status status) {
-		this(hostname, null, port, rack, status);
+		this(hostname, null, port, rack, rack, status);
 	}
 	
 	public Host(String hostname, String ipAddress, int port, String rack) {
-		this(hostname, ipAddress, port, rack, Status.Down);
+		this(hostname, ipAddress, port, rack, rack, Status.Down);
 	}
 	
 	public Host(String hostname, String ipAddress, String rack, Status status) {
-		this(hostname, ipAddress, DEFAULT_PORT, rack, status);
+		this(hostname, ipAddress, DEFAULT_PORT, rack, rack, status);
 	}
 
-	public Host(String name, String ipAddress, int port, String rack, Status status) {
+	public Host(String name, String ipAddress, int port, String rack, String datacenter,  Status status) {
 		this.hostname = name;
 		this.ipAddress = ipAddress;
 		this.port = port;
 		this.rack = rack;
 		this.status = status;
+		
+		this.datacenter = ConfigUtils.getDataCenter(datacenter);
+		
 		// Used for the unit tests to prevent host name resolution
 		if(port != -1) {
 		    this.socketAddress = new InetSocketAddress(name, port);
 		} else { 
 		    this.socketAddress = null;
 		}
-
+		
 
 	}
 
@@ -84,6 +94,10 @@ public class Host implements Comparable<Host> {
 		return hostname;
 	}
 	
+	public String getHostName() {
+            return hostname;
+	}
+	
 	public String getIpAddress() {
 		return ipAddress;
 	}
@@ -92,10 +106,6 @@ public class Host implements Comparable<Host> {
 		return port;
 	}
 	
-
-	public Status getStatus() {
-		return status;
-	}
 
 	public String getRack() {
 		return rack;
@@ -144,10 +154,6 @@ public class Host implements Comparable<Host> {
 		return equals;
 	}
 
-	@Override
-	public String toString() {
-		return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack + ", status: " + status.name() + "]";
-	}
 
 	@Override
 	public int compareTo(Host o) {
@@ -161,4 +167,16 @@ public class Host implements Comparable<Host> {
 	    }
 	    return Integer.compare(this.port,o.port);
 	}
+
+        public String getDatacenter() {
+    	return datacenter;
+        }
+    
+     
+    
+        @Override
+        public String toString() {
+    	return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack
+    		+ ", datacenter: " + datacenter + ", status: " + status.name() + "]";
+        }
 }
