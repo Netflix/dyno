@@ -153,7 +153,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 
     public boolean addHost(Host host, boolean refreshLoadBalancer) {
 
-	host.setPort(cpConfiguration.getPort());
+	//host.setPort(cpConfiguration.getPort());
 
 	HostConnectionPool<CL> connPool = cpMap.get(host);
 
@@ -163,6 +163,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 	    }
 	    return false;
 	}
+
 
 	final HostConnectionPool<CL> hostPool = hostConnPoolFactory.createHostConnectionPool(host, this);
 
@@ -291,6 +292,9 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 		connection = selectionStrategy.getConnectionUsingRetryPolicy(op,
 			cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS, retry);
 
+		connection.getContext().setMetadata("host", connection.getHost().getHostAddress());
+                connection.getContext().setMetadata("port", connection.getHost().getPort());
+                
 		OperationResult<R> result = connection.execute(op);
 
 		// Add context to the result from the successful execution

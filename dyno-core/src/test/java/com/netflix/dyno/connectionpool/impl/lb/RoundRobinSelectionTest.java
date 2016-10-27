@@ -51,10 +51,10 @@ public class RoundRobinSelectionTest {
 	 */
 
 
-	private final HostToken h1 = new HostToken(309687905L, new Host("h1", -1, Status.Up));
-	private final HostToken h2 = new HostToken(1383429731L, new Host("h2", -1, Status.Up));
-	private final HostToken h3 = new HostToken(2457171554L, new Host("h3", -1, Status.Up));
-	private final HostToken h4 = new HostToken(3530913377L, new Host("h4", -1, Status.Up));
+	private final HostToken h1 = new HostToken(309687905L, new Host("h1", -1, "r1", Status.Up));
+	private final HostToken h2 = new HostToken(1383429731L, new Host("h2", -1, "r1", Status.Up));
+	private final HostToken h3 = new HostToken(2457171554L, new Host("h3", -1, "r1", Status.Up));
+	private final HostToken h4 = new HostToken(3530913377L, new Host("h4", -1, "r1", Status.Up));
 
 	private final BaseOperation<Integer, Integer> testOperation = new BaseOperation<Integer, Integer>() {
 

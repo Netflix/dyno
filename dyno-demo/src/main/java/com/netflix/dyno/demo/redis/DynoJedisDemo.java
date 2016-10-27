@@ -66,7 +66,7 @@ public class DynoJedisDemo {
 
 		final int port = 6379; 
 		
-		final Host localHost = new Host("localhost", port, Status.Up);
+		final Host localHost = new Host("localhost", port, "localrack", Status.Up);
 
 		final HostSupplier localHostSupplier = new HostSupplier() {
 
@@ -126,7 +126,6 @@ public class DynoJedisDemo {
                         //.setCompressionThreshold(2)
                         //.setLocalRack(this.localRack)
 //      )
-		.withPort(port)
 		.build();
 	}
 
@@ -396,7 +395,7 @@ public class DynoJedisDemo {
 				if (parts.length != 2) {
 					throw new RuntimeException("Bad data format in file:" + line);
 				}
-				Host host = new Host(parts[0].trim(), port, Status.Up).setRack(parts[1].trim());
+				Host host = new Host(parts[0].trim(), port, parts[1].trim(), Status.Up);
 				hosts.add(host);
 			}
 		} finally {
@@ -583,10 +582,10 @@ public class DynoJedisDemo {
 			
 			for (Map<String, String> map : handler.getList()) {
 				
-				Host host = new Host(map.get("public-hostname"), 8102);
-				host.setRack(map.get("availability-zone"));
-				host.setStatus(map.get("status").equalsIgnoreCase("UP") ? Status.Up : Status.Down);
-				
+
+				String rack = map.get("availability-zone");
+				Status status = map.get("status").equalsIgnoreCase("UP") ? Status.Up : Status.Down;
+                Host host = new Host(map.get("public-hostname"), 8102, rack, status);
 				hosts.add(host);
 				System.out.println("Host: " + host);
 			}
