@@ -48,7 +48,7 @@ public class ConfigUtils {
 	}
 
 	if (dc == null) {
-	    return getDataCenter(getLocalZone());
+	    return getDataCenterFromRack(getLocalZone());
 	} else {
 	    return dc;
 	}
@@ -61,7 +61,7 @@ public class ConfigUtils {
      * @param rack
      * @return the datacenter based on the provided rack
      */
-    public static String getDataCenter(String rack) {
+    public static String getDataCenterFromRack(String rack) {
 	if (rack != null) {
 	    return rack.substring(0, rack.length() - 1);
 	}
