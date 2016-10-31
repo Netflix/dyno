@@ -37,29 +37,60 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
 
 /**
- * An Example of the JSON payload that we get from a dynomite server [
- * {"token":"3051939411","hostname":"ec2-54-237-143-4.compute-1.amazonaws.com"
- * ,"dc":"florida","ip":"54.237.143.4", "zone":"us-east-1d",
- * "location":"us-east-1"}, {"token":"188627880","
- * hostname":"ec2-50-17-65-2.compute-1.amazonaws.com"
- * ,"dc":"florida","ip":"50.17.65.2", "zone":"us-east-1d",
- * "location":"us-east-1"},
- * {"token":"2019187467","hostname":"ec2-54-83-87-174.compute-1.amazonaws.com"
- * ,"dc":"florida-v001","ip":"54.83.87.174", "zone":"us-east-1c",
- * "location":"us-east-1"},
- * {"token":"3450843231","hostname":"ec2-54-81-138-73.compute-1.amazonaws.com"
- * ,"dc":"florida-v001","ip":"54.81.138.73", "zone":"us-east-1c",
- * "location":"us-east-1"}, {"token":"587531700","
- * hostname":"ec2-54-82-176-215.compute-1.amazonaws.com","dc":"florida-v001","ip":"54.82.176.215","zone":"us-east-1c",
- * "location":"us-east-1"},
- * {"token":"3101134286","hostname":"ec2-54-82-83-115.compute-1.amazonaws.com"
- * ,"dc":"florida-v000","ip":"54.82.83.115", "zone":"us-east-1e",
- * "location":"us-east-1"}, {"token":"237822755","
- * hostname":"ec2-54-211-220-55.compute-1.amazonaws.com","dc":"florida-v000","ip":"54.211.220.55","zone":"us-east-1e",
- * "location":"us-east-1"},
- * {"token":"1669478519","hostname":"ec2-54-80-65-203.compute-1.amazonaws.com"
- * ,"dc":"florida-v000","ip":"54.80.65.203", "zone":"us-east-1e",
- * "location":"us-east-1"} ]
+ * An Example of the JSON payload that we get from dynomite-manager (this will eventually be changed so that the call
+ * is made directly to Dynomite)
+ * <pre>
+ * [
+ *  {
+ *      "dc": "eu-west-1",
+ *      "hostname": "ec2-52-208-92-24.eu-west-1.compute.amazonaws.com",
+ *      "ip": "52.208.92.24",
+ *      "rack": "dyno_sandbox--euwest1c",
+ *      "token": "1383429731",
+ *      "zone": "eu-west-1c"
+ *  },
+ *  {
+ *      "dc": "us-east-1",
+ *      "hostname": "ec2-52-90-147-135.compute-1.amazonaws.com",
+ *      "ip": "52.90.147.135",
+ *      "rack": "dyno_sandbox--useast1c",
+ *      "token": "1383429731",
+ *      "zone": "us-east-1c"
+ *  },
+ *  {
+ *      "dc": "us-east-1",
+ *      "hostname": "ec2-52-23-207-227.compute-1.amazonaws.com",
+ *      "ip": "52.23.207.227",
+ *      "rack": "dyno_sandbox--useast1e",
+ *      "token": "1383429731",
+ *      "zone": "us-east-1e"
+ *  },
+ *  {
+ *      "dc": "eu-west-1",
+ *      "hostname": "ec2-52-209-165-110.eu-west-1.compute.amazonaws.com",
+ *      "ip": "52.209.165.110",
+ *      "rack": "dyno_sandbox--euwest1a",
+ *      "token": "1383429731",
+ *      "zone": "eu-west-1a"
+ *  },
+ *  {
+ *      "dc": "eu-west-1",
+ *      "hostname": "ec2-52-16-89-77.eu-west-1.compute.amazonaws.com",
+ *      "ip": "52.16.89.77",
+ *      "rack": "dyno_sandbox--euwest1b",
+ *      "token": "1383429731",
+ *      "zone": "eu-west-1b"
+ *  },
+ *  {
+ *      "dc": "us-east-1",
+ *      "hostname": "ec2-54-208-235-30.compute-1.amazonaws.com",
+ *      "ip": "54.208.235.30",
+ *      "rack": "dyno_sandbox--useast1d",
+ *      "token": "1383429731",
+ *      "zone": "us-east-1d"
+ *  }
+ *]
+ * </pre>
  *
  * @author poberai
  *
@@ -115,7 +146,7 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
                 Logger.warn("Could not get json response for token topology [" + e.getMessage() + "]");
             }
         }
-        return new ArrayList<HostToken>(allTokens);
+        return new ArrayList<>(allTokens);
     }
 
     @Override
