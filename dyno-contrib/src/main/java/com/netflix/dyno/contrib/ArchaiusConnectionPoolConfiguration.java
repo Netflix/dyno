@@ -42,7 +42,6 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	private final DynamicIntProperty maxFailoverCount;
 	private final DynamicIntProperty connectTimeout;
 	private final DynamicIntProperty socketTimeout;
-	private final DynamicIntProperty poolShutdownDelay;
 	private final DynamicBooleanProperty localZoneAffinity;
 	private final DynamicIntProperty resetTimingsFrequency;
     private final DynamicStringProperty configPublisherConfig;
@@ -68,7 +67,6 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		maxFailoverCount = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.maxFailoverCount", super.getMaxFailoverCount());
 		connectTimeout = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.connectTimeout", super.getConnectTimeout());
 		socketTimeout = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.socketTimeout", super.getSocketTimeout());
-		poolShutdownDelay = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.poolShutdownDelay", super.getPoolShutdownDelay());
 		localZoneAffinity = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + ".connection.localZoneAffinity", super.localZoneAffinity());
 		resetTimingsFrequency = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.metrics.resetFrequencySeconds", super.getTimingCountersResetFrequencySeconds());
         configPublisherConfig = DynamicPropertyFactory.getInstance().getStringProperty(propertyPrefix + ".config.publisher.address", super.getConfigurationPublisherConfig());
@@ -121,11 +119,6 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	@Override
 	public RetryPolicyFactory getRetryPolicyFactory() {
 		return retryPolicyFactory;
-	}
-
-	@Override
-	public int getPoolShutdownDelay() {
-		return poolShutdownDelay.get();
 	}
 
 	@Override
@@ -187,7 +180,6 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
                 ", maxFailoverCount=" + maxFailoverCount +
                 ", connectTimeout=" + connectTimeout +
                 ", socketTimeout=" + socketTimeout +
-                ", poolShutdownDelay=" + poolShutdownDelay +
                 ", localZoneAffinity=" + localZoneAffinity +
                 ", resetTimingsFrequency=" + resetTimingsFrequency +
                 ", configPublisherConfig=" + configPublisherConfig +
