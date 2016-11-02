@@ -70,7 +70,8 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 		public JedisConnection(HostConnectionPool<Jedis> hostPool) {
 			this.hostPool = hostPool;
 			Host host = hostPool.getHost();
-			jedisClient = new Jedis(host.getHostAddress(), host.getPort(), hostPool.getConnectionTimeout());
+			jedisClient = new Jedis(host.getHostAddress(), host.getPort(), hostPool.getConnectionTimeout(),
+					hostPool.getSocketTimeout());
 		}
 		
 		@Override
