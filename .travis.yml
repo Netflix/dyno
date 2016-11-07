@@ -1,6 +1,12 @@
 language: java
-install: true
-script: ./travis.sh
+jdk:
+- oraclejdk8
+sudo: false
+install: ./installViaTravis.sh
+script: ./buildViaTravis.sh
+cache:
+  directories:
+  - $HOME/.gradle/caches/
 env:
   global:
   - secure: GLRunlapijH/uL489R5wpobpQdLOKQS0oJ9Bk69K3Bee6quaaeK4bnO7aEQcSd2MSF0obFT1Hz9WWhiz18c50n9gfkwBsPxWI7AnGn3aQd+qNbJ8yacdAZ7MWq9oThMUblxnLR4figaJC6vtL48GReOVxAtqp/jGIBod5ugUW1Q=

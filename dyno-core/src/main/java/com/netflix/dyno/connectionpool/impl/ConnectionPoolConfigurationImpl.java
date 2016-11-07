@@ -115,7 +115,6 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         this.maxFailoverCount = config.getMaxFailoverCount();
         this.maxTimeoutWhenExhausted = config.getMaxTimeoutWhenExhausted();
         this.pingFrequencySeconds = config.getPingFrequencySeconds();
-        this.poolShutdownDelay = config.getPoolShutdownDelay();
         this.retryFactory = config.getRetryPolicyFactory();
         this.socketTimeout = config.getSocketTimeout();
         this.errorMonitorFactory = config.getErrorMonitorFactory();
@@ -160,11 +159,6 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	@Override
 	public RetryPolicyFactory getRetryPolicyFactory() {
 		return retryFactory;
-	}
-	
-	@Override
-	public int getPoolShutdownDelay() {
-		return poolShutdownDelay;
 	}
 
 	@Override

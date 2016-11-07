@@ -18,7 +18,9 @@ package com.netflix.dyno.connectionpool;
 import com.netflix.dyno.connectionpool.RetryPolicy.RetryPolicyFactory;
 import com.netflix.dyno.connectionpool.impl.health.ErrorMonitor.ErrorMonitorFactory;
 
-
+/**
+ * Specifies configuration settings for an instance of a dyno connection pool.
+ */
 public interface ConnectionPoolConfiguration {
     
 	enum LoadBalancingStrategy {
@@ -34,92 +36,91 @@ public interface ConnectionPoolConfiguration {
     }
 
     /**
-     * @return Unique name assigned to this connection pool
+     * Returns the unique name assigned to this connection pool.
      */
     String getName();
 
-
     /**
-     * @return Maximum number of connections to allocate for a single host's pool
+     * Returns the maximum number of connections to allocate to each Dynomite host. Note that at startup exactly this
+     * number of connections will be established prior to serving requests.
      */
     int getMaxConnsPerHost();
 
     /**
-     * @return Maximum amount of time to wait for a connection to free up when a
-     * connection pool is exhausted.
-     * 
-     * @return
+     * Returns the maximum amount of time to wait for a connection to become available from the pool.
+     *
+     * <p>Retrieving a connection from the pool is very fast unless all connections are busy (in which case the
+     * connection pool is exhausted)</p>
      */
     int getMaxTimeoutWhenExhausted();
 
     /**
-     * @return Get the max number of failover attempts
+     * Returns the maximum number of failover attempts.
      */
     int getMaxFailoverCount();
 
     /**
-     * @return Socket read/write timeout
+     * Returns the socket read/write timeout
      */
     int getSocketTimeout();
 
     /**
-     * @return LoadBalancingStrategy
+     * Returns the {@link LoadBalancingStrategy} for this connection pool.
      */
     LoadBalancingStrategy getLoadBalancingStrategy();
     
     /**
-     * @return Socket connect timeout
+     * Specifies the socket connection timeout
      */
     int getConnectTimeout();
-    
+
     /**
-     * 
-     * @return
-     */
-    int getPoolShutdownDelay();
-    
-    /**
-     * 
-     * @return
+     * Returns true if the connection pool respects zone affinity, false otherwise.
+     *
+     * <p>
+     * By default this is true. This is only false if it has been explicitly set to false OR if the connection pool
+     * cannot determine it's local zone at startup.
+     * </p>
      */
     boolean localZoneAffinity();
     
     /**
-     * 
-     * @return
+     * Returns the {@link ErrorMonitorFactory} to use for this connection pool.
      */
     ErrorMonitorFactory getErrorMonitorFactory();
     
     /**
-     * 
-     * @return
+     * Returns the {@link RetryPolicyFactory} to use for this connection pool.
      */
     RetryPolicyFactory getRetryPolicyFactory();
     
     /**
-     * 
-     * @return
+     * Returns the {@link HostSupplier} to use for this connection pool.
      */
     HostSupplier getHostSupplier();
     
     /**
-     * 
-     * @return
+     * Returns the {@link TokenMapSupplier} to use for this connection pool.
      */
     TokenMapSupplier getTokenSupplier();
     
     /**
-     * 
-     * @return
+     * Returns the interval for which pings are issued on connections.
+     *
+     * <p>
+     * Pings are used to keep persistent connections warm.
+     * </p>
      */
     int getPingFrequencySeconds();
     
     /**
-     * 
-     * @return
+     * Returns the local rack name for this connection pool. In AWS terminology this is a zone, e.g. us-east-1c.
      */
     String getLocalRack();
 
+    /**
+     * Returns the local data center name for this connection pool. In AWS terminology this is a region, e.g. us-east-1.
+     */
     String getLocalDataCenter();
 
     /**
@@ -137,10 +138,11 @@ public interface ConnectionPoolConfiguration {
     int getTimingCountersResetFrequencySeconds();
 
     /**
+     * This is an experimental setting and as such is unstable and subject to change or be removed.
+     * <p>
      * Returns info about a system that will consume configuration data from dyno. This is used to
      * log configuration settings to a central system such as elastic search or cassandra.
-     *
-     * @return todo
+     * </p>
      */
      String getConfigurationPublisherConfig();
 
@@ -182,10 +184,19 @@ public interface ConnectionPoolConfiguration {
      */
     CompressionStrategy getCompressionStrategy();
 
+    /**
+     * Returns true if dual-write functionality is enabled, false otherwise.
+     */
     boolean isDualWriteEnabled();
 
+    /**
+     * Returns the name of the designated dual-write cluster, or null.
+     */
     String getDualWriteClusterName();
 
+    /**
+     * Returns the percentage of traffic designated to be sent to the dual-write cluster.
+     */
     int getDualWritePercentage();
 
 }
