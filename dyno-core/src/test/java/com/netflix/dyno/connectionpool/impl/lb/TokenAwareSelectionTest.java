@@ -20,6 +20,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Collection;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -51,10 +52,16 @@ public class TokenAwareSelectionTest {
 		cqlsh:dyno_bootstrap> 
 	 */
 
-	private final HostToken h1 = new HostToken(309687905L, new Host("h1", -1, Status.Up));
-	private final HostToken h2 = new HostToken(1383429731L, new Host("h2", -1, Status.Up));
-	private final HostToken h3 = new HostToken(2457171554L, new Host("h3", -1, Status.Up));
-	private final HostToken h4 = new HostToken(3530913377L, new Host("h4", -1, Status.Up));
+    	private final HostToken h1 = new HostToken(309687905L, new Host("h1",  -1, "r1", Status.Up));
+	private final HostToken h2 = new HostToken(1383429731L, new Host("h2", -1, "r1", Status.Up));
+	private final HostToken h3 = new HostToken(2457171554L, new Host("h3", -1, "r1",  Status.Up));
+	private final HostToken h4 = new HostToken(3530913377L, new Host("h4", -1, "r1", Status.Up));
+	
+	
+	private final HostToken h1p8100 = new HostToken(309687905L, new Host("h1",  8100, "r1", Status.Up));
+	private final HostToken h1p8101 = new HostToken(1383429731L, new Host("h1",  8101, "r1", Status.Up));
+	private final HostToken h1p8102 = new HostToken(2457171554L, new Host("h1",  8102, "r1", Status.Up));
+	private final HostToken h1p8103 = new HostToken(3530913377L, new Host("h1",  8103, "r1", Status.Up));
 
 	private final Murmur1HashPartitioner m1Hash = new Murmur1HashPartitioner();
 
@@ -82,7 +89,35 @@ public class TokenAwareSelectionTest {
 
 		System.out.println("Token distribution: " + result);
 
-		verifyTokenDistribution(result);
+		verifyTokenDistribution(result.values());
+	}
+
+	@Test
+	public void testTokenAwareMultiplePorts() throws Exception {
+
+		TreeMap<HostToken, HostConnectionPool<Integer>> pools = new TreeMap<HostToken, HostConnectionPool<Integer>>(new Comparator<HostToken>() {
+
+			@Override
+			public int compare(HostToken o1, HostToken o2) {
+				return o1.compareTo(o2);
+			}
+		});
+
+		pools.put(h1p8100, getMockHostConnectionPool(h1p8100));
+		pools.put(h1p8101, getMockHostConnectionPool(h1p8101));
+		pools.put(h1p8102, getMockHostConnectionPool(h1p8102));
+		pools.put(h1p8103, getMockHostConnectionPool(h1p8103));
+
+
+		TokenAwareSelection<Integer> tokenAwareSelector = new TokenAwareSelection<Integer>();
+		tokenAwareSelector.initWithHosts(pools);
+
+		Map<Integer, Integer> result = new HashMap<Integer, Integer>();
+		runTestWithPorts(0L, 100000L, result, tokenAwareSelector);
+
+		System.out.println("Token distribution: " + result);
+
+		verifyTokenDistribution(result.values());
 	}
 
 	private BaseOperation<Integer, Long> getTestOperation(final Long n) {
@@ -120,6 +155,25 @@ public class TokenAwareSelectionTest {
 		}
 	}
 
+	
+	private void runTestWithPorts(long start, long end, Map<Integer, Integer> result, TokenAwareSelection<Integer> tokenAwareSelector) {
+
+		for (long i=start; i<=end; i++) {
+
+			BaseOperation<Integer, Long> op = getTestOperation(i);
+			HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op);
+
+			int port = pool.getHost().getPort();
+
+			verifyKeyHashWithPort(op.getKey(), port);
+
+			Integer count = result.get(port);
+			if (count == null) {
+				count = 0;
+			}
+			result.put(port, ++count);
+		}
+	}
 	private void verifyKeyHash(String key, String hostname) {
 
 		Long keyHash = m1Hash.hash(key);
@@ -143,22 +197,47 @@ public class TokenAwareSelectionTest {
 		}
 	}
 
-	private void verifyTokenDistribution(Map<String, Integer> result) {
+	
+	private void verifyKeyHashWithPort(String key, int port) {
+
+		Long keyHash = m1Hash.hash(key);
+
+		String expectedHostname = null;
+		int expectedPort = 0;
+
+		if (keyHash <= 309687905L) {
+			expectedPort = 8100;
+		} else if (keyHash <= 1383429731L) { //1129055870
+			expectedPort = 8101;
+		} else if (keyHash <= 2457171554L) {
+			expectedPort = 8102;
+		} else if (keyHash <= 3530913377L) {
+			expectedPort = 8103;
+		} else {
+			expectedPort = 8100;
+		}
+
+		if (expectedPort != port) {
+			Assert.fail("FAILED! for key: " + key + ", got port: " + port + ", expected: " + expectedPort + " for hash: " + keyHash);
+		}
+	}
+	private void verifyTokenDistribution(Collection<Integer> values) {
 
 		int sum = 0;  int count = 0;
-		for (int n : result.values()) {
+		for (int n : values) {
 			sum += n;
 			count++;
 		}
 
 		double mean = (sum/count);
 
-		for (int n : result.values()) {
+		for (int n : values) {
 			double percentageDiff = 100*((mean-n)/mean);
 			Assert.assertTrue(percentageDiff < 1.0);
 		}
 	}
-
+	
+	
 	@SuppressWarnings("unchecked")
 	private HostConnectionPool<Integer> getMockHostConnectionPool(final HostToken hostToken) {
 

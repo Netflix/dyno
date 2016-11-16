@@ -94,18 +94,21 @@ public class EurekaHostsSupplier implements HostSupplier {
 					public Host apply(InstanceInfo info) {
 						
 						Host.Status status = info.getStatus() == InstanceStatus.UP ? Host.Status.Up : Host.Status.Down;
-						Host host = new Host(info.getHostName(), info.getIPAddr(), status);
-
+						
+						String rack = null;
 						try {
 							if (info.getDataCenterInfo() instanceof AmazonInfo) {
 								AmazonInfo amazonInfo = (AmazonInfo)info.getDataCenterInfo();
-								host.setRack(amazonInfo.get(MetaDataKey.availabilityZone));
+								rack = amazonInfo.get(MetaDataKey.availabilityZone);
 							}
 						}
 						catch (Throwable t) {
-							Logger.error("Error getting rack for host " + host.getHostAddress(), t);
+						    Logger.error("Error getting rack for host " + info.getHostName(), t);
 						}
-
+						if(rack == null) {
+						    Logger.error("Rack wasn't found for host:" + info.getHostName() + " there may be issues matching it up to the token map");
+						}
+						Host host = new Host(info.getHostName(), info.getIPAddr(), rack, status);
 						return host;
 					}
 				}));

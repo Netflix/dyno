@@ -135,7 +135,7 @@ public class HostStatusTrackerTest {
 		if (names != null && names.length > 0) {
 			for (String name : names) {
 				if (!name.isEmpty()) {
-					set.add(new Host(name, 1234));
+					set.add(new Host(name, 1234, "r1"));
 				}
 			}
 		}

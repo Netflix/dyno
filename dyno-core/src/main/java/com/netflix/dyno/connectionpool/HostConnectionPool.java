@@ -131,4 +131,6 @@ public interface HostConnectionPool<CL> {
     Collection<Connection<CL>> getAllConnections();
 
     int getConnectionTimeout();
+
+    int getSocketTimeout();
 }

@@ -16,6 +16,7 @@
 package com.netflix.dyno.jedis;
 
 import com.netflix.dyno.connectionpool.ConnectionPool;
+import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.contrib.DynoOPMonitor;
 import org.slf4j.Logger;
@@ -54,18 +55,20 @@ public class DynoDualWriterClient extends DynoJedisClient {
     public DynoDualWriterClient(String name, String clusterName,
                                 ConnectionPool<Jedis> pool,
                                 DynoOPMonitor operationMonitor,
+                                ConnectionPoolMonitor connectionPoolMonitor,
                                 DynoJedisClient shadowClient) {
 
-        this(name, clusterName, pool, operationMonitor, shadowClient,
+        this(name, clusterName, pool, operationMonitor, connectionPoolMonitor, shadowClient,
                 new TimestampDial(pool.getConfiguration().getDualWritePercentage()));
     }
 
     public DynoDualWriterClient(String name, String clusterName,
                                 ConnectionPool<Jedis> pool,
                                 DynoOPMonitor operationMonitor,
+                                ConnectionPoolMonitor connectionPoolMonitor,
                                 DynoJedisClient shadowClient,
                                 Dial dial) {
-        super(name, clusterName, pool, operationMonitor);
+        super(name, clusterName, pool, operationMonitor, connectionPoolMonitor);
         this.shadowClient = shadowClient;
         this.dial = dial;
     }

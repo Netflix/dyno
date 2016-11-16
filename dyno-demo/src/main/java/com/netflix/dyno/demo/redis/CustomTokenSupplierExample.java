@@ -49,7 +49,7 @@ public class CustomTokenSupplierExample {
 
         final int port = 6379;
 
-        final Host localHost = new Host("localhost", port, Host.Status.Up);
+        final Host localHost = new Host("localhost", port, "localrack", Host.Status.Up);
 
         final HostSupplier localHostSupplier = new HostSupplier() {
 
@@ -81,7 +81,6 @@ public class CustomTokenSupplierExample {
                 .withHostSupplier(localHostSupplier)
                 .withCPConfig(new ConnectionPoolConfigurationImpl("tokenSupplierExample")
                         .withTokenSupplier(supplier))
-                .withPort(port)
                 .build();
 
     }

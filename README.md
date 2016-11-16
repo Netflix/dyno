@@ -1,5 +1,8 @@
-# Dyno [![Build Status](https://secure.travis-ci.org/Netflix/dyno.png)](http://travis-ci.org/Netflix/dyno)
- 
+# Dyno 
+[![Build Status](https://secure.travis-ci.org/Netflix/dyno.png)](http://travis-ci.org/Netflix/dyno)
+[![Dev chat at https://gitter.im/Netflix/dynomite](https://badges.gitter.im/Netflix/dynomite.svg)](https://gitter.im/Netflix/dynomite?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Apache V2 License](http://img.shields.io/badge/license-Apache%20V2-blue.svg)](https://github.com/Netflix/dyno/blob/master/LICENSE)
+
  Dyno encapsulates features necessary to scale a client application utilizing [Dynomite](https://github.com/Netflix/dynomite).
  
  See the [blog post](http://techblog.netflix.com/2014/11/introducing-dynomite.html) for introductory info.
@@ -42,7 +45,7 @@ Thank you for your interest in contributing to the Dyno project. Please see the 
 
 Need some help with either getting up and going or some problems with the code?
 
-- [Submit an issue](./issues)
+- [Submit an issue](https://github.com/Netflix/dyno/issues)
 - Chat with us on [![Dev chat at https://gitter.im/Netflix/dynomite](https://badges.gitter.im/Netflix/dynomite.svg)](https://gitter.im/Netflix/dynomite?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 

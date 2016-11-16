@@ -30,7 +30,7 @@ public class OperationResultImplTest {
 
 		OperationMonitor monitor = new LastOperationMonitor();
 		OperationResultImpl<Integer> opResult = new OperationResultImpl<Integer>("test", 11, monitor);
-		Host host = new Host("testHost", "rand_ip", 1234);
+		Host host = new Host("testHost", "rand_ip", 1234, "rand_rack");
 
 		opResult.attempts(2)
 		.addMetadata("foo", "f1").addMetadata("bar", "b1")

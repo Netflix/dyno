@@ -71,12 +71,12 @@ public class HostSelectionWithFallbackTest {
 	private final ConnectionPoolConfigurationImpl cpConfig = new ConnectionPoolConfigurationImpl("test");
 	private final ConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
 
-	Host h1 = new Host("h1", Status.Up).setRack("localTestRack");
-	Host h2 = new Host("h2", Status.Up).setRack("localTestRack");
-	Host h3 = new Host("h3", Status.Up).setRack("remoteRack1");
-	Host h4 = new Host("h4", Status.Up).setRack("remoteRack1");
-	Host h5 = new Host("h5", Status.Up).setRack("remoteRack2");
-	Host h6 = new Host("h6", Status.Up).setRack("remoteRack2");
+	Host h1 = new Host("h1", "localTestRack", Status.Up);
+	Host h2 = new Host("h2", "localTestRack", Status.Up);
+	Host h3 = new Host("h3", "remoteRack1", Status.Up);
+	Host h4 = new Host("h4", "remoteRack1", Status.Up);
+	Host h5 = new Host("h5", "remoteRack2", Status.Up);
+	Host h6 = new Host("h6", "remoteRack2", Status.Up);
 
 	Host[] arr = {h1, h2, h3, h4, h5, h6};
 	List<Host> hosts = Arrays.asList(arr);
@@ -389,21 +389,21 @@ public class HostSelectionWithFallbackTest {
         HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
 
         List<HostToken> hostTokens = Arrays.asList(
-                new HostToken(1383429731L, new Host("host-1", -1).setRack("localTestRack")), // Use -1 otherwise the port is opened which works
-                new HostToken(2815085496L, new Host("host-2", -1).setRack("localTestRack")), // but slows down the test
-                new HostToken(4246741261L, new Host("host-3", -1).setRack("localTestRack")),
-                new HostToken(1383429731L, new Host("host-4", -1).setRack("localTestRack")),
-                new HostToken(2815085496L, new Host("host-5", -1).setRack("localTestRack")),
-                new HostToken(4246741261L, new Host("host-6", -1).setRack("localTestRack")),
-                new HostToken(1383429731L, new Host("host-7", -1).setRack("localTestRack")),
-                new HostToken(2815085496L, new Host("host-8", -1).setRack("localTestRack")),
-                new HostToken(4246741261L, new Host("host-9", -1).setRack("localTestRack")),
-                new HostToken(1383429731L, new Host("host-7", -1).setRack("localTestRack")),
-                new HostToken(2815085496L, new Host("host-8", -1).setRack("localTestRack")),
-                new HostToken(4246741261L, new Host("host-9", -1).setRack("localTestRack")),
-                new HostToken(1383429731L, new Host("host-7", -1).setRack("localTestRack")),
-                new HostToken(2815085496L, new Host("host-8", -1).setRack("localTestRack")),
-                new HostToken(4246741261L, new Host("host-9", -1).setRack("localTestRack"))
+                new HostToken(1383429731L, new Host("host-1", -1, "localTestRack")), // Use -1 otherwise the port is opened which works
+                new HostToken(2815085496L, new Host("host-2", -1, "localTestRack")),
+                new HostToken(4246741261L, new Host("host-3", -1, "localTestRack" )),
+                new HostToken(1383429731L, new Host("host-4", -1, "localTestRack")),
+                new HostToken(2815085496L, new Host("host-5", -1, "localTestRack")),
+                new HostToken(4246741261L, new Host("host-6", -1, "localTestRack")),
+                new HostToken(1383429731L, new Host("host-7", -1, "localTestRack")),
+                new HostToken(2815085496L, new Host("host-8", -1, "localTestRack")),
+                new HostToken(4246741261L, new Host("host-9", -1, "localTestRack")),
+                new HostToken(1383429731L, new Host("host-7", -1, "localTestRack")),
+                new HostToken(2815085496L, new Host("host-8", -1, "localTestRack")),
+                new HostToken(4246741261L, new Host("host-9", -1, "localTestRack")),
+                new HostToken(1383429731L, new Host("host-7", -1, "localTestRack")),
+                new HostToken(2815085496L, new Host("host-8", -1, "localTestRack")),
+                new HostToken(4246741261L, new Host("host-9", -1, "localTestRack"))
 
         );
 
@@ -421,12 +421,12 @@ public class HostSelectionWithFallbackTest {
 		HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
 
         List<HostToken> hostTokens = Arrays.asList(
-                new HostToken(1111L, new Host("host-1", -1).setRack("us-east-1c")),
-                new HostToken(1111L, new Host("host-2", -1).setRack("us-east-1d")),
-                new HostToken(1111L, new Host("host-3", -1).setRack("us-east-1e")),
-                new HostToken(2222L, new Host("host-4", -1).setRack("us-east-1c")),
-                new HostToken(2222L, new Host("host-5", -1).setRack("us-east-1d")),
-                new HostToken(2222L, new Host("host-6", -1).setRack("us-east-1e"))
+                new HostToken(1111L, new Host("host-1", -1, "us-east-1c")),
+                new HostToken(1111L, new Host("host-2", -1, "us-east-1d")),
+                new HostToken(1111L, new Host("host-3", -1, "us-east-1e")),
+                new HostToken(2222L, new Host("host-4", -1, "us-east-1c")),
+                new HostToken(2222L, new Host("host-5", -1, "us-east-1d")),
+                new HostToken(2222L, new Host("host-6", -1, "us-east-1e"))
         );
 
 		int rf = selection.calculateReplicationFactor(hostTokens);
@@ -443,10 +443,10 @@ public class HostSelectionWithFallbackTest {
         HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
 
         List<HostToken> hostTokens = Arrays.asList(
-                new HostToken(1111L, new Host("host-1", -1).setRack("us-east-1c")),
-                new HostToken(1111L, new Host("host-2", -1).setRack("us-east-1d")),
-                new HostToken(2222L, new Host("host-4", -1).setRack("us-east-1c")),
-                new HostToken(2222L, new Host("host-5", -1).setRack("us-east-1d"))
+                new HostToken(1111L, new Host("host-1", -1, "us-east-1c")),
+                new HostToken(1111L, new Host("host-2", -1, "us-east-1d")),
+                new HostToken(2222L, new Host("host-4", -1, "us-east-1c")),
+                new HostToken(2222L, new Host("host-5", -1, "us-east-1d"))
         );
 
         int rf = selection.calculateReplicationFactor(hostTokens);
@@ -482,9 +482,9 @@ public class HostSelectionWithFallbackTest {
         HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
 
         List<HostToken> hostTokens = Arrays.asList(
-                new HostToken(1111L, new Host("host-1", -1).setRack("us-east-1c")),
-                new HostToken(1111L, new Host("host-2", -1).setRack("us-east-1d")),
-                new HostToken(2222L, new Host("host-4", -1).setRack("us-east-1c"))
+                new HostToken(1111L, new Host("host-1", -1, "us-east-1c")),
+                new HostToken(1111L, new Host("host-2", -1, "us-east-1d")),
+                new HostToken(2222L, new Host("host-4", -1, "us-east-1c"))
         );
 
         selection.calculateReplicationFactor(hostTokens);
@@ -500,26 +500,26 @@ public class HostSelectionWithFallbackTest {
         HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
 
         List<HostToken> hostTokens = Arrays.asList(
-                new HostToken(3530913378L, new Host("host-1", -1).setRack("us-east-1c")),
-                new HostToken(1383429731L, new Host("host-1", -1).setRack("us-east-1c")),
-                new HostToken(3530913378L, new Host("host-2", -1).setRack("us-east-1d")),
-                new HostToken(1383429731L, new Host("host-2", -1).setRack("us-east-1d")),
-                new HostToken(1383429731L, new Host("host-3", -1).setRack("us-east-1e")),
-                new HostToken(3530913378L, new Host("host-3", -1).setRack("us-east-1e")),
+                new HostToken(3530913378L, new Host("host-1", -1, "us-east-1c")),
+                new HostToken(1383429731L, new Host("host-1", -1, "us-east-1c")),
+                new HostToken(3530913378L, new Host("host-2", -1, "us-east-1d")),
+                new HostToken(1383429731L, new Host("host-2", -1, "us-east-1d")),
+                new HostToken(1383429731L, new Host("host-3", -1, "us-east-1e")),
+                new HostToken(3530913378L, new Host("host-3", -1, "us-east-1e")),
 
-                new HostToken(3530913378L, new Host("host-4", -1).setRack("us-west-2a")),
-                new HostToken(1383429731L, new Host("host-4", -1).setRack("us-west-2a")),
-                new HostToken(3530913378L, new Host("host-5", -1).setRack("us-west-2b")),
-                new HostToken(1383429731L, new Host("host-5", -1).setRack("us-west-2b")),
-                new HostToken(3530913378L, new Host("host-6", -1).setRack("us-west-2c")),
-                new HostToken(1383429731L, new Host("host-6", -1).setRack("us-west-2c")),
+                new HostToken(3530913378L, new Host("host-4", -1, "us-west-2a")),
+                new HostToken(1383429731L, new Host("host-4", -1, "us-west-2a")),
+                new HostToken(3530913378L, new Host("host-5", -1, "us-west-2b")),
+                new HostToken(1383429731L, new Host("host-5", -1, "us-west-2b")),
+                new HostToken(3530913378L, new Host("host-6", -1, "us-west-2c")),
+                new HostToken(1383429731L, new Host("host-6", -1, "us-west-2c")),
 
-                new HostToken(3530913378L, new Host("host-7", -1).setRack("eu-west-1a")),
-                new HostToken(1383429731L, new Host("host-7", -1).setRack("eu-west-1a")),
-                new HostToken(1383429731L, new Host("host-8", -1).setRack("eu-west-1b")),
-                new HostToken(3530913378L, new Host("host-8", -1).setRack("eu-west-1b")),
-                new HostToken(3530913378L, new Host("host-9", -1).setRack("eu-west-1c")),
-                new HostToken(1383429731L, new Host("host-9", -1).setRack("eu-west-1c"))
+                new HostToken(3530913378L, new Host("host-7", -1, "eu-west-1a")),
+                new HostToken(1383429731L, new Host("host-7", -1, "eu-west-1a")),
+                new HostToken(1383429731L, new Host("host-8", -1, "eu-west-1b")),
+                new HostToken(3530913378L, new Host("host-8", -1, "eu-west-1b")),
+                new HostToken(3530913378L, new Host("host-9", -1, "eu-west-1c")),
+                new HostToken(1383429731L, new Host("host-9", -1, "eu-west-1c"))
         );
 
         int rf = selection.calculateReplicationFactor(hostTokens);
