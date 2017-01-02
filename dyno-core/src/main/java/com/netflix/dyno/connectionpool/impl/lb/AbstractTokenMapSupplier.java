@@ -123,6 +123,12 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
         localDatacenter = ConfigUtils.getDataCenter();
         unsuppliedPort = port;
     }
+    
+    public AbstractTokenMapSupplier(int port,String localZone,String localDatacenter) {
+        this.localZone = localZone;
+        this.localDatacenter = localDatacenter;
+        unsuppliedPort = port;
+    }
 
     public abstract String getTopologyJsonPayload(Set<Host> activeHosts);
 
