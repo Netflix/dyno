@@ -433,7 +433,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	}
 
     public ConnectionPoolConfigurationImpl setLocalDataCenter(String dc) {
-        this.localRack = dc;
+        this.localDataCenter = dc;
         return this;
     }
 
