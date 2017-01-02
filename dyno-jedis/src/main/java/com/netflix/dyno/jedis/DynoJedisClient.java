@@ -43,7 +43,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.CompressionStrategy;
 
 
-public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, MultiKeyCommands {
+public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, MultiKeyCommands,ScriptingCommands {
 
     private static final Logger Logger = org.slf4j.LoggerFactory.getLogger(DynoJedisClient.class);
 
@@ -109,6 +109,33 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         	return this.binaryKey;
         }
         
+    }
+    
+    private abstract class ScriptOperation<T> extends BaseKeyOperation<T> {
+
+        private final String script;
+        private final int keyCount;
+        private final String[] params;
+
+        private ScriptOperation(final String k, final OpName o, final String script, int keyCount, String... params) {
+            super(k, o);
+            this.script = script;
+            this.keyCount = keyCount;
+            this.params = params;
+        }
+
+        public String getScript() {
+            return script;
+        }
+
+        public int getKeyCount() {
+            return keyCount;
+        }
+
+        public String[] getParams() {
+            return params;
+        }
+
     }
  
 
@@ -3670,5 +3697,89 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 	public ScanResult<Tuple> zscan(String arg0, String arg1, ScanParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
 	}
+
+    @Override
+    public Object eval(final String script, final int keyCount, final String... params) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+    
+    public OperationResult<Object> d_eval(final String script, final int keyCount, final String... params) {
+        return connPool.executeWithFailover(new ScriptOperation<Object>(params[0], OpName.EVAL, script, keyCount, params) {
+            @Override
+            public Object execute(Jedis client, ConnectionContext state) throws DynoException {
+                return client.eval(script, keyCount, params);
+            }
+        });
+    }
+    
+    
+    /**
+     * NOT SUPPORTED ! Use {@link #d_eval(String, int, String...)}
+     * instead.
+     *
+     * @param cursor
+     * @return nothing -- throws UnsupportedOperationException when invoked
+     * @see #dyno_scan(CursorBasedResult, String...)
+     */
+    @Override
+    public Object eval(String script, List<String> keys, List<String> args) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    /* (non-Javadoc)
+     * @see redis.clients.jedis.ScriptingCommands#eval(java.lang.String)
+     */
+    @Override
+    public Object eval(String script) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    /* (non-Javadoc)
+     * @see redis.clients.jedis.ScriptingCommands#evalsha(java.lang.String)
+     */
+    @Override
+    public Object evalsha(String script) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    /* (non-Javadoc)
+     * @see redis.clients.jedis.ScriptingCommands#evalsha(java.lang.String, java.util.List, java.util.List)
+     */
+    @Override
+    public Object evalsha(String sha1, List<String> keys, List<String> args) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    /* (non-Javadoc)
+     * @see redis.clients.jedis.ScriptingCommands#evalsha(java.lang.String, int, java.lang.String[])
+     */
+    @Override
+    public Object evalsha(String sha1, int keyCount, String... params) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    /* (non-Javadoc)
+     * @see redis.clients.jedis.ScriptingCommands#scriptExists(java.lang.String)
+     */
+    @Override
+    public Boolean scriptExists(String sha1) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    /* (non-Javadoc)
+     * @see redis.clients.jedis.ScriptingCommands#scriptExists(java.lang.String[])
+     */
+    @Override
+    public List<Boolean> scriptExists(String... sha1) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    /* (non-Javadoc)
+     * @see redis.clients.jedis.ScriptingCommands#scriptLoad(java.lang.String)
+     */
+    @Override
+    public String scriptLoad(String script) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
 
 }
