@@ -62,6 +62,8 @@ project(':dyno-contrib') {
         compileApi "com.netflix.archaius:archaius-core:0.5.6"
         compileApi "com.netflix.servo:servo-core:0.5.5"
         compileApi 'com.netflix.eureka:eureka-client:1.1.110'
+        compileApi 'com.ecwid.consul:consul-api:1.2.1'
+        compileApi 'org.apache.commons:commons-lang3:3.5'
     }
 }
 
