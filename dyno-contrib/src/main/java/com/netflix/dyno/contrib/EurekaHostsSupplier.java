@@ -113,7 +113,7 @@ public class EurekaHostsSupplier implements HostSupplier {
 					}
 				}));
 		
-		Logger.info("Dyno found hosts from eureka - num hosts: " + hosts.size() + hosts.toString());
+		Logger.info("Dyno found hosts from eureka - num hosts: " + hosts.size());
 		
 		return hosts;
 	}
