@@ -178,7 +178,7 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 
             @Override
             public boolean apply(HostToken x) {
-                return x.getHost().getHostAddress().equals(host.getHostName());
+                return x.getHost().compareTo(host) == 0;
             }
         });
     }

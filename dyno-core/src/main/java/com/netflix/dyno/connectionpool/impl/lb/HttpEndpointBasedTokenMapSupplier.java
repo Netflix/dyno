@@ -161,7 +161,7 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
      * @param activeHosts
      * @return a random host
      */
-    private String getRandomHost(Set<Host> activeHosts) {
+    private Host getRandomHost(Set<Host> activeHosts) {
 	Random random = new Random();
 
 	List<Host> hostsUp = new ArrayList<Host>(CollectionUtils.filter(activeHosts, new Predicate<Host>() {
@@ -172,7 +172,7 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 	    }
 	}));
 
-	return hostsUp.get(random.nextInt(hostsUp.size())).getHostAddress();
+	return hostsUp.get(random.nextInt(hostsUp.size()));
     }
 
     /**
@@ -187,11 +187,11 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 	int count = NUM_RETRIES_PER_NODE;
 	String nodeResponse;
 	Exception lastEx;
-	final String randomHost = getRandomHost(activeHosts);
+	final Host randomHost = getRandomHost(activeHosts);
 	do {
 	    try {
 		lastEx = null;
-		nodeResponse = getResponseViaHttp(randomHost);
+		nodeResponse = getResponseViaHttp(randomHost.getHostName());
 		if (nodeResponse != null) {
 
 		    Logger.info("Received topology from " + randomHost);

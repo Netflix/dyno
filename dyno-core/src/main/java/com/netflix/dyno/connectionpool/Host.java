@@ -166,7 +166,7 @@ public class Host implements Comparable<Host> {
         if (compared != 0) {
             return compared;
         }
-        compared = this.rack.compareTo(o.hostname);
+        compared = this.rack.compareTo(o.rack);
         if (compared != 0) {
             return compared;
         }
