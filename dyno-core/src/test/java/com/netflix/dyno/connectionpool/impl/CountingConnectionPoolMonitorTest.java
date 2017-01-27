@@ -30,8 +30,8 @@ public class CountingConnectionPoolMonitorTest {
 
 		CountingConnectionPoolMonitor counter = new CountingConnectionPoolMonitor();
 
-		Host host1 = new Host("host1","address1", 1111);
-		Host host2 = new Host("host2","address2", 2222);
+		Host host1 = new Host("host1","address1", 1111, "rack1");
+		Host host2 = new Host("host2","address2", 2222, "rack1");
 
 		// Host 1
 		counter.incConnectionCreated(host1);

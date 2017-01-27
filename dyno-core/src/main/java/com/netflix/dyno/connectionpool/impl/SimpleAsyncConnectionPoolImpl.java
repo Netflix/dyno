@@ -194,6 +194,11 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 		return cpConfig.getConnectTimeout();
 	}
 
+	@Override
+	public int getSocketTimeout() {
+		return cpConfig.getSocketTimeout();
+	}
+
 	private Connection<CL> createConnection() throws DynoException {
 		
 		Connection<CL> connection = connFactory.createConnection((HostConnectionPool<CL>) this, null);

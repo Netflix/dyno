@@ -259,7 +259,12 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		return cpConfig.getConnectTimeout();
 	}
 
-	private interface ConnectionPoolState<CL> { 
+	@Override
+	public int getSocketTimeout() {
+		return cpConfig.getSocketTimeout();
+	}
+
+	private interface ConnectionPoolState<CL> {
 		
 		
 		Connection<CL> createConnection(); 

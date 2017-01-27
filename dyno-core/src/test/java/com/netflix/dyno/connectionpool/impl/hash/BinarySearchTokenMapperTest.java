@@ -69,7 +69,7 @@ public class BinarySearchTokenMapperTest {
 
 		// Now construct the midpoint token between 'h2' and 'h3' 
 		Long midpoint = 309687905L + (1383429731L - 309687905L)/2;
-		tokenMapper.addHostToken(new HostToken(midpoint, new Host("h23", Status.Up)));
+		tokenMapper.addHostToken(new HostToken(midpoint, new Host("h23", -1, "r1", Status.Up)));
 
 		failures += runTest(309687905L + 1L, 309687905L + 10L, "h23", tokenMapper);
 		Assert.assertTrue("Failures: " + failures, failures == 0);
@@ -93,7 +93,7 @@ public class BinarySearchTokenMapperTest {
 		Assert.assertTrue("Failures: " + failures, failures == 0);
 
 		// Now remove token 'h3'
-		tokenMapper.remoteHostToken(new HostToken(1383429731L, new Host("h2", Status.Up)));
+		tokenMapper.remoteHostToken(new HostToken(1383429731L, new Host("h2", -1, "r1", Status.Up)));
 
 		failures += runTest(309687905L + 1L, 309687905L + 10L, "h3", tokenMapper);
 		Assert.assertTrue("Failures: " + failures, failures == 0);
@@ -137,10 +137,10 @@ cqlsh:dyno_bootstrap>
 
 		List<HostToken> tokens = new ArrayList<HostToken>();
 
-		tokens.add(new HostToken(309687905L, new Host("h1", -1, Status.Up)));
-		tokens.add(new HostToken(1383429731L, new Host("h2", -1, Status.Up)));
-		tokens.add(new HostToken(2457171554L, new Host("h3", -1, Status.Up)));
-		tokens.add(new HostToken(3530913377L, new Host("h4", -1, Status.Up)));
+		tokens.add(new HostToken(309687905L, new Host("h1", -1, "r1", Status.Up)));
+		tokens.add(new HostToken(1383429731L, new Host("h2", -1, "r1", Status.Up)));
+		tokens.add(new HostToken(2457171554L, new Host("h3", -1, "r1", Status.Up)));
+		tokens.add(new HostToken(3530913377L, new Host("h4", -1, "r1", Status.Up)));
 
 		return tokens;
 	}

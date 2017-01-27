@@ -38,14 +38,20 @@ import java.util.Set;
 
 public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier {
 
+
     private static final Logger Logger = LoggerFactory.getLogger(HttpEndpointBasedTokenMapSupplier.class);
 
     private static final String DefaultServerUrl = "http://{hostname}:{port}/REST/v1/admin/cluster_describe";
-    private final String serverUrl;
     private static final Integer NUM_RETRIES_PER_NODE = 2;
     private static final Integer NUM_RETRIER_ACROSS_NODES = 2;
     private static final Integer defaultPort = 8080;
 
+    private final String serverUrl;
+
+    public HttpEndpointBasedTokenMapSupplier() {
+        this(DefaultServerUrl, defaultPort);
+    }
+    
     public HttpEndpointBasedTokenMapSupplier(int port) {
 	this(DefaultServerUrl, port);
     }
@@ -147,7 +153,7 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
      * @param activeHosts
      * @return a random host
      */
-    private String getRandomHost(Set<Host> activeHosts) {
+    private Host getRandomHost(Set<Host> activeHosts) {
 	Random random = new Random();
 
 	List<Host> hostsUp = new ArrayList<Host>(CollectionUtils.filter(activeHosts, new Predicate<Host>() {
@@ -158,7 +164,7 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 	    }
 	}));
 
-	return hostsUp.get(random.nextInt(hostsUp.size())).getHostAddress();
+	return hostsUp.get(random.nextInt(hostsUp.size()));
     }
 
     /**
@@ -173,11 +179,11 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
 	int count = NUM_RETRIES_PER_NODE;
 	String nodeResponse;
 	Exception lastEx;
-	final String randomHost = getRandomHost(activeHosts);
+	final Host randomHost = getRandomHost(activeHosts);
 	do {
 	    try {
 		lastEx = null;
-		nodeResponse = getResponseViaHttp(randomHost);
+		nodeResponse = getResponseViaHttp(randomHost.getHostName());
 		if (nodeResponse != null) {
 
 		    Logger.info("Received topology from " + randomHost);

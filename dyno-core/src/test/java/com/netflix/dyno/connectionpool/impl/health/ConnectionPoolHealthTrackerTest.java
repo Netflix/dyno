@@ -66,7 +66,7 @@ public class ConnectionPoolHealthTrackerTest {
 		ConnectionPoolHealthTracker<Integer> tracker = new ConnectionPoolHealthTracker<Integer>(config, threadPool, 1000, -1);
 		tracker.start();
 
-		Host h1 = new Host("h1", Status.Up);
+		Host h1 = new Host("h1", "r1", Status.Up);
 		AtomicBoolean poolStatus = new AtomicBoolean(false); 
 		HostConnectionPool<Integer> hostPool = getMockConnectionPool(h1, poolStatus);
 
@@ -94,7 +94,7 @@ public class ConnectionPoolHealthTrackerTest {
 		ConnectionPoolHealthTracker<Integer> tracker = new ConnectionPoolHealthTracker<Integer>(config, threadPool, 1000, -1);
 		tracker.start();
 
-		Host h1 = new Host("h1", Status.Up);
+		Host h1 = new Host("h1", "r1", Status.Up);
 		AtomicBoolean poolStatus = new AtomicBoolean(false); 
 		HostConnectionPool<Integer> hostPool = getMockConnectionPool(h1, poolStatus, true);
 

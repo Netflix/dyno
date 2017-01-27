@@ -36,13 +36,12 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	
 	private static final String DynoPrefix = "dyno.";
 	
-	private final DynamicIntProperty port;
+	//private final DynamicIntProperty port;
 	private final DynamicIntProperty maxConnsPerHost;
 	private final DynamicIntProperty maxTimeoutWhenExhausted;
 	private final DynamicIntProperty maxFailoverCount;
 	private final DynamicIntProperty connectTimeout;
 	private final DynamicIntProperty socketTimeout;
-	private final DynamicIntProperty poolShutdownDelay;
 	private final DynamicBooleanProperty localZoneAffinity;
 	private final DynamicIntProperty resetTimingsFrequency;
     private final DynamicStringProperty configPublisherConfig;
@@ -63,13 +62,11 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		
 		String propertyPrefix = DynoPrefix + name; 
 		
-		port = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.port", super.getPort());
 		maxConnsPerHost = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.maxConnsPerHost", super.getMaxConnsPerHost());
 		maxTimeoutWhenExhausted = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.maxTimeoutWhenExhausted", super.getMaxTimeoutWhenExhausted());
 		maxFailoverCount = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.maxFailoverCount", super.getMaxFailoverCount());
 		connectTimeout = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.connectTimeout", super.getConnectTimeout());
 		socketTimeout = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.socketTimeout", super.getSocketTimeout());
-		poolShutdownDelay = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.poolShutdownDelay", super.getPoolShutdownDelay());
 		localZoneAffinity = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + ".connection.localZoneAffinity", super.localZoneAffinity());
 		resetTimingsFrequency = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.metrics.resetFrequencySeconds", super.getTimingCountersResetFrequencySeconds());
         configPublisherConfig = DynamicPropertyFactory.getInstance().getStringProperty(propertyPrefix + ".config.publisher.address", super.getConfigurationPublisherConfig());
@@ -92,10 +89,6 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		return super.getName();
 	}
 
-	@Override
-	public int getPort() {
-		return port.get();
-	}
 
 	@Override
 	public int getMaxConnsPerHost() {
@@ -126,11 +119,6 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	@Override
 	public RetryPolicyFactory getRetryPolicyFactory() {
 		return retryPolicyFactory;
-	}
-
-	@Override
-	public int getPoolShutdownDelay() {
-		return poolShutdownDelay.get();
 	}
 
 	@Override
@@ -187,13 +175,11 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
     public String toString() {
         return "ArchaiusConnectionPoolConfiguration{" +
                 "name=" + getName() +
-                ", port=" + port +
                 ", maxConnsPerHost=" + maxConnsPerHost +
                 ", maxTimeoutWhenExhausted=" + maxTimeoutWhenExhausted +
                 ", maxFailoverCount=" + maxFailoverCount +
                 ", connectTimeout=" + connectTimeout +
                 ", socketTimeout=" + socketTimeout +
-                ", poolShutdownDelay=" + poolShutdownDelay +
                 ", localZoneAffinity=" + localZoneAffinity +
                 ", resetTimingsFrequency=" + resetTimingsFrequency +
                 ", configPublisherConfig=" + configPublisherConfig +

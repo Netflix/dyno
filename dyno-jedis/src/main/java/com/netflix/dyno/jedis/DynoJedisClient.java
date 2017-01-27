@@ -1646,6 +1646,23 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
+	public Long zadd(String key, double score, String member, ZAddParams params) {
+		return d_zadd(key, score, member, params).getResult();
+	}
+    
+    public OperationResult<Long> d_zadd(final String key, final double score, final String member, final ZAddParams params) {
+    	
+    	return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZADD) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+            	return client.zadd(key, score, member, params);
+            }
+
+        });
+    }
+    
+    @Override
     public Long zcard(final String key) {
         return d_zcard(key).getResult();
     }
@@ -3218,7 +3235,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         private String appName;
         private String clusterName;
-        private int port = -1;
         private ConnectionPoolConfigurationImpl cpConfig;
         private HostSupplier hostSupplier;
         private DiscoveryClient discoveryClient;
@@ -3250,10 +3266,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
-        public Builder withPort(int suppliedPort) {
-            port = suppliedPort;
-            return this;
-        }
 
         public Builder withDiscoveryClient(DiscoveryClient client) {
             discoveryClient = client;
@@ -3303,9 +3315,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             // Ensure that if the shadow cluster is down it will not block client application startup
             shadowConfig.setFailOnStartupIfNoHosts(false);
 
-            if (port != -1) {
-                shadowConfig.setPort(port);
-            }
+           
 
             HostSupplier shadowSupplier = null;
             if (dualWriteHostSupplier == null) {
@@ -3366,9 +3376,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         private ConnectionPoolImpl<Jedis> createConnectionPool(String appName, DynoOPMonitor opMonitor, ConnectionPoolMonitor cpMonitor) {
-            if (port != -1) {
-                cpConfig.setPort(port);
-            }
 
             if (hostSupplier == null) {
                 if (discoveryClient == null) {
@@ -3424,7 +3431,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             if (ConnectionPoolConfiguration.LoadBalancingStrategy.TokenAware == config.getLoadBalancingStrategy()) {
                 if (config.getTokenSupplier() == null) {
                     Logger.warn("TOKEN AWARE selected and no token supplier found, using default HttpEndpointBasedTokenMapSupplier()");
-                    config.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier(port));
+                    config.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier());
                 }
 
                 if (config.getLocalRack() == null && config.localZoneAffinity()) {
@@ -3665,11 +3672,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
 	@Override
 	public Long zadd(String arg0, Map<String, Double> arg1, ZAddParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-	}
-
-	@Override
-	public Long zadd(String arg0, double arg1, String arg2, ZAddParams arg3) {
         throw new UnsupportedOperationException("not yet implemented");
 	}
 

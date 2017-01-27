@@ -21,149 +21,161 @@ import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
 
 /**
  * Class encapsulating information about a host.
- * 
+ *
+ * This is immutable except for the host status.
+ * Note that the HostSupplier may not know the Dynomite port,
+ * whereas the Host object created by the load balancer
+ * may receive the port the cluster_describe REST call.
+ * Hence, we must not use the port in the equality and hashCode
+ * calculations.
+ *
  * @author poberai
  * @author ipapapanagiotou
  *
  */
-public class Host {
+public class Host implements Comparable<Host> {
+
+    public static final int DEFAULT_PORT = 8102;
+    public static final Host NO_HOST = new Host("UNKNOWN", "UNKNOWN", 0, "UNKNOWN");
 
     private final String hostname;
     private final String ipAddress;
-    private int port;
+    private final int port;
+    private final InetSocketAddress socketAddress;
+    private final String rack;
+    private final String datacenter;
     private Status status = Status.Down;
-    private InetSocketAddress socketAddress = null;
 
-    private String rack;
-    private String datacenter;
-
-    public static enum Status {
-	Up, Down;
+    public enum Status {
+        Up, Down;
     }
 
-    public Host(String hostname, int port) {
-	this(hostname, null, port, Status.Down);
+    public Host(String hostname, int port, String rack) {
+        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down);
     }
 
-    public Host(String hostname, Status status) {
-	this(hostname, null, -1, status);
+    public Host(String hostname, String rack, Status status) {
+        this(hostname, null, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status);
     }
 
-    public Host(String hostname, int port, Status status) {
-	this(hostname, null, port, status);
+    public Host(String hostname, int port, String rack, Status status) {
+        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), status);
     }
 
-    public Host(String hostname, String ipAddress, int port) {
-	this(hostname, ipAddress, port, Status.Down);
+    public Host(String hostname, String ipAddress, int port, String rack) {
+        this(hostname, ipAddress, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down);
     }
 
-    public Host(String hostname, String ipAddress, Status status) {
-	this(hostname, ipAddress, -1, status);
+    public Host(String hostname, String ipAddress, String rack, Status status) {
+        this(hostname, ipAddress, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status);
     }
 
-    public Host(String name, String ipAddress, int port, Status status) {
-	this.hostname = name;
-	this.ipAddress = ipAddress;
-	this.port = port;
-	this.status = status;
-	if (port != -1) {
-	    this.socketAddress = new InetSocketAddress(name, port);
-	}
+    public Host(String name, String ipAddress, int port, String rack, String datacenter, Status status) {
+        this.hostname = name;
+        this.ipAddress = ipAddress;
+        this.port = port;
+        this.rack = rack;
+        this.status = status;
+        this.datacenter = datacenter;
+
+        // Used for the unit tests to prevent host name resolution
+        if (port != -1) {
+            this.socketAddress = new InetSocketAddress(name, port);
+        } else {
+            this.socketAddress = null;
+        }
     }
 
     public String getHostAddress() {
-	if (this.ipAddress != null) {
-	    return ipAddress;
-	}
-	return hostname;
+        if (this.ipAddress != null) {
+            return ipAddress;
+        }
+        return hostname;
     }
 
     public String getHostName() {
-	return hostname;
+        return hostname;
     }
 
     public String getIpAddress() {
-	return ipAddress;
+        return ipAddress;
     }
 
     public int getPort() {
-	return port;
-    }
-
-    public Host setPort(int p) {
-	this.port = p;
-	this.socketAddress = new InetSocketAddress(hostname, port);
-	return this;
-    }
-
-    public Status getStatus() {
-	return status;
-    }
-
-    public String getRack() {
-	return rack;
-    }
-
-    public Host setRack(String rack) {
-	this.rack = rack;
-	setDatacenter(rack);
-	return this;
+        return port;
     }
 
     public String getDatacenter() {
-	return datacenter;
+        return datacenter;
     }
 
-    private void setDatacenter(String rack) {
-	this.datacenter = ConfigUtils.getDataCenter(rack);
+    public String getRack() {
+        return rack;
     }
 
     public Host setStatus(Status condition) {
-	status = condition;
-	return this;
+        status = condition;
+        return this;
     }
 
     public boolean isUp() {
-	return status == Status.Up;
+        return status == Status.Up;
     }
 
     public InetSocketAddress getSocketAddress() {
-	return socketAddress;
+        return socketAddress;
     }
 
-    public static final Host NO_HOST = new Host("UNKNOWN", "UNKNOWN", 0);
-
+    /**
+     * Equality checks will fail in collections between Host objects
+     * created from the HostSupplier, which may not know the Dynomite port, and
+     * the Host objects created by the load balancer.
+     */
     @Override
     public int hashCode() {
-	final int prime = 31;
-	int result = 1;
-	result = prime * result + ((hostname == null) ? 0 : hostname.hashCode());
-	result = prime * result + ((rack == null) ? 0 : rack.hashCode());
-	return result;
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((hostname == null) ? 0 : hostname.hashCode());
+        result = prime * result + ((rack == null) ? 0 : rack.hashCode());
+
+        return result;
     }
 
     @Override
     public boolean equals(Object obj) {
-	if (this == obj)
-	    return true;
-	if (obj == null)
-	    return false;
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
 
-	if (getClass() != obj.getClass())
-	    return false;
+        if (getClass() != obj.getClass())
+            return false;
 
-	Host other = (Host) obj;
-	boolean equals = true;
+        Host other = (Host) obj;
+        boolean equals = true;
 
-	equals &= (hostname != null) ? hostname.equals(other.hostname) : other.hostname == null;
-	equals &= (rack != null) ? rack.equals(other.rack) : other.rack == null;
+        equals &= (hostname != null) ? hostname.equals(other.hostname) : other.hostname == null;
+        equals &= (rack != null) ? rack.equals(other.rack) : other.rack == null;
 
-	return equals;
+        return equals;
+    }
+
+    @Override
+    public int compareTo(Host o) {
+        int compared = this.hostname.compareTo(o.hostname);
+        if (compared != 0) {
+            return compared;
+        }
+        compared = this.rack.compareTo(o.rack);
+        if (compared != 0) {
+            return compared;
+        }
+        return Integer.compare(this.port, o.port);
     }
 
     @Override
     public String toString() {
-	return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack
-		+ ", datacenter: " + datacenter + ", status: " + status.name() + "]";
+        return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack
+                + ", datacenter: " + datacenter + ", status: " + status.name() + "]";
     }
 }

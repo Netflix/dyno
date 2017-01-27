@@ -164,7 +164,6 @@ public class MonitorConsole implements MonitorConsoleMBean {
             config.put("hostSupplier", cpConfig.getHostSupplier().toString());
             config.put("loadBalancingStrategy", cpConfig.getLoadBalancingStrategy().name());
             config.put("maxConnsPerHost", String.valueOf(cpConfig.getMaxConnsPerHost()));
-            config.put("port", String.valueOf(cpConfig.getPort()));
             config.put("socketTimeout", String.valueOf(cpConfig.getSocketTimeout()));
             config.put("timingCountersResetFrequencyInSecs",
                     String.valueOf(cpConfig.getTimingCountersResetFrequencySeconds()));
