@@ -40,6 +40,7 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -63,6 +64,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     private volatile Pipeline jedisPipeline = null;
     // the cached row key for the pipeline. all subsequent requests to pipeline must be the same. this is used to check that.
     private final AtomicReference<String> theKey = new AtomicReference<String>(null);
+    private final AtomicReference<byte[]> theBinaryKey = new AtomicReference<byte[]>(null);
     // used for tracking errors
     private final AtomicReference<DynoException> pipelineEx = new AtomicReference<DynoException>(null);
 
@@ -72,6 +74,44 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         this.connPool = cPool;
         this.opMonitor = operationMonitor;
         this.cpMonitor = connPoolMonitor;
+    }
+    
+    private void checkBinaryKey(final byte[] key) {
+        if (theBinaryKey.get() != null) {
+            verifyBinaryKey(key);
+        }
+        else {
+            boolean success = theBinaryKey.compareAndSet(null, key);
+            if (!success) {
+                verifyBinaryKey(key);
+            } else {
+                try {
+                    connection = connPool.getConnectionForOperation(new BaseOperation<Jedis, String>() {
+
+                        @Override
+                        public String getName() {
+                            return DynoPipeline;
+                        }
+
+                        @Override
+                        public String getKey() {
+                            return null;
+                        }
+
+                        @Override
+                        public byte[] getBinaryKey() {
+                            return key;
+                        }
+                    });
+                } catch (NoAvailableHostsException nahe) {
+                    cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, nahe);
+                    discardPipelineAndReleaseConnection();
+                    throw nahe;
+                }
+            }
+            
+
+        }
     }
 
     private void checkKey(final String key) {
@@ -99,6 +139,11 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
                         public String getKey() {
                             return key;
                         }
+
+                        @Override
+                        public byte[] getBinaryKey() {
+                            return null;
+                        }
                     });
                 } catch (NoAvailableHostsException nahe) {
                     cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, nahe);
@@ -118,6 +163,18 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         if (!theKey.get().equals(key)) {
             try {
                 throw new RuntimeException("Must have same key for Redis Pipeline in Dynomite");
+            } finally {
+                discardPipelineAndReleaseConnection();
+            }
+        }
+    }
+    
+
+    private void verifyBinaryKey(final byte[] key) {
+
+        if (!Arrays.equals(theBinaryKey.get(),(key))) {
+            try {
+                throw new RuntimeException("Must have same binary key for Redis Pipeline in Dynomite");
             } finally {
                 discardPipelineAndReleaseConnection();
             }
@@ -289,16 +346,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         abstract Response<R> execute(Pipeline jedisPipeline) throws DynoException;
 
         Response<R> execute(final byte[] key, final OpName opName) {
-            // For now simply convert the key into a String. Properly supporting this
-            // functionality requires significant changes to plumb this throughout for the LB
-            return execute(new String(key), opName);
+            checkBinaryKey(key);
+            return executeOperation(opName);
         }
 
         Response<R> execute(final String key, final OpName opName) {
-
             checkKey(key);
             return executeOperation(opName);
-
         }
 
         Response<R> executeOperation(final OpName opName) {

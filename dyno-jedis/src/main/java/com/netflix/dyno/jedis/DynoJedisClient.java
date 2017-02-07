@@ -91,7 +91,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         
         private BaseKeyOperation(final byte[] k, final OpName o) {
         	this.key = null;
-        	this.binaryKey = null;
+        	this.binaryKey = k;
         	this.op = o;
         }
         
@@ -105,8 +105,9 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this.key;
         }
         
+        @Override
         public byte[] getBinaryKey() {
-        	return this.binaryKey;
+            return this.binaryKey;
         }
         
     }
@@ -169,7 +170,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                     ctx.setMetadata("compression", true);
                 }
             } catch (IOException e) {
-                Logger.warn("UNABLE to compress [" + value + "] for key [" + getKey() + "]; sending value uncompressed");
+                if (getKey() == null) {
+                    Logger.warn("UNABLE to compress [" + value + "] for key [" + getKey() + "]; sending value uncompressed");
+                }
+                else {
+                    Logger.warn("UNABLE to compress [" + value + "] for binary key [" + getBinaryKey() + "]; sending value uncompressed");
+                }
             }
 
             return result;

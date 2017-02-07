@@ -68,6 +68,11 @@ public class DynoRedissonClient {
 			public ListenableFuture<String> executeAsync(RedisAsyncConnection<String, String> client) throws DynoException {
 				return new DecoratingListenableFuture<String>((client.get(key)));
 			}
+
+            @Override
+            public byte[] getBinaryKey() {
+                return null;
+            }
 		});
 	}
 	
@@ -84,11 +89,17 @@ public class DynoRedissonClient {
 			public String getKey() {
 				return key;
 			}
+				
 
 			@Override
 			public ListenableFuture<String> executeAsync(RedisAsyncConnection<String, String> client) throws DynoException {
 				return new DecoratingListenableFuture<String>((client.set(key, value)));
 			}
+
+            @Override
+            public byte[] getBinaryKey() {
+                return null;
+            }
 		});
 	}
 	

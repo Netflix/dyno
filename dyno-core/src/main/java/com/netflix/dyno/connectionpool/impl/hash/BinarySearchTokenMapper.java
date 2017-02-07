@@ -60,6 +60,11 @@ public class BinarySearchTokenMapper implements HashPartitioner {
 	public Long hash(String key) {
 		return partitioner.hash(key);
 	}
+	
+        @Override
+        public Long hash(byte[] key) {
+             return partitioner.hash(key);
+        }		
 
 	@Override
 	public HostToken getToken(Long keyHash) {

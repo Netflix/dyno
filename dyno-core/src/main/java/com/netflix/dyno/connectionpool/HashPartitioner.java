@@ -39,6 +39,12 @@ public interface HashPartitioner {
 	 */
 	public Long hash(long key);
 	
+	       /**
+         * @param key
+         * @return Long
+         */
+        public Long hash(byte[] key);
+	
 	/**
 	 * @param key
 	 * @return Long
@@ -51,4 +57,5 @@ public interface HashPartitioner {
 	 * @return
 	 */
 	public HostToken getToken(Long keyHash);
+
 }

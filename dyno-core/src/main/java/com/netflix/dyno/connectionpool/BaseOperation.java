@@ -35,5 +35,11 @@ public interface BaseOperation<CL, R> {
 	 * @return String
 	 */
 	public String getKey();
+	
+	       /**
+         * The key for the operation. Useful for implementing token aware routing.
+         * @return byte[]
+         */
+        public byte[] getBinaryKey();
 
 }
