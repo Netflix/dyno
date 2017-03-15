@@ -110,7 +110,44 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
         
     }
- 
+
+    /* A poor man's solution for multikey operation. This is similar to basekeyoperation just that it takes a
+       list of keys as arguments. For token aware, we just use the first key in the list. Ideally we should be doing
+       a scatter gatter
+     */
+    private abstract class MultiKeyOperation<T> implements Operation<Jedis, T> {
+
+        private final List<String> keys;
+        private final List<byte[]> binaryKeys;
+        private final OpName op;
+
+        private MultiKeyOperation(final List<String> keys, final OpName o) {
+            this.keys = keys;
+            this.binaryKeys = null;
+            this.op = o;
+        }
+
+        private MultiKeyOperation(final byte[] k, final OpName o) {
+            this.keys = null;
+            this.binaryKeys = null;
+            this.op = o;
+        }
+
+        @Override
+        public String getName() {
+            return op.name();
+        }
+
+        @Override
+        public String getKey() {
+            return this.keys.get(0);
+        }
+
+        public byte[] getBinaryKey() {
+            return this.binaryKeys.get(0);
+        }
+
+    }
 
 
     /**
@@ -2430,8 +2467,19 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public List<String> mget(String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public List<String> mget(String... keys) { return d_mget(keys).getResult(); }
+
+    public OperationResult<List<String>> d_mget(final String... keys) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new MultiKeyOperation<List<String>>(new ArrayList<String>(Arrays.asList(keys)), OpName.MGET) {
+                @Override
+                public List<String> execute(Jedis client, ConnectionContext state) {
+                    return client.mget(keys);
+                }
+            });
+        } else {
+            throw new UnsupportedOperationException("Not yet implemented with compression ON")
+        }
     }
 
     @Override
