@@ -2478,7 +2478,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 }
             });
         } else {
-            throw new UnsupportedOperationException("Not yet implemented with compression ON")
+            throw new UnsupportedOperationException("Not yet implemented with compression ON");
         }
     }
 
