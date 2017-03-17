@@ -166,11 +166,7 @@ public class Host implements Comparable<Host> {
         if (compared != 0) {
             return compared;
         }
-        compared = this.rack.compareTo(o.hostname);
-        if (compared != 0) {
-            return compared;
-        }
-        return Integer.compare(this.port, o.port);
+        return this.rack.compareTo(o.rack);
     }
 
     @Override
