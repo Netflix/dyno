@@ -2470,16 +2470,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public List<String> mget(String... keys) { return d_mget(keys).getResult(); }
 
     public OperationResult<List<String>> d_mget(final String... keys) {
-        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new MultiKeyOperation<List<String>>(new ArrayList<String>(Arrays.asList(keys)), OpName.MGET) {
-                @Override
-                public List<String> execute(Jedis client, ConnectionContext state) {
-                    return client.mget(keys);
-                }
-            });
-        } else {
-            throw new UnsupportedOperationException("Not yet implemented with compression ON");
-        }
+        return connPool.executeWithFailover(new MultiKeyOperation<List<String>>(new ArrayList<String>(Arrays.asList(keys)), OpName.MGET) {
+            @Override
+            public List<String> execute(Jedis client, ConnectionContext state) {
+                return client.mget(keys);
+            }
+        });
     }
 
     @Override
