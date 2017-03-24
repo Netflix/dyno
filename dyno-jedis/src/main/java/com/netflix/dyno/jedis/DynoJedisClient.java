@@ -228,6 +228,16 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     }
 
+    /**
+     * The following commands are supported
+     *
+     * <ul>
+     *     <lh>String Operations</lh>
+     *     <li>{@link #mget(String...) MGET}</li>
+     * </ul>
+     *
+     * @param <T> the parameterized type
+     */
     private abstract class CompressionValueMultiKeyOperation<T> extends MultiKeyOperation<T> implements CompressionOperation<Jedis, T> {
 
         private CompressionValueMultiKeyOperation(List<String> keys, OpName o) {
@@ -2514,6 +2524,14 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         throw new UnsupportedOperationException("not yet implemented");
     }
 
+    /**
+     * Get values for all the keys provided. Returns a list of string values corresponding to individual keys.
+     * If one of the key is missing, the return list has null as its corresponding value.
+     *
+     * @param keys: variable list of keys to query
+     * @return list of string values
+     * @see <a href="http://redis.io/commands/MGET">mget</a>
+     */
     @Override
     public List<String> mget(String... keys) { return d_mget(keys).getResult(); }
 
