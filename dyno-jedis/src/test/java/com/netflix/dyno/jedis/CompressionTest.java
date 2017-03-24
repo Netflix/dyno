@@ -15,10 +15,7 @@
  ******************************************************************************/
 package com.netflix.dyno.jedis;
 
-import com.netflix.dyno.connectionpool.ConnectionPool;
-import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
-import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
-import com.netflix.dyno.connectionpool.OperationMonitor;
+import com.netflix.dyno.connectionpool.*;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
 import com.netflix.dyno.connectionpool.impl.LastOperationMonitor;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
@@ -30,7 +27,9 @@ import org.mockito.MockitoAnnotations;
 import redis.clients.jedis.Jedis;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.mockito.Mockito.mock;
@@ -112,6 +111,31 @@ public class CompressionTest {
     }
 
     @Test
+    public void testDynoJedis_Mget() throws IOException {
+        client.set(KEY_1KB, VALUE_1KB);
+        client.set(KEY_2KB, VALUE_1KB);
+        client.set(KEY_3KB, VALUE_1KB);
+        client.set(KEY_4KB, VALUE_1KB);
+        client.set(KEY_5KB, VALUE_1KB);
+
+        final int MGET_KEYS = 10;
+        String[] keys = {KEY_1KB, KEY_2KB, KEY_3KB, KEY_4KB, KEY_5KB};
+        String[] values = {VALUE_1KB, VALUE_2KB, VALUE_3KB, VALUE_4KB, VALUE_5KB};
+        for (int i = 0; i < keys.length; i++) {
+            client.set(keys[i], values[i]);
+        }
+
+        List<String> result = client.mget(keys);
+
+        Assert.assertEquals(result.size(), keys.length);
+
+        for (int i = 0; i< keys.length; i++) {
+            String value = result.get(i);
+            Assert.assertEquals(value, values[i]);
+        }
+    }
+
+    @Test
     public void testDynoJedis_Hmset_AboveCompressionThreshold() throws IOException {
         final Map<String, String> map = new HashMap<String, String>();
         map.put(KEY_1KB, VALUE_1KB);
@@ -151,9 +175,15 @@ public class CompressionTest {
 //    }
 
     public static final String KEY_1KB = "keyFor1KBValue";
+    public static final String KEY_2KB = "keyFor2KBValue";
     public static final String KEY_3KB = "keyFor3KBValue";
+    public static final String KEY_4KB = "keyFor4KBValue";
+    public static final String KEY_5KB = "keyFor5KBValue";
     public static final String VALUE_1KB = generateValue(1);
+    public static final String VALUE_2KB = generateValue(2);
     public static final String VALUE_3KB = generateValue(3);
+    public static final String VALUE_4KB = generateValue(4);
+    public static final String VALUE_5KB = generateValue(5);
 
     private static String generateValue(int kilobytes) {
         StringBuilder sb = new StringBuilder(kilobytes * 512); // estimating 2 bytes per char

@@ -228,6 +228,54 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     }
 
+    private abstract class CompressionValueMultiKeyOperation<T> extends MultiKeyOperation<T> implements CompressionOperation<Jedis, T> {
+
+        private CompressionValueMultiKeyOperation(List<String> keys, OpName o) {
+            super(keys, o);
+        }
+
+        /**
+         * Compresses the value based on the threshold defined by
+         * {@link ConnectionPoolConfiguration#getValueCompressionThreshold()}
+         *
+         * @param value
+         * @return
+         */
+        @Override
+        public String compressValue(String value, ConnectionContext ctx) {
+            String result = value;
+            int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
+
+            try {
+                // prefer speed over accuracy here so rather than using getBytes() to get the actual size
+                // just estimate using 2 bytes per character
+                if ((2 * value.length()) > thresholdBytes) {
+                    result = ZipUtils.compressStringToBase64String(value);
+                    ctx.setMetadata("compression", true);
+                }
+            } catch (IOException e) {
+                Logger.warn("UNABLE to compress [" + value + "] for key [" + getKey() + "]; sending value uncompressed");
+            }
+
+            return result;
+        }
+
+        @Override
+        public String decompressValue(String value, ConnectionContext ctx) {
+            try {
+                if (ZipUtils.isCompressed(value)) {
+                    ctx.setMetadata("decompression", true);
+                    return ZipUtils.decompressFromBase64String(value);
+                }
+            } catch (IOException e) {
+                Logger.warn("Unable to decompress value [" + value + "]");
+            }
+
+            return value;
+        }
+
+    }
+
     public TopologyView getTopologyView() {
         return this.getConnPool();
     }
@@ -2470,12 +2518,28 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public List<String> mget(String... keys) { return d_mget(keys).getResult(); }
 
     public OperationResult<List<String>> d_mget(final String... keys) {
-        return connPool.executeWithFailover(new MultiKeyOperation<List<String>>(new ArrayList<String>(Arrays.asList(keys)), OpName.MGET) {
-            @Override
-            public List<String> execute(Jedis client, ConnectionContext state) {
-                return client.mget(keys);
-            }
-        });
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+
+            return connPool.executeWithFailover(new MultiKeyOperation<List<String>>(new ArrayList<String>(Arrays.asList(keys)), OpName.MGET) {
+                @Override
+                public List<String> execute(Jedis client, ConnectionContext state) {
+                    return client.mget(keys);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<List<String>>(new ArrayList<String>(Arrays.asList(keys)), OpName.MGET) {
+                @Override
+                public List<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                    return new ArrayList<String>(CollectionUtils.transform(client.mget(keys),
+                            new CollectionUtils.Transform<String, String>() {
+                                @Override
+                                public String get(String s) {
+                                    return decompressValue(s, state);
+                                }
+                            }));
+                }
+            });
+        }
     }
 
     @Override
