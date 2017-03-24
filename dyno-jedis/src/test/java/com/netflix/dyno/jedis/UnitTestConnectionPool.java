@@ -112,11 +112,6 @@ public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
                     // if found, return that else return nil
                     String key = (String)keys[i];
                     String value = redis_data.get(key);
-
-                    if (value == null) {
-                        throw new RuntimeException("Key " + key + " was not found");
-                    }
-
                     values.add(i, value);
                 }
                 return values;

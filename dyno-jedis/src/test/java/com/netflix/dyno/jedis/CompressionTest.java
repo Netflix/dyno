@@ -113,17 +113,17 @@ public class CompressionTest {
     @Test
     public void testDynoJedis_Mget() throws IOException {
         client.set(KEY_1KB, VALUE_1KB);
-        client.set(KEY_2KB, VALUE_1KB);
-        client.set(KEY_3KB, VALUE_1KB);
-        client.set(KEY_4KB, VALUE_1KB);
-        client.set(KEY_5KB, VALUE_1KB);
+        client.set(KEY_2KB, VALUE_2KB);
+        client.set(KEY_3KB, VALUE_3KB);
+        // Expect one key as missing in datastore
+        //client.set(KEY_4KB, VALUE_4KB);
+        client.set(KEY_5KB, VALUE_5KB);
 
         final int MGET_KEYS = 10;
         String[] keys = {KEY_1KB, KEY_2KB, KEY_3KB, KEY_4KB, KEY_5KB};
-        String[] values = {VALUE_1KB, VALUE_2KB, VALUE_3KB, VALUE_4KB, VALUE_5KB};
-        for (int i = 0; i < keys.length; i++) {
-            client.set(keys[i], values[i]);
-        }
+
+        // expected value list
+        String[] values = {VALUE_1KB, VALUE_2KB, VALUE_3KB, null, VALUE_5KB};
 
         List<String> result = client.mget(keys);
 
