@@ -110,7 +110,44 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
         
     }
- 
+
+    /* A poor man's solution for multikey operation. This is similar to basekeyoperation just that it takes a
+       list of keys as arguments. For token aware, we just use the first key in the list. Ideally we should be doing
+       a scatter gatter
+     */
+    private abstract class MultiKeyOperation<T> implements Operation<Jedis, T> {
+
+        private final List<String> keys;
+        private final List<byte[]> binaryKeys;
+        private final OpName op;
+
+        private MultiKeyOperation(final List<String> keys, final OpName o) {
+            this.keys = keys;
+            this.binaryKeys = null;
+            this.op = o;
+        }
+
+        private MultiKeyOperation(final byte[] k, final OpName o) {
+            this.keys = null;
+            this.binaryKeys = null;
+            this.op = o;
+        }
+
+        @Override
+        public String getName() {
+            return op.name();
+        }
+
+        @Override
+        public String getKey() {
+            return this.keys.get(0);
+        }
+
+        public byte[] getBinaryKey() {
+            return this.binaryKeys.get(0);
+        }
+
+    }
 
 
     /**
@@ -155,6 +192,64 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
          *
          * @param value
          * @return 
+         */
+        @Override
+        public String compressValue(String value, ConnectionContext ctx) {
+            String result = value;
+            int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
+
+            try {
+                // prefer speed over accuracy here so rather than using getBytes() to get the actual size
+                // just estimate using 2 bytes per character
+                if ((2 * value.length()) > thresholdBytes) {
+                    result = ZipUtils.compressStringToBase64String(value);
+                    ctx.setMetadata("compression", true);
+                }
+            } catch (IOException e) {
+                Logger.warn("UNABLE to compress [" + value + "] for key [" + getKey() + "]; sending value uncompressed");
+            }
+
+            return result;
+        }
+
+        @Override
+        public String decompressValue(String value, ConnectionContext ctx) {
+            try {
+                if (ZipUtils.isCompressed(value)) {
+                    ctx.setMetadata("decompression", true);
+                    return ZipUtils.decompressFromBase64String(value);
+                }
+            } catch (IOException e) {
+                Logger.warn("Unable to decompress value [" + value + "]");
+            }
+
+            return value;
+        }
+
+    }
+
+    /**
+     * The following commands are supported
+     *
+     * <ul>
+     *     <lh>String Operations</lh>
+     *     <li>{@link #mget(String...) MGET}</li>
+     * </ul>
+     *
+     * @param <T> the parameterized type
+     */
+    private abstract class CompressionValueMultiKeyOperation<T> extends MultiKeyOperation<T> implements CompressionOperation<Jedis, T> {
+
+        private CompressionValueMultiKeyOperation(List<String> keys, OpName o) {
+            super(keys, o);
+        }
+
+        /**
+         * Compresses the value based on the threshold defined by
+         * {@link ConnectionPoolConfiguration#getValueCompressionThreshold()}
+         *
+         * @param value
+         * @return
          */
         @Override
         public String compressValue(String value, ConnectionContext ctx) {
@@ -2429,9 +2524,40 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         throw new UnsupportedOperationException("not yet implemented");
     }
 
+    /**
+     * Get values for all the keys provided. Returns a list of string values corresponding to individual keys.
+     * If one of the key is missing, the return list has null as its corresponding value.
+     *
+     * @param keys: variable list of keys to query
+     * @return list of string values
+     * @see <a href="http://redis.io/commands/MGET">mget</a>
+     */
     @Override
-    public List<String> mget(String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public List<String> mget(String... keys) { return d_mget(keys).getResult(); }
+
+    public OperationResult<List<String>> d_mget(final String... keys) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+
+            return connPool.executeWithFailover(new MultiKeyOperation<List<String>>(Arrays.asList(keys), OpName.MGET) {
+                @Override
+                public List<String> execute(Jedis client, ConnectionContext state) {
+                    return client.mget(keys);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<List<String>>(Arrays.asList(keys), OpName.MGET) {
+                @Override
+                public List<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                    return new ArrayList<String>(CollectionUtils.transform(client.mget(keys),
+                            new CollectionUtils.Transform<String, String>() {
+                                @Override
+                                public String get(String s) {
+                                    return decompressValue(s, state);
+                                }
+                            }));
+                }
+            });
+        }
     }
 
     @Override
