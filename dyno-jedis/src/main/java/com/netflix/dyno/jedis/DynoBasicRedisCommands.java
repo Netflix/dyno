@@ -62,11 +62,11 @@ public class DynoBasicRedisCommands implements BasicCommands {
         }
 
     }
-
-    public StringBasedResult<String> dyno_flushdb() {
+    
+    public StringBasedResult<String> dyno_flushall() {
         final Map<String, String> results = new LinkedHashMap<>();
 
-        List<OperationResult<String>> opResults = scatterGatherFlushDB();
+        List<OperationResult<String>> opResults = scatterFlushAll();
         for (OperationResult<String> opResult : opResults) {
             results.put(opResult.getNode().getHostAddress(), opResult.getResult());
         }
@@ -74,8 +74,37 @@ public class DynoBasicRedisCommands implements BasicCommands {
         return new StringBasedResultImpl<>(results);
 
     }
+    
+    public StringBasedResult<String> dyno_flushdb() {
+        final Map<String, String> results = new LinkedHashMap<>();
 
-    private List<OperationResult<String>> scatterGatherFlushDB() {
+        List<OperationResult<String>> opResults = scatterFlushDB();
+        for (OperationResult<String> opResult : opResults) {
+            results.put(opResult.getNode().getHostAddress(), opResult.getResult());
+        }
+
+        return new StringBasedResultImpl<>(results);
+
+    }
+    
+
+    private List<OperationResult<String>> scatterFlushAll() {
+        return new ArrayList<>(connPool.executeWithRing(new BaseCommOperation<String>(CommName.FLUSHALL) {
+            @Override
+            public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
+
+                return client.flushAll();
+            }
+
+            @Override
+            public String getKey() {
+                // TODO Auto-generated method stub
+                return null;
+            }
+        }));
+    }
+    
+    private List<OperationResult<String>> scatterFlushDB() {
         return new ArrayList<>(connPool.executeWithRing(new BaseCommOperation<String>(CommName.FLUSHDB) {
             @Override
             public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
@@ -115,11 +144,6 @@ public class DynoBasicRedisCommands implements BasicCommands {
 
     }
 
-    @Override
-    public String flushAll() {
-        throw new UnsupportedOperationException("not yet implemented");
-
-    }
 
     @Override
     public String auth(String password) {
@@ -207,8 +231,14 @@ public class DynoBasicRedisCommands implements BasicCommands {
 
     @Override
     public String flushDB() {
-        // TODO Auto-generated method stub
-        return null;
+        throw new UnsupportedOperationException("Not supported - use scatterFlushDB instead");
+
+    }
+    
+    @Override
+    public String flushAll() {
+        throw new UnsupportedOperationException("Not supported - use scatterFlushAll instead");
+
     }
 
 }

@@ -205,7 +205,7 @@ public class DynoDistributedCounterDemo extends DynoJedisDemo {
     }
 
     @Override
-    public void cleanup(int nKeys) {
+    public void cleanupWithDel(int nKeys) {
         try {
             for (DynoCounter counter : counters) {
                 cleanup(counter);

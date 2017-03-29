@@ -3199,7 +3199,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     public DynoJedisPipeline pipelined() {
         return new DynoJedisPipeline(getConnPool(), checkAndInitPipelineMonitor(), getConnPool().getMonitor());
-    }
+    }   
 
     private DynoJedisPipelineMonitor checkAndInitPipelineMonitor() {
 
@@ -3214,6 +3214,14 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             pipelineMonitor.get().init();
         }
         return pipelineMonitor.get();
+    }
+    
+    public DynoBasicRedisCommands basicRedisCommands() {
+        return new DynoBasicRedisCommands(getConnPool(), initBasicRedisCommandsMonitor(), getConnPool().getMonitor());
+    }
+    
+    private DynoBasicRedisCommandsMonitor initBasicRedisCommandsMonitor() {
+        return new DynoBasicRedisCommandsMonitor(appName);
     }
 
     public static class Builder {
