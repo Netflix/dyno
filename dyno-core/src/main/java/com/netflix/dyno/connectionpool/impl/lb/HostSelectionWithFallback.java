@@ -42,6 +42,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -230,20 +231,24 @@ public class HostSelectionWithFallback<CL> {
 		final Collection<HostToken> localZoneTokens = CollectionUtils.filter(hostTokens.values(), new Predicate<HostToken>() {
 			@Override
 			public boolean apply(HostToken x) {
+				if (localRack == null) {
+					logger.warn("local rack is NULL for {}", this);
+				}
 				return localRack == null || localRack.equalsIgnoreCase(x.getHost().getRack());
 			}
 		});
 		
-		final Collection<Long> tokens = CollectionUtils.transform(localZoneTokens, new Transform<HostToken, Long>() {
-			@Override
-			public Long get(HostToken x) {
+		final Set<Long> tokens = Collections.unmodifiableSet(
+				new HashSet<>(CollectionUtils.transform(localZoneTokens, new Transform<HostToken, Long>() {
+					@Override
+					public Long get(HostToken x) {
 				return x.getToken();
 			}
-		});
+				})));
 		
 		DynoConnectException lastEx = null;
 		
-		List<Connection<CL>> connections = new ArrayList<Connection<CL>>();
+		final List<Connection<CL>> connections = new ArrayList<>();
 				
 		for (Long token : tokens) {
 			try { 
@@ -474,4 +479,22 @@ public class HostSelectionWithFallback<CL> {
     public Long getTokenForKey(String key) {
         return localSelector.getTokenForKey(key).getToken();
     }
+
+	@Override
+	public String toString() {
+		return "HostSelectionWithFallback{" +
+				"localDataCenter='" + localDataCenter + '\'' +
+				", localRack='" + localRack + '\'' +
+				", localSelector=" + localSelector +
+				", remoteDCSelectors=" + remoteDCSelectors +
+				", hostTokens=" + hostTokens +
+				", tokenSupplier=" + tokenSupplier +
+				", cpConfig=" + cpConfig +
+				", cpMonitor=" + cpMonitor +
+				", replicationFactor=" + replicationFactor +
+				", topology=" + topology +
+				", remoteDCNames=" + remoteDCNames +
+				", selectorFactory=" + selectorFactory +
+				'}';
+	}
 }

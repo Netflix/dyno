@@ -357,91 +357,91 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
     }
 
     @Override
-    public <R> Collection<OperationResult<R>> executeWithRing(Operation<CL, R> op) throws DynoException {
+	public <R> Collection<OperationResult<R>> executeWithRing(Operation<CL, R> op) throws DynoException {
 
-	// Start recording the operation
-	long startTime = System.currentTimeMillis();
+		// Start recording the operation
+		long startTime = System.currentTimeMillis();
 
-	Collection<Connection<CL>> connections = selectionStrategy
-		.getConnectionsToRing(cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
+		Collection<Connection<CL>> connections = selectionStrategy
+				.getConnectionsToRing(cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
 
-	LinkedBlockingQueue<Connection<CL>> connQueue = new LinkedBlockingQueue<Connection<CL>>();
-	connQueue.addAll(connections);
+		LinkedBlockingQueue<Connection<CL>> connQueue = new LinkedBlockingQueue<Connection<CL>>();
+		connQueue.addAll(connections);
 
-	List<OperationResult<R>> results = new ArrayList<OperationResult<R>>();
+		List<OperationResult<R>> results = new ArrayList<OperationResult<R>>();
 
-	DynoException lastException = null;
+		DynoException lastException = null;
 
-	try {
-	    while (!connQueue.isEmpty()) {
+		try {
+			while (!connQueue.isEmpty()) {
 
-		Connection<CL> connection = connQueue.poll();
+				Connection<CL> connection = connQueue.poll();
 
-		RetryPolicy retry = cpConfiguration.getRetryPolicyFactory().getRetryPolicy();
-		retry.begin();
+				RetryPolicy retry = cpConfiguration.getRetryPolicyFactory().getRetryPolicy();
+				retry.begin();
 
-		do {
-		    try {
-			connection.getContext().setMetadata("host", connection.getHost().getHostAddress());
-			OperationResult<R> result = connection.execute(op);
+				do {
+					try {
+						connection.getContext().setMetadata("host", connection.getHost().getHostAddress());
+						OperationResult<R> result = connection.execute(op);
 
-			// Add context to the result from the successful
-			// execution
-			result.setNode(connection.getHost()).addMetadata(connection.getContext().getAll());
+						// Add context to the result from the successful
+						// execution
+						result.setNode(connection.getHost()).addMetadata(connection.getContext().getAll());
 
-			retry.success();
-			cpMonitor.incOperationSuccess(connection.getHost(), System.currentTimeMillis() - startTime);
+						retry.success();
+						cpMonitor.incOperationSuccess(connection.getHost(), System.currentTimeMillis() - startTime);
 
-			results.add(result);
+						results.add(result);
 
-		    } catch (NoAvailableHostsException e) {
-			cpMonitor.incOperationFailure(null, e);
+					} catch (NoAvailableHostsException e) {
+						cpMonitor.incOperationFailure(null, e);
 
-			throw e;
-		    } catch (DynoException e) {
+						throw e;
+					} catch (DynoException e) {
 
-			retry.failure(e);
-			lastException = e;
+						retry.failure(e);
+						lastException = e;
 
-			cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, e);
+						cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, e);
 
-			// Track the connection health so that the pool can be
-			// purged at a later point
-			if (connection != null) {
-			    cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
+						// Track the connection health so that the pool can be
+						// purged at a later point
+						if (connection != null) {
+							cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
+						}
+
+					} catch (Throwable t) {
+						throw new RuntimeException(t);
+					} finally {
+						connection.getContext().reset();
+						connection.getParentConnectionPool().returnConnection(connection);
+					}
+
+				} while (retry.allowRetry());
 			}
 
-		    } catch (Throwable t) {
-			throw new RuntimeException(t);
-		    } finally {
-			connection.getContext().reset();
-			connection.getParentConnectionPool().returnConnection(connection);
-		    }
+			// we fail the entire operation on a partial failure. hence need to
+			// clean up the rest of the pending connections
+		} finally {
+			List<Connection<CL>> remainingConns = new ArrayList<Connection<CL>>();
+			connQueue.drainTo(remainingConns);
+			for (Connection<CL> connectionToClose : remainingConns) {
+				try {
+					connectionToClose.getContext().reset();
+					connectionToClose.getParentConnectionPool().returnConnection(connectionToClose);
+				} catch (Throwable t) {
 
-		} while (retry.allowRetry());
-	    }
-
-	    // we fail the entire operation on a partial failure. hence need to
-	    // clean up the rest of the pending connections
-	} finally {
-	    List<Connection<CL>> remainingConns = new ArrayList<Connection<CL>>();
-	    connQueue.drainTo(remainingConns);
-	    for (Connection<CL> connectionToClose : remainingConns) {
-		try {
-		    connectionToClose.getContext().reset();
-		    connectionToClose.getParentConnectionPool().returnConnection(connectionToClose);
-		} catch (Throwable t) {
-
+				}
+			}
 		}
-	    }
-	}
 
-	if (lastException != null) {
-	    throw lastException;
-	} else {
-	    return results;
+		if (lastException != null) {
+			throw lastException;
+		} else {
+			return results;
+		}
 	}
-    }
 
     /**
      * Use with EXTREME CAUTION. Connection that is borrowed must be returned,
