@@ -216,8 +216,8 @@ public class DynoJedisDemo {
         logger.info("SCAN TEST -- begin");
 
         if (populateKeys) {
+			logger.info("Writing 500 keys to " );
             for (int i=0; i<500; i++) {
-                logger.info("Writing 500 keys to " );
                 client.set("DynoClientTest_key-"+i, "value-"+i);
             }
         }
@@ -712,7 +712,7 @@ public class DynoJedisDemo {
 	/**
 	 *
 	 * @param args Should contain:
-	 *             <ol>dynomite_cluster_name</ol>
+	 *             <ol>dynomite_cluster_name, e.g. dyno_sandbox_quorum</ol>
 	 *             <ol>
 	 *                 test number, in the set:
 	 *                 1 - simple test
@@ -772,7 +772,8 @@ public class DynoJedisDemo {
 					break;
 				}
                 case 4: {
-                    demo.runScanTest(false);
+                	final boolean writeKeys = Boolean.valueOf(props.getProperty("dyno.demo.scan.populateKeys"));
+                    demo.runScanTest(writeKeys);
                     break;
                 }
                 case 5: {
