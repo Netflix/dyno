@@ -712,13 +712,13 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return "0";
     }
 
-    private List<OperationResult<ScanResult<String>>> scatterGatherScan(final CursorBasedResult<String> cursor, final String... pattern) {
+    private List<OperationResult<ScanResult<String>>> scatterGatherScan(final CursorBasedResult<String> cursor, final int count, final String... pattern) {
         return new ArrayList<>(
                 connPool.executeWithRing(new BaseKeyOperation<ScanResult<String>>("SCAN", OpName.SCAN) {
                     @Override
                     public ScanResult<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                        if (pattern != null) {
-                            ScanParams sp = new ScanParams();
+                        if (pattern != null && pattern.length > 0) {
+                            ScanParams sp = new ScanParams().count(count);
                             for (String s: pattern) {
                                 sp.match(s);
                             }
@@ -3290,19 +3290,22 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     public CursorBasedResult<String> dyno_scan(String... pattern) {
-        return this.dyno_scan(null, pattern);
+        return this.dyno_scan(10, pattern);
     }
 
-    public CursorBasedResult<String> dyno_scan(CursorBasedResult<String> cursor, String... pattern) {
+    public CursorBasedResult<String> dyno_scan(int count, String... pattern) {
+        return this.dyno_scan(null, count, pattern);
+    }
+
+    public CursorBasedResult<String> dyno_scan(CursorBasedResult<String> cursor, int count, String... pattern) {
         final Map<String, ScanResult<String>> results = new LinkedHashMap<>();
 
-        List<OperationResult<ScanResult<String>>> opResults = scatterGatherScan(cursor, pattern);
+        List<OperationResult<ScanResult<String>>> opResults = scatterGatherScan(cursor, count, pattern);
         for (OperationResult<ScanResult<String>> opResult: opResults) {
             results.put(opResult.getNode().getHostAddress(), opResult.getResult());
         }
 
         return new CursorBasedResultImpl<>(results);
-
     }
 
     @Override
