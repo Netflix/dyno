@@ -58,8 +58,10 @@ public class DynoJedisDemo {
     protected int numKeys;
 
     protected final String localRack;
+    protected final String clusterName;
 
-	public DynoJedisDemo(String localRack) {
+	public DynoJedisDemo(String clusterName, String localRack) {
+		this.clusterName =  clusterName;
         this.localRack = localRack;
     }
 
@@ -215,16 +217,20 @@ public class DynoJedisDemo {
     public void runScanTest(boolean populateKeys) throws Exception {
         logger.info("SCAN TEST -- begin");
 
+        final String keyPattern = System.getProperty("dyno.demo.scan.key.pattern", "DynoClientTest_key-*");
+        final String keyPrefix = System.getProperty("dyno.demo.scan.key.prefix", "DynoClientTest_key-");
+
         if (populateKeys) {
-			logger.info("Writing 500 keys to " );
+			logger.info("Writing 500 keys to {} with prefix {}", this.clusterName, keyPrefix);
             for (int i=0; i<500; i++) {
-                client.set("DynoClientTest_key-"+i, "value-"+i);
+                client.set(keyPrefix + i, "value-"+i);
             }
         }
 
+		logger.info("Reading keys from {} with pattern {}", this.clusterName, keyPattern);
         CursorBasedResult<String> cbi = null;
         do {
-			cbi = client.dyno_scan(cbi, 100, "DynoClientTest_key-*");
+			cbi = client.dyno_scan(cbi, 10000, keyPattern);
 
             List<String> results = cbi.getStringResult();
             for (String res: results) {
@@ -573,7 +579,10 @@ public class DynoJedisDemo {
 			throw new IllegalArgumentException("Discovery URL not found");
 		}
 
-		final String url = String.format("http://%s/%s", System.getProperty(discoveryKey), clusterName);
+		String region = System.getProperty("EC2_REGION");
+		final String discoveryUrl = String.format(System.getProperty(discoveryKey), region);
+
+		final String url = String.format("http://%s/%s", discoveryUrl, clusterName);
 		
 		HttpClient client = new DefaultHttpClient();
 		try {
@@ -747,7 +756,7 @@ public class DynoJedisDemo {
 		String hostsFile = props.getProperty("dyno.demo.hostsFile");
 		int port = Integer.valueOf(props.getProperty("dyno.demo.port", "8102"));
 
-        DynoJedisDemo demo = new DynoJedisDemo(rack);
+        DynoJedisDemo demo = new DynoJedisDemo(clusterName, rack);
 
         try {
 			if (hostsFile != null) {
