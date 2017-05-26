@@ -16,6 +16,7 @@
 package com.netflix.dyno.jedis;
 
 import com.netflix.discovery.DiscoveryClient;
+import com.netflix.discovery.EurekaClient;
 import com.netflix.dyno.connectionpool.*;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
@@ -3351,7 +3352,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         private String clusterName;
         private ConnectionPoolConfigurationImpl cpConfig;
         private HostSupplier hostSupplier;
-        private DiscoveryClient discoveryClient;
+        private EurekaClient discoveryClient;
         private String dualWriteClusterName;
         private HostSupplier dualWriteHostSupplier;
         private DynoDualWriterClient.Dial dualWriteDial;
@@ -3380,8 +3381,13 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
-
+        @Deprecated
         public Builder withDiscoveryClient(DiscoveryClient client) {
+            discoveryClient = client;
+            return this;
+        }
+        
+        public Builder withDiscoveryClient(EurekaClient client) {
             discoveryClient = client;
             return this;
         }
@@ -3440,7 +3446,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                     shadowSupplier = new EurekaHostsSupplier(shadowConfig.getDualWriteClusterName(), discoveryClient);
                 } else {
                     throw new DynoConnectException("HostSupplier for DualWrite cluster is REQUIRED if you are not " +
-                        "using EurekaHostsSupplier implementation or using a DiscoveryClient");
+                        "using EurekaHostsSupplier implementation or using a EurekaClient");
                 }
             } else {
                 shadowSupplier = dualWriteHostSupplier;
