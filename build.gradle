@@ -35,6 +35,23 @@ subprojects {
         testCompile "org.mockito:mockito-all:1.9.5"
     }
 
+    // Maven-publish gradle bug workaround
+    // https://github.com/Netflix/dyno/issues/138
+    publishing {
+        publications {
+            nebula(MavenPublication) {
+                pom.withXml {
+                    configurations.compile.resolvedConfiguration.firstLevelModuleDependencies.each { dep ->
+                        asNode().dependencies[0].dependency.find {
+                            it.artifactId[0].text() == dep.moduleName &&
+                                    it.groupId[0].text() == dep.moduleGroup
+                        }.scope[0].value = 'compile'
+                    }
+                }
+            }
+        }
+    }
+
     project.tasks.withType(Javadoc) {
         if (JavaVersion.current().isJava8Compatible()) {
             options.addStringOption('Xdoclint:none', '-quiet')
