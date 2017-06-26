@@ -1319,11 +1319,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_set(key, value).getResult();
     }
 
-    @Override
-    public String set(String key, String value, String nxxx, String expx, long time) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
     public OperationResult<String> d_set(final String key, final String value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
             return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
@@ -1343,6 +1338,31 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     }
 
+    @Override
+    public String set(final String key, final String value, final String nxxx, final String expx, final long time) {
+        return d_set(key, value, nxxx, expx, time).getResult();
+    }
+    
+
+    public OperationResult<String> d_set(final String key, final String value, final String nxxx, final String expx, final long time) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.set(key, value, nxxx, expx, time);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.SET) {
+                @Override
+                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                    return client.set(key, compressValue(value, state), nxxx, expx, time);
+                }
+            });
+        }
+
+    }
+    
     @Override
     public Boolean setbit(final String key, final long offset, final boolean value) {
         return d_setbit(key, offset, value).getResult();
