@@ -54,6 +54,15 @@ public class CursorBasedResultImpl<T> implements CursorBasedResult<T> {
     }
 
     @Override
+    public List<String> getStringResult() {
+        final List<String> aggregated = new ArrayList<>();
+        for (Map.Entry<String, ScanResult<T>> entry: result.entrySet()) {
+            aggregated.add(String.format("%s -> %s", entry.getKey(), entry.getValue().getStringCursor()));
+        }
+        return aggregated;
+    }
+
+    @Override
     public String getCursorForHost(String host) {
         ScanResult<T> sr = result.get(host);
         if (sr != null) {

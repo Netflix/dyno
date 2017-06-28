@@ -24,6 +24,8 @@ public interface CursorBasedResult<T> {
 
     List<T> getResult();
 
+    List<String> getStringResult();
+
     String getCursorForHost(String host);
 
     boolean isComplete();

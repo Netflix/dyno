@@ -16,8 +16,9 @@
 package com.netflix.dyno.connectionpool;
 
 /**
- * Interface for retry policies when executing {@link Operation}
- * @author poberai
+ * Interface for retry policies when executing an {@link Operation}.
+ *
+ * @author poberai, jcacciatore
  *
  */
 public interface RetryPolicy {
@@ -37,20 +38,21 @@ public interface RetryPolicy {
     void failure(Exception e);
 
     /**
-     * Ask the policy if a retry is allowed. This may internally sleep
+     * Ask the policy if a retry is allowed. Note that this will return false if {@link #success()} has been called.
      * 
      * @return boolean
      */
     boolean allowRetry();
 
     /**
-     * Ask the policy is a retry can use a remote dc 
+     * Ask the policy is a retry can use a remote zone (rack)
+     *
      * @return boolean
      */
     boolean allowCrossZoneFallback();
     
     /**
-     * Return the number of attempts since begin was called
+     * Return the number of attempts since {@link #begin()} was called
      * 
      * @return int
      */
