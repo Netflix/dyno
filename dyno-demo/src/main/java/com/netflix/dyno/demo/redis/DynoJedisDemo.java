@@ -18,6 +18,7 @@ package com.netflix.dyno.demo.redis;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 import java.util.concurrent.Callable;
@@ -57,8 +58,10 @@ public class DynoJedisDemo {
     protected int numKeys;
 
     protected final String localRack;
+    protected final String clusterName;
 
-	public DynoJedisDemo(String localRack) {
+	public DynoJedisDemo(String clusterName, String localRack) {
+		this.clusterName =  clusterName;
         this.localRack = localRack;
     }
 
@@ -214,19 +217,25 @@ public class DynoJedisDemo {
     public void runScanTest(boolean populateKeys) throws Exception {
         logger.info("SCAN TEST -- begin");
 
+        final String keyPattern = System.getProperty("dyno.demo.scan.key.pattern", "DynoClientTest_key-*");
+        final String keyPrefix = System.getProperty("dyno.demo.scan.key.prefix", "DynoClientTest_key-");
+
         if (populateKeys) {
+			logger.info("Writing 500 keys to {} with prefix {}", this.clusterName, keyPrefix);
             for (int i=0; i<500; i++) {
-                logger.info("Writing 500 keys to " );
-                client.set("DynoClientTest_key-"+i, "value-"+i);
+                client.set(keyPrefix + i, "value-"+i);
             }
         }
 
+		logger.info("Reading keys from {} with pattern {}", this.clusterName, keyPattern);
         CursorBasedResult<String> cbi = null;
         do {
-            cbi = client.dyno_scan(cbi, "DynoClientTest_key-*");
+			cbi = client.dyno_scan(cbi, 10000, keyPattern);
 
-            logger.info("result: " + cbi.getResult().toString());
-
+            List<String> results = cbi.getStringResult();
+            for (String res: results) {
+            	logger.info(res);
+			}
         } while (!cbi.isComplete());
 
         logger.info("SCAN TEST -- done");
@@ -562,36 +571,42 @@ public class DynoJedisDemo {
 		return ss;
 	}
 	private List<Host> getHostsFromDiscovery(final String clusterName) {
-		
-		String url = "http://discovery.cloudqa.netflix.net:7001/discovery/v2/apps/" + clusterName;
+
+		String env = System.getProperty("netflix.environment", "test");
+		String discoveryKey = String.format("dyno.demo.discovery.%s", env);
+
+		if (!System.getProperties().containsKey(discoveryKey)) {
+			throw new IllegalArgumentException("Discovery URL not found");
+		}
+
+		String region = System.getProperty("EC2_REGION");
+		final String discoveryUrl = String.format(System.getProperty(discoveryKey), region);
+
+		final String url = String.format("http://%s/%s", discoveryUrl, clusterName);
 		
 		HttpClient client = new DefaultHttpClient();
 		try {
 			HttpResponse response = client.execute(new HttpGet(url));
 			InputStream in = response.getEntity().getContent();
-			
-			//InputStream in = new FileInputStream(new File("/tmp/aa"));
-			
+
 			SAXParserFactory parserFactor = SAXParserFactory.newInstance();
 			
 			SAXParser parser = parserFactor.newSAXParser();
-			SAXHandler handler = new SAXHandler("instance", "public-hostname", "availability-zone", "status");
+			SAXHandler handler = new SAXHandler("instance", "public-hostname", "availability-zone", "status", "local-ipv4");
 			parser.parse(in, handler);
 			
 			List<Host> hosts = new ArrayList<Host>();
 			
 			for (Map<String, String> map : handler.getList()) {
-				
-
 				String rack = map.get("availability-zone");
 				Status status = map.get("status").equalsIgnoreCase("UP") ? Status.Up : Status.Down;
-                Host host = new Host(map.get("public-hostname"), 8102, rack, status);
+                Host host = new Host(map.get("public-hostname"), map.get("local-ipv4"), rack, status);
 				hosts.add(host);
 				System.out.println("Host: " + host);
 			}
 			
 			return hosts;
-		} catch (Exception e) {
+		} catch (Throwable e) {
 			throw new RuntimeException(e);
 		}
 	}
@@ -706,37 +721,48 @@ public class DynoJedisDemo {
 	/**
 	 *
 	 * @param args Should contain:
-	 *             <ol>dynomite_cluster_name</ol>
+	 *             <ol>dynomite_cluster_name, e.g. dyno_sandbox_quorum</ol>
 	 *             <ol>
 	 *                 test number, in the set:
 	 *                 1 - simple test
 	 *                 2 - keys test
 	 *                 3 - multi-threaded
-	 *                 4 - singe pipeline
+	 *                 4 - scan test
 	 *                 5 - pipeline
-	 *                 6 - binary single pipeline
 	 *             </ol>
 	 */
-	public static void main(String args[]) {
+	public static void main(String args[]) throws IOException {
 
 		if (args.length < 2) {
-			System.out.println("Incorrect numer of arguments.");
+			System.out.println("Incorrect number of arguments.");
 			printUsage();
 			System.exit(1);
 		}
 
 		String clusterName = args[0];
 		int testNumber = Integer.valueOf(args[1]);
-        String localDC = args.length > 2 ? args[2] : "us-east-1e";
-        String hostsFile = args.length == 4 ? args[3] : null;
 
-        DynoJedisDemo demo = new DynoJedisDemo(localDC);
+		Properties props = new Properties();
+		props.load(DynoJedisDemo.class.getResourceAsStream("/demo.properties"));
+		for (String name: props.stringPropertyNames()) {
+			System.setProperty(name, props.getProperty(name));
+		}
+
+		if (!props.containsKey("EC2_AVAILABILITY_ZONE") && !props.containsKey("dyno.dyno_demo.lbStrategy")) {
+			throw new IllegalArgumentException("MUST set local for load balancing OR set the load balancing strategy to round robin");
+		}
+
+		String rack = props.getProperty("EC2_AVAILABILITY_ZONE", "us-east-1e");
+		String hostsFile = props.getProperty("dyno.demo.hostsFile");
+		int port = Integer.valueOf(props.getProperty("dyno.demo.port", "8102"));
+
+        DynoJedisDemo demo = new DynoJedisDemo(clusterName, rack);
 
         try {
 			if (hostsFile != null) {
-                demo.initWithRemoteClusterFromFile(hostsFile, 8102);
+                demo.initWithRemoteClusterFromFile(hostsFile, port);
             } else {
-                demo.initWithRemoteClusterFromEurekaUrl(clusterName, 8102);
+                demo.initWithRemoteClusterFromEurekaUrl(clusterName, port);
             }
 
 			System.out.println("Connected");
@@ -755,7 +781,8 @@ public class DynoJedisDemo {
 					break;
 				}
                 case 4: {
-                    demo.runScanTest(false);
+                	final boolean writeKeys = Boolean.valueOf(props.getProperty("dyno.demo.scan.populateKeys"));
+                    demo.runScanTest(writeKeys);
                     break;
                 }
                 case 5: {
@@ -776,11 +803,15 @@ public class DynoJedisDemo {
 			
 			demo.cleanup(demo.numKeys);
 			
-		} catch (Exception e) {
+		} catch (Throwable e) {
 			e.printStackTrace();
 		} finally {
 			demo.stop();
             System.out.println("Done");
+
+			System.out.flush();
+			System.err.flush();
+			System.exit(0);
 		}
 	}
 

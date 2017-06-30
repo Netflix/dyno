@@ -1,5 +1,5 @@
 plugins {
-    id 'nebula.netflixoss' version '3.5.1'
+    id 'nebula.netflixoss' version '3.6.0'
 }
 
 // Establish version and status
@@ -58,10 +58,15 @@ project(':dyno-contrib') {
     
     dependencies {
         compileApi  project(':dyno-core')
-        compileApi "com.google.inject:guice:3.0"
-        compileApi "com.netflix.archaius:archaius-core:0.5.6"
-        compileApi "com.netflix.servo:servo-core:0.5.5"
-        compileApi 'com.netflix.eureka:eureka-client:1.1.110'
+        compileApi "com.google.inject:guice:4.1.0"
+        compileApi "com.netflix.archaius:archaius-core:0.7.5"
+        compileApi "com.netflix.servo:servo-core:0.12.16"
+        compileApi 'com.netflix.eureka:eureka-client:1.6.2'
+        compileApi 'org.apache.commons:commons-lang3:3.5'
+        compileApi ('com.ecwid.consul:consul-api:1.2.1') {
+            exclude group: 'org.apache.httpcomponents'
+        }       
+        testCompile 'com.pszymczyk.consul:embedded-consul:0.3.3'
     }
 }
 

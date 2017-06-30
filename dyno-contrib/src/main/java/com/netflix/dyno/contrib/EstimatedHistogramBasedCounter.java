@@ -83,6 +83,11 @@ public abstract class EstimatedHistogramBasedCounter extends AbstractMonitor<Num
 			return estHistogram.mean();
 		}
 
+        @Override
+        public Number getValue(int pollerIndex) {
+            return estHistogram.mean();
+        }
+
 		public void add(long n) {
             this.estHistogram.add(n);
         }
@@ -90,6 +95,7 @@ public abstract class EstimatedHistogramBasedCounter extends AbstractMonitor<Num
         public void reset() {
             this.estHistogram.getBuckets(true);
         }
+
 	}
 
 	public static class EstimatedHistogramPercentile extends EstimatedHistogramBasedCounter {
@@ -110,5 +116,10 @@ public abstract class EstimatedHistogramBasedCounter extends AbstractMonitor<Num
 		public Number getValue() {
 			return estHistogram.percentile(percentile);
 		}
+
+        @Override
+        public Number getValue(int pollerIndex) {
+            return estHistogram.percentile(percentile);
+        }
 	}
 }

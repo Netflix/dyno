@@ -16,11 +16,12 @@
 package com.netflix.dyno.connectionpool.impl;
 
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.netflix.dyno.connectionpool.RetryPolicy;
 
 /**
- * Simple implementation of {@link RetryPolicy} that ensures an operation can be re tried at most N times. 
+ * Simple implementation of {@link RetryPolicy} that ensures an operation can be re tried at most N times.
  * 
  * Note that RetryNTimes (2) means that a total of 2 + 1 = 3 attempts will be allowed before giving up.
  * 
@@ -30,7 +31,7 @@ import com.netflix.dyno.connectionpool.RetryPolicy;
 public class RetryNTimes implements RetryPolicy {
 
 	private int n; 
-	private final AtomicInteger count = new AtomicInteger(0);
+	private final AtomicReference<RetryState> state = new AtomicReference<>(new RetryState(0, false));
 	private final boolean allowCrossZoneFallback;
 	
 	public RetryNTimes(int n, boolean allowFallback) {
@@ -44,22 +45,31 @@ public class RetryNTimes implements RetryPolicy {
 
 	@Override
 	public void success() {
-		count.incrementAndGet();
+		boolean success = false;
+		RetryState rs = state.get();
+		while (!success) {
+			success = state.compareAndSet(rs, new RetryState(rs.count + 1, true));
+		}
 	}
 
 	@Override
 	public void failure(Exception e) {
-		count.incrementAndGet();
+		boolean success = false;
+		RetryState rs = state.get();
+		while (!success) {
+			success = state.compareAndSet(rs, new RetryState(rs.count + 1, false));
+		}
 	}
 
 	@Override
 	public boolean allowRetry() {
-		return count.get() <= n;
+		final RetryState rs = state.get();
+		return !rs.success && rs.count <= n;
 	}
 
 	@Override
 	public int getAttemptCount() {
-		return count.get();
+		return state.get().count;
 	}
 
 	@Override
@@ -71,7 +81,7 @@ public class RetryNTimes implements RetryPolicy {
 	public String toString() {
 		return "RetryNTimes{" +
 				"n=" + n +
-				", count=" + count +
+				", state=" + state.get() +
 				", allowCrossZoneFallback=" + allowCrossZoneFallback +
 				'}';
 	}
@@ -100,6 +110,24 @@ public class RetryNTimes implements RetryPolicy {
 			return "RetryFactory{" +
 					"n=" + n +
 					", allowCrossZoneFallback=" + allowCrossZoneFallback +
+					'}';
+		}
+	}
+
+	private class RetryState {
+		private final int count;
+		private final boolean success;
+
+		public RetryState(final int count, final boolean success) {
+			this.count = count;
+			this.success = success;
+		}
+
+		@Override
+		public String toString() {
+			return "RetryState{" +
+					"count=" + count +
+					", success=" + success +
 					'}';
 		}
 	}

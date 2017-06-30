@@ -36,8 +36,8 @@ public class DynoDistributedCounterDemo extends DynoJedisDemo {
 
     private final List<DynoCounter> counters = new ArrayList<DynoCounter>();
 
-    public DynoDistributedCounterDemo(String localDC) {
-        super(localDC);
+    public DynoDistributedCounterDemo(String clusterName, String localDC) {
+        super(clusterName, localDC);
     }
 
     private void runMultiThreadedCounter(final int numCounters) throws Exception {
@@ -236,7 +236,9 @@ public class DynoDistributedCounterDemo extends DynoJedisDemo {
      */
     public static void main(String[] args) {
 
-        DynoDistributedCounterDemo demo = new DynoDistributedCounterDemo("us-east-1e");
+        final String clusterName = args[0];
+
+        final DynoDistributedCounterDemo demo = new DynoDistributedCounterDemo(clusterName, "us-east-1e");
         int numCounters = (args.length == 2) ? Integer.valueOf(args[1]) : 1;
 
         try {

@@ -20,26 +20,26 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionContextImpl;
 import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
+import org.junit.Assert;
+import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import redis.clients.jedis.Jedis;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-import static org.mockito.Matchers.anyMap;
-import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.*;
 import static org.mockito.Mockito.when;
 
 public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
 
+    Map<String, String> redis_data;
     @Mock
     Jedis client;
 
@@ -57,11 +57,14 @@ public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
 
         this.config = config;
         this.opMonitor = opMonitor;
-
+        this.redis_data = new HashMap<String, String>();
         when(client.set(anyString(), anyString())).thenAnswer(new Answer<String>() {
             @Override
             public String answer(InvocationOnMock invocation) throws Throwable {
-                return (String) invocation.getArguments()[1];
+                String key = (String)invocation.getArguments()[0];
+                String value = (String)invocation.getArguments()[1];
+                redis_data.put(key, value);
+                return value;
             }
         });
 
@@ -93,6 +96,25 @@ public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
                 }
 
                 return "OK";
+            }
+        });
+
+        when(client.mget(Matchers.<String>anyVararg())).thenAnswer (new Answer<List<String>>() {
+            @Override
+            public List<String> answer(InvocationOnMock invocation) throws Throwable {
+
+                // Get the keys passed
+                Object[] keys = invocation.getArguments();
+
+                List<String> values = new ArrayList<String>(10);
+                for (int i = 0; i < keys.length; i++) {
+                    // get the ith key, find the value in redis_data
+                    // if found, return that else return nil
+                    String key = (String)keys[i];
+                    String value = redis_data.get(key);
+                    values.add(i, value);
+                }
+                return values;
             }
         });
 

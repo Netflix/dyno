@@ -31,6 +31,7 @@ import com.netflix.appinfo.InstanceInfo;
 import com.netflix.appinfo.InstanceInfo.InstanceStatus;
 import com.netflix.discovery.DiscoveryClient;
 import com.netflix.discovery.DiscoveryManager;
+import com.netflix.discovery.EurekaClient;
 import com.netflix.discovery.shared.Application;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostSupplier;
@@ -49,12 +50,18 @@ public class EurekaHostsSupplier implements HostSupplier {
 
 	// The Dynomite cluster name for discovering nodes
 	private final String applicationName;
-	private final DiscoveryClient discoveryClient;
+	private final EurekaClient discoveryClient;
 	
-	public EurekaHostsSupplier(String applicationName, DiscoveryClient dClient) {
-		this.applicationName = applicationName.toUpperCase();
-		this.discoveryClient = dClient;
-	}
+	@Deprecated
+    public EurekaHostsSupplier(String applicationName, DiscoveryClient dClient) {
+        this.applicationName = applicationName.toUpperCase();
+        this.discoveryClient = dClient;
+    }
+    
+    public EurekaHostsSupplier(String applicationName, EurekaClient dClient) {
+        this.applicationName = applicationName.toUpperCase();
+        this.discoveryClient = dClient;
+    }
 
 	public static EurekaHostsSupplier newInstance(String applicationName, EurekaHostsSupplier hostsSupplier) {
         return new EurekaHostsSupplier(applicationName, hostsSupplier.getDiscoveryClient());
@@ -127,7 +134,7 @@ public class EurekaHostsSupplier implements HostSupplier {
         return applicationName;
     }
 
-    public DiscoveryClient getDiscoveryClient() {
+    public EurekaClient getDiscoveryClient() {
         return discoveryClient;
     }
 }
