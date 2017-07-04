@@ -69,7 +69,7 @@ public class CursorBasedResultImpl<T> implements CursorBasedResult<T> {
             return sr.getStringCursor();
         }
 
-        return null;
+        return "0";
     }
 
     @Override
