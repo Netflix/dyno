@@ -46,6 +46,8 @@ import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.jedis.DynoJedisClient;
 import com.netflix.dyno.jedis.DynoJedisPipeline;
+import redis.clients.jedis.ScanParams;
+import redis.clients.jedis.ScanResult;
 
 public class DynoJedisDemo {
 
@@ -214,31 +216,61 @@ public class DynoJedisDemo {
         System.out.println(result);
 	}
 
-    public void runScanTest(boolean populateKeys) throws Exception {
-        logger.info("SCAN TEST -- begin");
+	public void runScanTest(boolean populateKeys) throws Exception {
+		logger.info("SCAN TEST -- begin");
 
-        final String keyPattern = System.getProperty("dyno.demo.scan.key.pattern", "DynoClientTest_key-*");
-        final String keyPrefix = System.getProperty("dyno.demo.scan.key.prefix", "DynoClientTest_key-");
+		final String keyPattern = System.getProperty("dyno.demo.scan.key.pattern", "DynoClientTest_key-*");
+		final String keyPrefix = System.getProperty("dyno.demo.scan.key.prefix", "DynoClientTest_key-");
 
-        if (populateKeys) {
+		if (populateKeys) {
 			logger.info("Writing 500 keys to {} with prefix {}", this.clusterName, keyPrefix);
-            for (int i=0; i<500; i++) {
-                client.set(keyPrefix + i, "value-"+i);
-            }
-        }
+			for (int i=0; i<500; i++) {
+				client.set(keyPrefix + i, "value-"+i);
+			}
+		}
 
 		logger.info("Reading keys from {} with pattern {}", this.clusterName, keyPattern);
-        CursorBasedResult<String> cbi = null;
-        do {
+		CursorBasedResult<String> cbi = null;
+		do {
 			cbi = client.dyno_scan(cbi, 10000, keyPattern);
 
-            List<String> results = cbi.getStringResult();
-            for (String res: results) {
-            	logger.info(res);
+			List<String> results = cbi.getStringResult();
+			for (String res: results) {
+				logger.info(res);
 			}
-        } while (!cbi.isComplete());
+		} while (!cbi.isComplete());
 
-        logger.info("SCAN TEST -- done");
+		logger.info("SCAN TEST -- done");
+	}
+
+	public void runSScanTest(boolean populateKeys) throws Exception {
+		logger.info("SET SCAN TEST -- begin");
+
+		final String key = "DynoClientTest_Set";
+
+		if (populateKeys) {
+			logger.info("Populating set in cluster {} with key {}", this.clusterName, key);
+			for (int i=0; i<50; i++) {
+				client.sadd(key, "value-"+i);
+			}
+		}
+
+		logger.info("Reading members of set from cluster {} with key {}", this.clusterName, key);
+		ScanResult<String> scanResult;
+		final Set<String> matches = new HashSet<>();
+		String cursor = "0";
+		do {
+
+			final ScanParams scanParams = new ScanParams().count(10);
+			scanParams.match("*");
+			scanResult = client.sscan(key, cursor, scanParams);
+			matches.addAll(scanResult.getResult());
+			cursor = scanResult.getStringCursor();
+			if ("0".equals(cursor)) {
+				break;
+			}
+		} while(true);
+        logger.info("SET SCAN TEST -- done");
     }
 	
 	public void cleanup(int nKeys) throws Exception {
@@ -789,6 +821,10 @@ public class DynoJedisDemo {
                     demo.runPipeline();
                     break;
                 }
+				case 6: {
+					demo.runSScanTest(true);
+					break;
+				}
 			}
 
 			//demo.runSinglePipeline();
