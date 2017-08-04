@@ -41,7 +41,7 @@ public class Host implements Comparable<Host> {
     private final String hostname;
     private final String ipAddress;
     private final int port;
-    private final String password; //redis auth
+    private String password = null; //redis auth
     private final InetSocketAddress socketAddress;
     private final String rack;
     private final String datacenter;
