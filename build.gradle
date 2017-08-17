@@ -88,7 +88,7 @@ project(':dyno-jedis') {
     dependencies {
         compileApi  project(':dyno-core')
         compileApi  project(':dyno-contrib')
-        compileApi "redis.clients:jedis:2.8.1"
+        compileApi "redis.clients:jedis:2.9.0"
     }
 }
 

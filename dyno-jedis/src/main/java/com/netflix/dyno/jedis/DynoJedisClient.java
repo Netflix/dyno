@@ -36,6 +36,7 @@ import redis.clients.jedis.params.geo.GeoRadiusParam;
 import redis.clients.jedis.params.sortedset.ZAddParams;
 import redis.clients.jedis.params.sortedset.ZIncrByParams;
 
+import javax.net.ssl.SSLSocketFactory;
 import java.io.IOException;
 import java.util.*;
 import java.util.Map.Entry;
@@ -3377,6 +3378,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         private HostSupplier dualWriteHostSupplier;
         private DynoDualWriterClient.Dial dualWriteDial;
         private ConnectionPoolMonitor cpMonitor;
+        private SSLSocketFactory sslSocketFactory;
 
         public Builder() {
         }
@@ -3432,6 +3434,13 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
+        public Builder withSSLSocketFactory(SSLSocketFactory sslSocketFactory)
+        {
+            this.sslSocketFactory = sslSocketFactory;
+            return this;
+        }
+
+
         public DynoJedisClient build() {
             assert (appName != null);
             assert (clusterName != null);
@@ -3480,7 +3489,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             DynoCPMonitor shadowCPMonitor = new DynoCPMonitor(shadowAppName);
             DynoOPMonitor shadowOPMonitor = new DynoOPMonitor(shadowAppName);
 
-            JedisConnectionFactory connFactory = new JedisConnectionFactory(shadowOPMonitor);
+            JedisConnectionFactory connFactory = new JedisConnectionFactory(shadowOPMonitor, sslSocketFactory);
 
             final ConnectionPoolImpl<Jedis> shadowPool =
                     startConnectionPool(shadowAppName, connFactory, shadowConfig, shadowCPMonitor);
@@ -3530,7 +3539,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             setLoadBalancingStrategy(cpConfig);
 
-            JedisConnectionFactory connFactory = new JedisConnectionFactory(opMonitor);
+            JedisConnectionFactory connFactory = new JedisConnectionFactory(opMonitor, sslSocketFactory);
 
             return startConnectionPool(appName, connFactory, cpConfig, cpMonitor);
         }
@@ -3730,7 +3739,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         throw new UnsupportedOperationException("not yet implemented");
 	}
 
-	@Override
+    @Override
+    public List<byte[]> bitfield(byte[] key, byte[]... arguments) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
 	public Long bitpos(String arg0, boolean arg1) {
         throw new UnsupportedOperationException("not yet implemented");
 	}
@@ -3794,7 +3808,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         throw new UnsupportedOperationException("not yet implemented");
 	}
 
-	@Override
+    @Override
+    public List<Long> bitfield(String key, String... arguments) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
 	public ScanResult<Entry<String, String>> hscan(String arg0, String arg1,
 			ScanParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
