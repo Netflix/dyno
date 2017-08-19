@@ -3434,8 +3434,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
-        public Builder withSSLSocketFactory(SSLSocketFactory sslSocketFactory)
-        {
+        public Builder withSSLSocketFactory(SSLSocketFactory sslSocketFactory) {
             this.sslSocketFactory = sslSocketFactory;
             return this;
         }
