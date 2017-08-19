@@ -80,13 +80,10 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 			{
 				jedisClient = new Jedis(host.getHostAddress(), host.getPort(), hostPool.getConnectionTimeout(),
 						hostPool.getSocketTimeout());
-			}else {
-
-                SSLParameters sslParameters =  new SSLParameters();
-                HostnameVerifier hostnameVerifier = null; //FIXME ?
-
+			}
+			else {
 				jedisClient = new Jedis(host.getHostAddress(), host.getPort(), hostPool.getConnectionTimeout(),
-						hostPool.getSocketTimeout(), true, sslSocketFactory, sslParameters, hostnameVerifier);
+						hostPool.getSocketTimeout(), true, sslSocketFactory,  new SSLParameters(), null);
 			}
 		}
 
