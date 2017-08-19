@@ -5,8 +5,6 @@ import io.netty.channel.SimpleChannelInboundHandler;
 
 public class MockedResponseHandler extends SimpleChannelInboundHandler<String> {
 
-    private static volatile int requestsReceived = 0;
-
     private final String response;
 
     public MockedResponseHandler(final String response) {
@@ -15,14 +13,8 @@ public class MockedResponseHandler extends SimpleChannelInboundHandler<String> {
 
     @Override
     protected void channelRead0(final ChannelHandlerContext ctx, final String msg) throws Exception {
-
-        if (requestsReceived == 0) {
-            ctx.writeAndFlush("$" + response.length() + "\r\n");
-            ctx.writeAndFlush(response + "\r\n");
-        } else {
-            ctx.writeAndFlush("+OK\r\n");
-        }
-
-        requestsReceived++;
+        
+        ctx.writeAndFlush("$" + response.length() + "\r\n");
+        ctx.writeAndFlush(response + "\r\n");
     }
 }
