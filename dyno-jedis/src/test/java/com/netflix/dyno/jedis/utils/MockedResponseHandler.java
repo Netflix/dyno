@@ -13,7 +13,7 @@ public class MockedResponseHandler extends SimpleChannelInboundHandler<String> {
 
     @Override
     protected void channelRead0(final ChannelHandlerContext ctx, final String msg) throws Exception {
-        
+
         ctx.writeAndFlush("$" + response.length() + "\r\n");
         ctx.writeAndFlush(response + "\r\n");
     }

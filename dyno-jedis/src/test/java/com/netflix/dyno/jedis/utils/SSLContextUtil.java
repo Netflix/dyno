@@ -8,8 +8,12 @@ import java.security.KeyStore;
 import java.security.SecureRandom;
 
 public class SSLContextUtil {
-    //FIXME - generate self-signed certs with appropriate password :D
-    private static final String STOREPASS = "tutorial123";
+
+    /**
+     * hardcoded password for both keystore/truststore for client and server. Because of we are using
+     * selfsigned certificates generated only for this purpose, it is perfectly ok to have publicly aviable password here.
+     */
+    private static final String STOREPASS = "dynotests";
 
     public static final SSLContext createAndInitSSLContext(final String jksFileName) throws Exception {
         final ClassLoader classloader = Thread.currentThread().getContextClassLoader();

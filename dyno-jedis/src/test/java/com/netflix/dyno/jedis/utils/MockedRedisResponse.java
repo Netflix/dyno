@@ -14,7 +14,15 @@ import static com.netflix.dyno.jedis.utils.SSLContextUtil.createAndInitSSLContex
 
 
 /**
- * Simple server that will response with pre-configured data.
+ * Simple server that pretends to be redis and will response for all requests with predefined string, surrounding
+ * it with Bulk Strings (see https://redis.io/topics/protocol). Basically it will response with following data
+ * <pre>
+ * $4\r\n
+ * test\r\n
+ * </pre>
+ *
+ * It allows us to test SSL/TLS end to end scenario, assuming that after connection
+ * to redis(here, to MockedRedisResponse server) by Jedis client, only simple GET will be invoked.
  */
 public class MockedRedisResponse {
 
