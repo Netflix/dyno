@@ -28,7 +28,7 @@ public class SSLContextUtil {
         final TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
         trustManagerFactory.init(trustStore);
 
-        final SSLContext sslContext = SSLContext.getInstance("TLS");
+        final SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
         sslContext.init(keyManagerFactory.getKeyManagers(), trustManagerFactory.getTrustManagers(), new SecureRandom());
 
         return sslContext;
