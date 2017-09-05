@@ -7,7 +7,7 @@ ext.githubProjectName = rootProject.name // Change if github project name is not
 
 apply plugin: 'osgi'
 apply plugin: 'project-report'
-
+apply plugin: 'maven-publish'
 
 subprojects {
     apply plugin: 'nebula.netflixoss'
@@ -33,6 +33,7 @@ subprojects {
         compileApi "com.sun.jersey:jersey-core:1.11"
         testCompile "junit:junit:4.11"
         testCompile "org.mockito:mockito-all:1.9.5"
+        testCompile "io.netty:netty-all:4.1.14.Final"
     }
 
     project.tasks.withType(Javadoc) {
@@ -88,7 +89,7 @@ project(':dyno-jedis') {
     dependencies {
         compileApi  project(':dyno-core')
         compileApi  project(':dyno-contrib')
-        compileApi "redis.clients:jedis:2.8.1"
+        compileApi "redis.clients:jedis:2.9.0"
     }
 }
 

@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import redis.clients.jedis.BinaryClient.LIST_POSITION;
 import redis.clients.jedis.*;
-import redis.clients.jedis.commands.RedisPipeline;
+import redis.clients.jedis.RedisPipeline;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.params.geo.GeoRadiusParam;
 import redis.clients.jedis.params.sortedset.ZAddParams;
@@ -1933,7 +1933,12 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     public Response<Long> pfcount(String key) {
         throw new UnsupportedOperationException("not yet implemented");
     }
-    
+
+    @Override
+    public Response<List<Long>> bitfield(String key, String... arguments) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
     @Override
     public Response<Set<String>> zrevrangeByLex(String key, String max, String min) {
         throw new UnsupportedOperationException("not yet implemented");

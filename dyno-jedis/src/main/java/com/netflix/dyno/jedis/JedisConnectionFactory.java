@@ -18,11 +18,7 @@ package com.netflix.dyno.jedis;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.lang.NotImplementedException;
-
-import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.exceptions.JedisConnectionException;
 
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;
@@ -42,47 +38,64 @@ import com.netflix.dyno.connectionpool.exception.ThrottledException;
 import com.netflix.dyno.connectionpool.impl.ConnectionContextImpl;
 import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
 
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.exceptions.JedisConnectionException;
+
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.SSLSocketFactory;
+
 public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 
     private static final org.slf4j.Logger Logger = LoggerFactory.getLogger(JedisConnectionFactory.class);
 
-	private final OperationMonitor opMonitor; 
-	
-	public JedisConnectionFactory(OperationMonitor monitor) {
+	private final OperationMonitor opMonitor;
+    private final SSLSocketFactory sslSocketFactory;
+
+	public JedisConnectionFactory(OperationMonitor monitor, SSLSocketFactory sslSocketFactory) {
 		this.opMonitor = monitor;
+        this.sslSocketFactory = sslSocketFactory;
 	}
-	
+
 	@Override
 	public Connection<Jedis> createConnection(HostConnectionPool<Jedis> pool, ConnectionObservor connectionObservor)
 			throws DynoConnectException, ThrottledException {
-		
+
 		return new JedisConnection(pool);
 	}
 
 	public class JedisConnection implements Connection<Jedis> {
 
 		private final HostConnectionPool<Jedis> hostPool;
-		private final Jedis jedisClient; 
+		private final Jedis jedisClient;
 		private final ConnectionContextImpl context = new ConnectionContextImpl();
-		
+
 		private DynoConnectException lastDynoException;
-		
+
 		public JedisConnection(HostConnectionPool<Jedis> hostPool) {
 			this.hostPool = hostPool;
 			Host host = hostPool.getHost();
-			jedisClient = new Jedis(host.getHostAddress(), host.getPort(), hostPool.getConnectionTimeout(),
-					hostPool.getSocketTimeout());
+
+			if(sslSocketFactory == null)
+			{
+				jedisClient = new Jedis(host.getHostAddress(), host.getPort(), hostPool.getConnectionTimeout(),
+						hostPool.getSocketTimeout());
+			}
+			else {
+				jedisClient = new Jedis(host.getHostAddress(), host.getPort(), hostPool.getConnectionTimeout(),
+						hostPool.getSocketTimeout(), true, sslSocketFactory,  new SSLParameters(), null);
+			}
 		}
-		
+
 		@Override
 		public <R> OperationResult<R> execute(Operation<Jedis, R> op) throws DynoException {
-			
+
 			long startTime = System.nanoTime()/1000;
 			String opName = op.getName();
 
 			OperationResultImpl<R> opResult = null;
-			
-			try { 
+
+			try {
 				R result = op.execute(jedisClient, context);
 				if (context.hasMetadata("compression") || context.hasMetadata("decompression")) {
                     opMonitor.recordSuccess(opName, true);
@@ -92,7 +105,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 				opResult = new OperationResultImpl<R>(opName, result, opMonitor);
 				opResult.addMetadata("connectionId", String.valueOf(this.hashCode()));
                 return opResult;
-				
+
 			} catch (JedisConnectionException ex) {
                 Logger.warn("Caught JedisConnectionException: " + ex.getMessage());
 				opMonitor.recordFailure(opName, ex.getMessage());
@@ -156,7 +169,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 		public ConnectionContext getContext() {
 			return context;
 		}
-		
+
 		public Jedis getClient() {
 			return jedisClient;
 		}
