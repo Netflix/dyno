@@ -133,8 +133,14 @@ public class TokenAwareSelectionTest {
 			public String getKey() {
 				return "" + n;
 			}
+			
+	                @Override
+	                public String getHashtag() {
+	                        return null;
+	                }
 		};
 	}
+
 
 	private void runTest(long start, long end, Map<String, Integer> result, TokenAwareSelection<Integer> tokenAwareSelector) {
 
@@ -239,7 +245,7 @@ public class TokenAwareSelectionTest {
 	
 	
 	@SuppressWarnings("unchecked")
-	private HostConnectionPool<Integer> getMockHostConnectionPool(final HostToken hostToken) {
+	public HostConnectionPool<Integer> getMockHostConnectionPool(final HostToken hostToken) {
 
 		HostConnectionPool<Integer> mockHostPool = mock(HostConnectionPool.class);
 		when(mockHostPool.isActive()).thenReturn(true);

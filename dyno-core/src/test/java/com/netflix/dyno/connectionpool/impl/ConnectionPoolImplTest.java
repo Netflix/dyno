@@ -682,6 +682,12 @@ public class ConnectionPoolImplTest {
 			public String getKey() {
 				return "TestOperation";
 			}
+
+            @Override
+            public String getHashtag() {
+                // TODO Auto-generated method stub
+                return null;
+            }
 		});
 	}
 
@@ -718,6 +724,12 @@ public class ConnectionPoolImplTest {
 									public String getKey() {
 										return "TestOperation";
 									}
+
+                                    @Override
+                                    public String getHashtag() {
+                                        // TODO Auto-generated method stub
+                                        return null;
+                                    }
 								});
 							} catch (DynoException e) {
 //								System.out.println("FAILED Test Worker operation: " + e.getMessage());

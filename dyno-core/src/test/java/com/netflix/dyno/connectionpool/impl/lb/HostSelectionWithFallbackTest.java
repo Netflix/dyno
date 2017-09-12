@@ -66,6 +66,11 @@ public class HostSelectionWithFallbackTest {
 		public String getKey() {
 			return "11";
 		}
+
+                @Override
+                public String getHashtag() {
+                    return null;
+                }
 	};
 
 	private final ConnectionPoolConfigurationImpl cpConfig = new ConnectionPoolConfigurationImpl("test");

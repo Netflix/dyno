@@ -17,6 +17,7 @@ package com.netflix.dyno.connectionpool;
 
 import java.net.InetSocketAddress;
 
+import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
 
 /**
@@ -44,6 +45,7 @@ public class Host implements Comparable<Host> {
     private final InetSocketAddress socketAddress;
     private final String rack;
     private final String datacenter;
+    private final String hashtag;
     private Status status = Status.Down;
 
     public enum Status {
@@ -51,32 +53,45 @@ public class Host implements Comparable<Host> {
     }
 
     public Host(String hostname, int port, String rack) {
-        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down);
+        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down, null);
     }
 
     public Host(String hostname, String rack, Status status) {
-        this(hostname, null, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status);
+        this(hostname, null, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
     }
 
     public Host(String hostname, int port, String rack, Status status) {
-        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), status);
+        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
+    }
+    
+    public Host(String hostname, int port, String rack, Status status, String hashtag) {
+        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
     }
 
     public Host(String hostname, String ipAddress, int port, String rack) {
-        this(hostname, ipAddress, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down);
+        this(hostname, ipAddress, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down, null);
     }
 
     public Host(String hostname, String ipAddress, String rack, Status status) {
-        this(hostname, ipAddress, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status);
+        this(hostname, ipAddress, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
     }
 
-    public Host(String name, String ipAddress, int port, String rack, String datacenter, Status status) {
+    public Host(String hostname, String ipAddress, String rack, Status status, String hashtag) {
+        this(hostname, ipAddress, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
+    }
+    
+    public Host(String hostname, String ipAddress, int port, String rack, String datacenter, Status status) {
+        this(hostname, ipAddress, port, rack, datacenter, status, null);
+    }
+
+    public Host(String name, String ipAddress, int port, String rack, String datacenter, Status status, String hashtag) {
         this.hostname = name;
         this.ipAddress = ipAddress;
         this.port = port;
         this.rack = rack;
         this.status = status;
         this.datacenter = datacenter;
+        this.hashtag = hashtag;
 
         // Used for the unit tests to prevent host name resolution
         if (port != -1) {
@@ -111,6 +126,10 @@ public class Host implements Comparable<Host> {
 
     public String getRack() {
         return rack;
+    }
+    
+    public String getHashtag() {
+        return hashtag;
     }
 
     public Host setStatus(Status condition) {

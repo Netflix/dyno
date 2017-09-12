@@ -32,9 +32,10 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
 
 /**
- * Concrete implementation of the {@link HostSelectionStrategy} interface using the TOKEN AWARE algorithm.
- * Note that this component needs to be aware of the dynomite ring topology to be able to 
- * successfully map to the correct token owner for any key of an {@link Operation}
+ * Concrete implementation of the {@link HostSelectionStrategy} interface using
+ * the TOKEN AWARE algorithm. Note that this component needs to be aware of the
+ * dynomite ring topology to be able to successfully map to the correct token
+ * owner for any key of an {@link Operation}
  * 
  * @author poberai
  *
@@ -42,67 +43,85 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
  */
 public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 
-	private final BinarySearchTokenMapper tokenMapper;
+    private final BinarySearchTokenMapper tokenMapper;
 
-	private final ConcurrentHashMap<Long, HostConnectionPool<CL>> tokenPools = new ConcurrentHashMap<Long, HostConnectionPool<CL>>();
-	
-	public TokenAwareSelection() {
-		
-		this.tokenMapper = new BinarySearchTokenMapper(new Murmur1HashPartitioner());
-	}
+    private final ConcurrentHashMap<Long, HostConnectionPool<CL>> tokenPools = new ConcurrentHashMap<Long, HostConnectionPool<CL>>();
 
-	@Override
-	public void initWithHosts(Map<HostToken, HostConnectionPool<CL>> hPools) {
-		
-		tokenPools.putAll(CollectionUtils.transformMapKeys(hPools, new Transform<HostToken, Long>() {
+    public TokenAwareSelection() {
 
-			@Override
-			public Long get(HostToken x) {
-				return x.getToken();
-			}
-			
-		}));
+        this.tokenMapper = new BinarySearchTokenMapper(new Murmur1HashPartitioner());
+    }
 
-		this.tokenMapper.initSearchMecahnism(hPools.keySet());
-	}
+    @Override
+    public void initWithHosts(Map<HostToken, HostConnectionPool<CL>> hPools) {
 
-	@Override
-	public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op) throws NoAvailableHostsException {
-		
-		String key = op.getKey();
-		HostToken hToken = this.getTokenForKey(key);
-		
-		HostConnectionPool<CL> hostPool = null;
-		if (hToken != null) {
-			hostPool = tokenPools.get(hToken.getToken());
-		}
-		
-		if (hostPool == null) {
-			throw new NoAvailableHostsException("Could not find host connection pool for key: " + key + ", hash: " +
-                    tokenMapper.hash(key));
-		}
-		
-		return hostPool;
-	}
+        tokenPools.putAll(CollectionUtils.transformMapKeys(hPools, new Transform<HostToken, Long>() {
 
-	@Override
-	public Map<HostConnectionPool<CL>,BaseOperation<CL,?>> getPoolsForOperationBatch(Collection<BaseOperation<CL, ?>> ops) throws NoAvailableHostsException {
-		throw new RuntimeException("Not Implemented");
-	}
-	
-	@Override
-	public List<HostConnectionPool<CL>> getOrderedHostPools() {
-		return new ArrayList<HostConnectionPool<CL>>(tokenPools.values());
-	}
-	
-	@Override
-	public HostConnectionPool<CL> getPoolForToken(Long token) {
-		return tokenPools.get(token);
-	}
-	
-	public List<HostConnectionPool<CL>> getPoolsForTokens(Long start, Long end) {
-		throw new RuntimeException("Not Implemented");
-	}
+            @Override
+            public Long get(HostToken x) {
+                return x.getToken();
+            }
+
+        }));
+
+        this.tokenMapper.initSearchMecahnism(hPools.keySet());
+    }
+
+    /**
+     * If a hashtag has been given then we give priority to it to select to the node.
+     * Otherwise, we use the key.
+     */
+    @Override
+    public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op) throws NoAvailableHostsException {
+
+        String key = op.getKey();
+        String hashtag = op.getHashtag();
+
+        HostToken hToken = null;
+        if (hashtag == null) {
+            hToken = this.getTokenForKey(key);
+        } else {
+            hToken = this.getTokenForKey(hashtag);
+        }
+
+        HostConnectionPool<CL> hostPool = null;
+        if (hToken != null) {
+            hostPool = tokenPools.get(hToken.getToken());
+        }
+        if (hashtag == null) {
+            if (hostPool == null) {
+                throw new NoAvailableHostsException(
+                        "Could not find host connection pool for key: " + key + ", hash: " + tokenMapper.hash(key));
+            }
+        } else {
+            if (hostPool == null) {
+                throw new NoAvailableHostsException(
+                        "Could not find host connection pool for hashtag: " + hashtag + ", hash: " + tokenMapper.hash(hashtag));
+            }
+        }
+
+        return hostPool;
+    }
+
+    @Override
+    public Map<HostConnectionPool<CL>, BaseOperation<CL, ?>> getPoolsForOperationBatch(
+            Collection<BaseOperation<CL, ?>> ops) throws NoAvailableHostsException {
+        throw new RuntimeException("Not Implemented");
+    }
+
+    @Override
+    public List<HostConnectionPool<CL>> getOrderedHostPools() {
+        return new ArrayList<HostConnectionPool<CL>>(tokenPools.values());
+    }
+
+    @Override
+    public HostConnectionPool<CL> getPoolForToken(Long token) {
+        return tokenPools.get(token);
+    }
+
+    public List<HostConnectionPool<CL>> getPoolsForTokens(Long start, Long end) {
+        throw new RuntimeException("Not Implemented");
+    }
 
     @Override
     public HostToken getTokenForKey(String key) throws UnsupportedOperationException {
@@ -111,46 +130,45 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
     }
 
     @Override
-	public boolean addHostPool(HostToken hostToken, HostConnectionPool<CL> hostPool) {
-		
-		HostConnectionPool<CL> prevPool = tokenPools.put(hostToken.getToken(), hostPool);
-		if (prevPool == null) {
-			tokenMapper.addHostToken(hostToken);
-			return true;
-		}  else {
-			return false;
-		}
-	}
+    public boolean addHostPool(HostToken hostToken, HostConnectionPool<CL> hostPool) {
 
-	@Override
-	public boolean removeHostPool(HostToken hostToken) {
+        HostConnectionPool<CL> prevPool = tokenPools.put(hostToken.getToken(), hostPool);
+        if (prevPool == null) {
+            tokenMapper.addHostToken(hostToken);
+            return true;
+        } else {
+            return false;
+        }
+    }
 
-		HostConnectionPool<CL> prev = tokenPools.get(hostToken.getToken());
-		if (prev != null) {
-			tokenPools.remove(hostToken.getToken());
-			return true;
-		} else {
-			return false;
-		}
-	}
+    @Override
+    public boolean removeHostPool(HostToken hostToken) {
 
-	@Override
-	public boolean isTokenAware() {
-		return true;
-	}
+        HostConnectionPool<CL> prev = tokenPools.get(hostToken.getToken());
+        if (prev != null) {
+            tokenPools.remove(hostToken.getToken());
+            return true;
+        } else {
+            return false;
+        }
+    }
 
-	@Override
-	public boolean isEmpty() {
-		return tokenPools.isEmpty();
-	}
+    @Override
+    public boolean isTokenAware() {
+        return true;
+    }
 
-	public Long getKeyHash(String key) {
-		Long keyHash = tokenMapper.hash(key);
-		return keyHash;
-	}
+    @Override
+    public boolean isEmpty() {
+        return tokenPools.isEmpty();
+    }
 
-	
-	public String toString() {
-		return "TokenAwareSelection: " + tokenMapper.toString();
-	}
+    public Long getKeyHash(String key) {
+        Long keyHash = tokenMapper.hash(key);
+        return keyHash;
+    }
+
+    public String toString() {
+        return "TokenAwareSelection: " + tokenMapper.toString();
+    }
 }

@@ -16,24 +16,36 @@
 package com.netflix.dyno.connectionpool;
 
 /**
- * Base for any operation that can be performed using a connection from the connection pool
+ * Base for any operation that can be performed using a connection from the
+ * connection pool
+ * 
  * @author poberai
  *
- * @param <CL> client
- * @param <R>  result
+ * @param <CL>
+ *            client
+ * @param <R>
+ *            result
  */
 public interface BaseOperation<CL, R> {
 
-	/**
-	 * Op name. Used for tracking metrics etc.
-	 * @return String
-	 */
-	public String getName();
-	
-	/**
-	 * The key for the operation. Useful for implementing token aware routing.
-	 * @return String
-	 */
-	public String getKey();
+    /**
+     * Op name. Used for tracking metrics etc.
+     * 
+     * @return String
+     */
+    public String getName();
+
+    /**
+     * The key for the operation. Useful for implementing token aware routing.
+     * 
+     * @return String
+     */
+    public String getKey();
+
+    /**
+     * The hashtag for the operation. Useful for bypassing token aware routing.
+     * @return String
+     */
+    String getHashtag();
 
 }
