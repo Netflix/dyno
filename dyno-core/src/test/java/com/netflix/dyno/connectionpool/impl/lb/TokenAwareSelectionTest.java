@@ -133,11 +133,6 @@ public class TokenAwareSelectionTest {
 			public String getKey() {
 				return "" + n;
 			}
-			
-	                @Override
-	                public String getHashtag() {
-	                        return null;
-	                }
 		};
 	}
 
@@ -147,7 +142,7 @@ public class TokenAwareSelectionTest {
 		for (long i=start; i<=end; i++) {
 
 			BaseOperation<Integer, Long> op = getTestOperation(i);
-			HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op);
+			HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op, null);
 
 			String hostName = pool.getHost().getHostAddress();
 
@@ -167,7 +162,7 @@ public class TokenAwareSelectionTest {
 		for (long i=start; i<=end; i++) {
 
 			BaseOperation<Integer, Long> op = getTestOperation(i);
-			HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op);
+			HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op, null);
 
 			int port = pool.getHost().getPort();
 

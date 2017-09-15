@@ -49,6 +49,7 @@ project(':dyno-core') {
     
     dependencies {
         compileApi "org.apache.commons:commons-math:2.2"
+        compileApi "org.apache.commons:commons-lang3:3.6"
         compileApi "commons-io:commons-io:2.4"
     }
 }

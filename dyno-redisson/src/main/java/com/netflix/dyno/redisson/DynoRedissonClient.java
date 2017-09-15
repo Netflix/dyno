@@ -64,11 +64,6 @@ public class DynoRedissonClient {
             }
 
             @Override
-            public String getHashtag() {
-                return null;
-            }
-
-            @Override
             public ListenableFuture<String> executeAsync(RedisAsyncConnection<String, String> client)
                     throws DynoException {
                 return new DecoratingListenableFuture<String>((client.get(key)));
@@ -88,11 +83,6 @@ public class DynoRedissonClient {
             @Override
             public String getKey() {
                 return key;
-            }
-
-            @Override
-            public String getHashtag() {
-                return hashtag;
             }
 
             @Override
@@ -118,11 +108,6 @@ public class DynoRedissonClient {
             }
 
             @Override
-            public String getHashtag() {
-                return null;
-            }
-
-            @Override
             public ListenableFuture<String> executeAsync(RedisAsyncConnection<String, String> client)
                     throws DynoException {
                 return new DecoratingListenableFuture<String>((client.set(key, value)));
@@ -144,12 +129,7 @@ public class DynoRedissonClient {
             public String getKey() {
                 return key;
             }
-
-            @Override
-            public String getHashtag() {
-                return hashtag;
-            }
-
+            
             @Override
             public ListenableFuture<String> executeAsync(RedisAsyncConnection<String, String> client)
                     throws DynoException {

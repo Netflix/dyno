@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.commons.lang3.StringUtils;
+
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.Operation;
@@ -68,20 +70,19 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
     }
 
     /**
-     * If a hashtag has been given then we give priority to it to select to the node.
-     * Otherwise, we use the key.
+     * If a hashtag is provided by Dynomite then we use that to craete the key to hash.
      */
     @Override
-    public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op) throws NoAvailableHostsException {
+    public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op, String hashtag) throws NoAvailableHostsException {
 
         String key = op.getKey();
-        String hashtag = op.getHashtag();
 
         HostToken hToken = null;
         if (hashtag == null) {
             hToken = this.getTokenForKey(key);
-        } else {
-            hToken = this.getTokenForKey(hashtag);
+        } else {            
+            String hashValue = StringUtils.substringBetween(key,Character.toString(hashtag.charAt(0)), Character.toString(hashtag.charAt(1)));
+            hToken = this.getTokenForKey(hashValue);
         }
 
         HostConnectionPool<CL> hostPool = null;
@@ -171,4 +172,5 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
     public String toString() {
         return "TokenAwareSelection: " + tokenMapper.toString();
     }
+
 }

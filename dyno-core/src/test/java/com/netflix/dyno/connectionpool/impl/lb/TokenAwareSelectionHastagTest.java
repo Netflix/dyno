@@ -41,12 +41,13 @@ import com.netflix.dyno.connectionpool.impl.hash.Murmur1HashPartitioner;
  */
 public class TokenAwareSelectionHastagTest {
 
-    private final HostToken hashtag1 = new HostToken(309687905L, new Host("hashtag1", -1, "r1", Status.Up, "hashtag1"));
-    private final HostToken hashtag2 = new HostToken(1383429731L, new Host("hashtag2", -1, "r1", Status.Up, "hashtag2"));
-    private final HostToken hashtag3 = new HostToken(2457171554L, new Host("hashtag3", -1, "r1", Status.Up, "hashtag3"));
-    private final HostToken hashtag4 = new HostToken(3530913377L, new Host("hashtag4", -1, "r1", Status.Up, "hashtag4"));
+    private final HostToken hashtag1 = new HostToken(309687905L, new Host("hashtag1", -1, "r1", Status.Up, "{}"));
+    private final HostToken hashtag2 = new HostToken(1383429731L, new Host("hashtag2", -1, "r1", Status.Up, "{}"));
+    private final HostToken hashtag3 = new HostToken(2457171554L, new Host("hashtag3", -1, "r1", Status.Up, "{}"));
+    private final HostToken hashtag4 = new HostToken(3530913377L, new Host("hashtag4", -1, "r1", Status.Up, "{}"));
 
     private final Murmur1HashPartitioner m1Hash = new Murmur1HashPartitioner();
+    String hashtag = null;
 
     @Test
     public void testTokenAware() throws Exception {
@@ -64,6 +65,8 @@ public class TokenAwareSelectionHastagTest {
         pools.put(hashtag2, getMockHostConnectionPool(hashtag2));
         pools.put(hashtag3, getMockHostConnectionPool(hashtag3));
         pools.put(hashtag4, getMockHostConnectionPool(hashtag4));
+        
+        this.hashtag = hashtag1.getHost().getHashtag();
 
         TokenAwareSelection<Integer> tokenAwareSelector = new TokenAwareSelection<Integer>();
         tokenAwareSelector.initWithHosts(pools);
@@ -86,13 +89,9 @@ public class TokenAwareSelectionHastagTest {
 
             @Override
             public String getKey() {
-                return "" + n;
+                return n + "-{bar}";
             }
 
-            @Override
-            public String getHashtag() {
-                return "" + n;
-            }
         };
     }
 
@@ -102,11 +101,11 @@ public class TokenAwareSelectionHastagTest {
         for (long i = start; i <= end; i++) {
 
             BaseOperation<Integer, Long> op = getTestOperationWithHashtag(i);
-            HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op);
+            HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op, hashtag);
 
             String hostName = pool.getHost().getHostAddress();
 
-            verifyHashtagHash(op.getHashtag(), hostName);
+            verifyHashtagHash(op.getKey(), hostName);
 
             Integer count = result.get(hostName);
             if (count == null) {
@@ -116,9 +115,9 @@ public class TokenAwareSelectionHastagTest {
         }
     }
 
-    private void verifyHashtagHash(String hashtag, String hostname) {
+    private void verifyHashtagHash(String key, String hostname) {
 
-        Long hashtagHash = m1Hash.hash(hashtag);
+        Long hashtagHash = m1Hash.hash("bar");
 
         String expectedHostname = null;
 

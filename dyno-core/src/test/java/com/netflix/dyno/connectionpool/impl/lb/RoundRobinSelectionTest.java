@@ -67,11 +67,6 @@ public class RoundRobinSelectionTest {
         public String getKey() {
             return null;
         }
-
-        @Override
-        public String getHashtag() {
-            return null;
-        }
     };
 
     @Test
@@ -116,7 +111,7 @@ public class RoundRobinSelectionTest {
 
         for (int i = 1; i <= iterations; i++) {
 
-            HostConnectionPool<Integer> pool = rrSelection.getPoolForOperation(testOperation);
+            HostConnectionPool<Integer> pool = rrSelection.getPoolForOperation(testOperation, null);
             String hostName = pool.getHost().getHostAddress();
 
             Integer count = result.get(hostName);

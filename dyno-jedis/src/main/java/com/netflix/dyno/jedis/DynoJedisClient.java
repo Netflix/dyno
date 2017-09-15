@@ -82,27 +82,17 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     private abstract class BaseKeyOperation<T> implements Operation<Jedis, T> {
 
         private final String key;
-        private final String hashtag;
         private final byte[] binaryKey;
         private final OpName op;
 
         private BaseKeyOperation(final String k, final OpName o) {
             this.key = k;
             this.binaryKey = null;
-            this.hashtag = null;
             this.op = o;
         }
 
         private BaseKeyOperation(final byte[] k, final OpName o) {
             this.key = null;
-            this.binaryKey = null;
-            this.hashtag = null;
-            this.op = o;
-        }
-
-        private BaseKeyOperation(final String k, final String h, final OpName o) {
-            this.key = k;
-            this.hashtag = h;
             this.binaryKey = null;
             this.op = o;
         }
@@ -110,11 +100,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         @Override
         public String getName() {
             return op.name();
-        }
-
-        @Override
-        public String getHashtag() {
-            return hashtag;
         }
 
         @Override
@@ -137,14 +122,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     private abstract class MultiKeyOperation<T> implements Operation<Jedis, T> {
 
         private final List<String> keys;
-        private final List<String> hashtag;
         private final List<byte[]> binaryKeys;
         private final OpName op;
 
 
-        private MultiKeyOperation(final List<String> keys, final List<String> hashtag, final OpName o) {
+        private MultiKeyOperation(final List<String> keys, final OpName o) {
             this.keys = keys;
-            this.hashtag = hashtag;
             this.binaryKeys = null;
             this.op = o;
         }
@@ -157,11 +140,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         @Override
         public String getKey() {
             return this.keys.get(0);
-        }
-
-        @Override
-        public String getHashtag() {
-            return this.hashtag.get(0);
         }
 
         public byte[] getBinaryKey() {
@@ -267,7 +245,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             implements CompressionOperation<Jedis, T> {
 
         private CompressionValueMultiKeyOperation(List<String> keys, OpName o) {
-            super(keys, null, o);
+            super(keys, o);
         }
 
         /**
@@ -1362,31 +1340,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
     }
-
-    public String setHashtag(final String key, final String hashtag, final String value) {
-        return d_setHashtag(hashtag, key, value).getResult();
-    }
-
-    
-    public OperationResult<String> d_setHashtag(final String key, final String hashtag, final String value) {
-        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, hashtag, OpName.SET) {
-                @Override
-                public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                    return client.set(key, value);
-                }
-            });
-        } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.SET) {
-                @Override
-                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return client.set(key, compressValue(value, state));
-                }
-            });
-        }
-
-    }
-    
 
     @Override
     public String set(final String key, final String value, final String nxxx, final String expx, final long time) {
@@ -2622,7 +2575,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public OperationResult<List<String>> d_mget(final String... keys) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
 
-            return connPool.executeWithFailover(new MultiKeyOperation<List<String>>(Arrays.asList(keys), null, OpName.MGET) {
+            return connPool.executeWithFailover(new MultiKeyOperation<List<String>>(Arrays.asList(keys), OpName.MGET) {
                 @Override
                 public List<String> execute(Jedis client, ConnectionContext state) {
                     return client.mget(keys);

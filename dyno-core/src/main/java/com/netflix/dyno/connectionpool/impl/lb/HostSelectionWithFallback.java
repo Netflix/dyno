@@ -45,8 +45,10 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -90,6 +92,7 @@ public class HostSelectionWithFallback<CL> {
 	private final ConnectionPoolMonitor cpMonitor;
 
     private final AtomicInteger replicationFactor = new AtomicInteger(-1);
+    private String hashtag = null;
 
     // Represents the *initial* topology from the token supplier. This does not affect selection of a host connection
     // pool for traffic. It only affects metrics such as failover/fallback
@@ -169,7 +172,7 @@ public class HostSelectionWithFallback<CL> {
         HostConnectionPool<CL> hostPool;
         try {
             if (!localSelector.isEmpty()) {
-                hostPool = (op != null) ? localSelector.getPoolForOperation(op) : localSelector.getPoolForToken(token);
+                hostPool = (op != null) ? localSelector.getPoolForOperation(op, hashtag) : localSelector.getPoolForToken(token);
                 if (isConnectionPoolActive(hostPool)) {
                     return hostPool;
                 }
@@ -207,7 +210,7 @@ public class HostSelectionWithFallback<CL> {
 			try {
 				
 				HostConnectionPool<CL> fallbackHostPool = 
-						(op != null) ? remoteDCSelector.getPoolForOperation(op) : remoteDCSelector.getPoolForToken(token);
+						(op != null) ? remoteDCSelector.getPoolForOperation(op,hashtag) : remoteDCSelector.getPoolForToken(token);
 				
 				if (isConnectionPoolActive(fallbackHostPool)) {
 					return fallbackHostPool;
@@ -337,13 +340,27 @@ public class HostSelectionWithFallback<CL> {
 		
 		Set<String> remoteDCs = new HashSet<String>();
 
+		/* Initialize the hashtag with the first host (if hashtag is defined) */
+		this.hashtag = hPools.keySet().iterator().next().getHashtag();
+		
 		for (Host host : hPools.keySet()) {
 			String dc = host.getRack();
 			if (localRack != null && !localRack.isEmpty() && dc != null && !dc.isEmpty() && !localRack.equals(dc)) {
 				remoteDCs.add(dc);
 			}
+			/**
+			 * Checking for defined hashtags if all of them are the same.
+			 * If not we need to throw an exception.
+			 */
+			if(this.hashtag != null) {
+			   String hashtagNew = host.getHashtag();
+			   if (!this.hashtag.equals(hashtagNew)){
+		               throw new RuntimeException("Hashtags are different across hosts");
+			   }
+			   this.hashtag = hashtagNew;
+			}
 		}
-
+		
 		Map<HostToken, HostConnectionPool<CL>> localPools = getHostPoolsForDC(tokenPoolMap, localRack);
 		localSelector.initWithHosts(localPools);
 

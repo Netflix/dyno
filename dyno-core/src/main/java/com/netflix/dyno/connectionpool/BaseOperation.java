@@ -42,10 +42,4 @@ public interface BaseOperation<CL, R> {
      */
     public String getKey();
 
-    /**
-     * The hashtag for the operation. Useful for bypassing token aware routing.
-     * @return String
-     */
-    String getHashtag();
-
 }
