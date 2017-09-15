@@ -78,7 +78,7 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
         String key = op.getKey();
 
         HostToken hToken = null;
-        if (hashtag == null) {
+        if (hashtag == null || hashtag.isEmpty()) {
             hToken = this.getTokenForKey(key);
         } else {            
             String hashValue = StringUtils.substringBetween(key,Character.toString(hashtag.charAt(0)), Character.toString(hashtag.charAt(1)));
@@ -89,7 +89,8 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
         if (hToken != null) {
             hostPool = tokenPools.get(hToken.getToken());
         }
-        if (hashtag == null) {
+        
+        if (hashtag == null || hashtag.isEmpty()) {
             if (hostPool == null) {
                 throw new NoAvailableHostsException(
                         "Could not find host connection pool for key: " + key + ", hash: " + tokenMapper.hash(key));

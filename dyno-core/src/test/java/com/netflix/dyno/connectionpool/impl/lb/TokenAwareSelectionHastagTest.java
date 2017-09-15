@@ -41,16 +41,21 @@ import com.netflix.dyno.connectionpool.impl.hash.Murmur1HashPartitioner;
  */
 public class TokenAwareSelectionHastagTest {
 
-    private final HostToken hashtag1 = new HostToken(309687905L, new Host("hashtag1", -1, "r1", Status.Up, "{}"));
-    private final HostToken hashtag2 = new HostToken(1383429731L, new Host("hashtag2", -1, "r1", Status.Up, "{}"));
-    private final HostToken hashtag3 = new HostToken(2457171554L, new Host("hashtag3", -1, "r1", Status.Up, "{}"));
-    private final HostToken hashtag4 = new HostToken(3530913377L, new Host("hashtag4", -1, "r1", Status.Up, "{}"));
+    private final HostToken host1 = new HostToken(309687905L, new Host("host1", -1, "r1", Status.Up, "{}"));
+    private final HostToken host2 = new HostToken(1383429731L, new Host("host2", -1, "r1", Status.Up, "{}"));
+    private final HostToken host3 = new HostToken(2457171554L, new Host("host3", -1, "r1", Status.Up, "{}"));
+    private final HostToken host4 = new HostToken(3530913377L, new Host("host4", -1, "r1", Status.Up, "{}"));
+
+    private final HostToken host5 = new HostToken(309687905L, new Host("host5", -1, "r1", Status.Up, ""));
+    private final HostToken host6 = new HostToken(1383429731L, new Host("host6", -1, "r1", Status.Up, ""));
+    private final HostToken host7 = new HostToken(2457171554L, new Host("host7", -1, "r1", Status.Up, ""));
+    private final HostToken host8 = new HostToken(3530913377L, new Host("host8", -1, "r1", Status.Up, ""));
 
     private final Murmur1HashPartitioner m1Hash = new Murmur1HashPartitioner();
-    String hashtag = null;
+    String hashValue = "bar";
 
     @Test
-    public void testTokenAware() throws Exception {
+    public void testTokenAwareWithHashtag() throws Exception {
 
         TreeMap<HostToken, HostConnectionPool<Integer>> pools = new TreeMap<HostToken, HostConnectionPool<Integer>>(
                 new Comparator<HostToken>() {
@@ -61,18 +66,48 @@ public class TokenAwareSelectionHastagTest {
                     }
                 });
 
-        pools.put(hashtag1, getMockHostConnectionPool(hashtag1));
-        pools.put(hashtag2, getMockHostConnectionPool(hashtag2));
-        pools.put(hashtag3, getMockHostConnectionPool(hashtag3));
-        pools.put(hashtag4, getMockHostConnectionPool(hashtag4));
-        
-        this.hashtag = hashtag1.getHost().getHashtag();
+        pools.put(host1, getMockHostConnectionPool(host1));
+        pools.put(host2, getMockHostConnectionPool(host2));
+        pools.put(host3, getMockHostConnectionPool(host3));
+        pools.put(host4, getMockHostConnectionPool(host4));
+
+        String hashtag = host1.getHost().getHashtag();
 
         TokenAwareSelection<Integer> tokenAwareSelector = new TokenAwareSelection<Integer>();
         tokenAwareSelector.initWithHosts(pools);
 
         Map<String, Integer> result = new HashMap<String, Integer>();
-        runTest(0L, 100000L, result, tokenAwareSelector);
+        runTest(0L, 100000L, result, tokenAwareSelector, hashtag);
+
+        System.out.println("Token distribution: " + result);
+
+        verifyTokenDistribution(result.values());
+    }
+
+    @Test
+    public void testTokenAwareWithEmptyHashtag() throws Exception {
+
+        TreeMap<HostToken, HostConnectionPool<Integer>> pools = new TreeMap<HostToken, HostConnectionPool<Integer>>(
+                new Comparator<HostToken>() {
+
+                    @Override
+                    public int compare(HostToken o1, HostToken o2) {
+                        return o1.getHost().getHostAddress().compareTo(o2.getHost().getHostAddress());
+                    }
+                });
+
+        pools.put(host5, getMockHostConnectionPool(host5));
+        pools.put(host6, getMockHostConnectionPool(host6));
+        pools.put(host7, getMockHostConnectionPool(host7));
+        pools.put(host8, getMockHostConnectionPool(host8));
+
+        String hashtag = host5.getHost().getHashtag();
+
+        TokenAwareSelection<Integer> tokenAwareSelector = new TokenAwareSelection<Integer>();
+        tokenAwareSelector.initWithHosts(pools);
+
+        Map<String, Integer> result = new HashMap<String, Integer>();
+        runTestEmptyHashtag(0L, 100000L, result, tokenAwareSelector, hashtag);
 
         System.out.println("Token distribution: " + result);
 
@@ -89,14 +124,14 @@ public class TokenAwareSelectionHastagTest {
 
             @Override
             public String getKey() {
-                return n + "-{bar}";
+                return n + "-{" + hashValue + "}";
             }
 
         };
     }
 
     private void runTest(long start, long end, Map<String, Integer> result,
-            TokenAwareSelection<Integer> tokenAwareSelector) {
+            TokenAwareSelection<Integer> tokenAwareSelector, String hashtag) {
 
         for (long i = start; i <= end; i++) {
 
@@ -105,7 +140,7 @@ public class TokenAwareSelectionHastagTest {
 
             String hostName = pool.getHost().getHostAddress();
 
-            verifyHashtagHash(op.getKey(), hostName);
+            verifyHashtagHash(op.getKey(), hostName, hashtag);
 
             Integer count = result.get(hostName);
             if (count == null) {
@@ -115,22 +150,67 @@ public class TokenAwareSelectionHastagTest {
         }
     }
 
-    private void verifyHashtagHash(String key, String hostname) {
+    private void runTestEmptyHashtag(long start, long end, Map<String, Integer> result,
+            TokenAwareSelection<Integer> tokenAwareSelector, String hashtag) {
 
-        Long hashtagHash = m1Hash.hash("bar");
+        for (long i = start; i <= end; i++) {
+
+            BaseOperation<Integer, Long> op = getTestOperationWithHashtag(i);
+            HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op, hashtag);
+
+            String hostName = pool.getHost().getHostAddress();
+
+            verifyEmptyHashtagHash(op.getKey(), hostName, hashtag);
+
+            Integer count = result.get(hostName);
+            if (count == null) {
+                count = 0;
+            }
+            result.put(hostName, ++count);
+        }
+    }
+
+    private void verifyHashtagHash(String key, String hostname, String hashtag) {
+
+        Long hashtagHash = m1Hash.hash(hashValue);
 
         String expectedHostname = null;
 
         if (hashtagHash <= 309687905L) {
-            expectedHostname = "hashtag1";
+            expectedHostname = "host1";
         } else if (hashtagHash <= 1383429731L) {
-            expectedHostname = "hashtag2";
+            expectedHostname = "host2";
         } else if (hashtagHash <= 2457171554L) {
-            expectedHostname = "hashtag3";
+            expectedHostname = "host3";
         } else if (hashtagHash <= 3530913377L) {
-            expectedHostname = "hashtag4";
+            expectedHostname = "host4";
         } else {
-            expectedHostname = "hashtag1";
+            expectedHostname = "host1";
+        }
+
+        if (!expectedHostname.equals(hostname)) {
+            Assert.fail("FAILED! for hashtag: " + hashtag + ", got hostname: " + hostname + ", expected: "
+                    + expectedHostname + " for hash: " + hashtagHash);
+        }
+    }
+
+    private void verifyEmptyHashtagHash(String key, String hostname, String hashtag) {
+
+        // hashtag is empty so we can use the key as the basis for hashing
+        Long hashtagHash = m1Hash.hash(key);
+
+        String expectedHostname = null;
+
+        if (hashtagHash <= 309687905L) {
+            expectedHostname = "host5";
+        } else if (hashtagHash <= 1383429731L) {
+            expectedHostname = "host6";
+        } else if (hashtagHash <= 2457171554L) {
+            expectedHostname = "host7";
+        } else if (hashtagHash <= 3530913377L) {
+            expectedHostname = "host8";
+        } else {
+            expectedHostname = "host5";
         }
 
         if (!expectedHostname.equals(hostname)) {
