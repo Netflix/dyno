@@ -85,6 +85,13 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 				jedisClient = new Jedis(host.getHostAddress(), host.getPort(), hostPool.getConnectionTimeout(),
 						hostPool.getSocketTimeout(), true, sslSocketFactory,  new SSLParameters(), null);
 			}
+
+			String redisPassword = host.getPassword();
+			if(null != jedisClient && null != redisPassword) {
+				if(!jedisClient.auth(redisPassword).equals("OK")) {
+					Logger.warn("Failed to set REDIS auth Password");
+				}
+			}
 		}
 
 		@Override

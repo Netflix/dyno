@@ -45,6 +45,7 @@ public class Host implements Comparable<Host> {
     private final String rack;
     private final String datacenter;
     private Status status = Status.Down;
+    private String password = null;
 
     public enum Status {
         Up, Down;
@@ -91,6 +92,14 @@ public class Host implements Comparable<Host> {
             return ipAddress;
         }
         return hostname;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
     }
 
     public String getHostName() {
