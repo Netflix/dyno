@@ -16,7 +16,6 @@
 package com.netflix.dyno.jedis;
 
 import com.netflix.dyno.connectionpool.*;
-import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
 import com.netflix.dyno.connectionpool.impl.LastOperationMonitor;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
 import org.junit.Assert;
@@ -27,12 +26,10 @@ import org.mockito.MockitoAnnotations;
 import redis.clients.jedis.Jedis;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -64,7 +61,7 @@ public class CompressionTest {
 
         opMonitor = new LastOperationMonitor();
 
-        connectionPool = new  UnitTestConnectionPool(config, opMonitor);
+        connectionPool = new  UnitTestConnectionPoolForCompression(config, opMonitor);
 
         client = new DynoJedisClient.TestBuilder()
                 .withAppname("CompressionTest")
@@ -119,7 +116,6 @@ public class CompressionTest {
         //client.set(KEY_4KB, VALUE_4KB);
         client.set(KEY_5KB, VALUE_5KB);
 
-        final int MGET_KEYS = 10;
         String[] keys = {KEY_1KB, KEY_2KB, KEY_3KB, KEY_4KB, KEY_5KB};
 
         // expected value list
