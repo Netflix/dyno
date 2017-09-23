@@ -20,6 +20,7 @@ import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancingStrategy;
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
+import com.netflix.dyno.connectionpool.HashPartitioner;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.RetryPolicy;
@@ -429,17 +430,23 @@ public class HostSelectionWithFallback<CL> {
 	private class DefaultSelectionFactory implements HostSelectionStrategyFactory<CL> {
 
 		private final LoadBalancingStrategy lbStrategy;
+                private final HashPartitioner hashPartitioner;
+                
 		private DefaultSelectionFactory(ConnectionPoolConfiguration config) {
 			lbStrategy = config.getLoadBalancingStrategy();
+                        hashPartitioner = config.getHashPartitioner();
 		}
+                
 		@Override
 		public HostSelectionStrategy<CL> vendPoolSelectionStrategy() {
 			
 			switch (lbStrategy) {
 			case RoundRobin:
 				return new RoundRobinSelection<CL>();
-			case TokenAware:
-				return new TokenAwareSelection<CL>();
+			case TokenAware:     
+				return hashPartitioner != null 
+                                        ? new TokenAwareSelection<CL>(hashPartitioner)
+                                        : new TokenAwareSelection<CL>();
 			default :
 				throw new RuntimeException("LoadBalancing strategy not supported! " + cpConfig.getLoadBalancingStrategy().name());
 			}

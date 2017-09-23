@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.netflix.dyno.connectionpool.BaseOperation;
+import com.netflix.dyno.connectionpool.HashPartitioner;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
@@ -48,8 +49,13 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 	
 	public TokenAwareSelection() {
 		
-		this.tokenMapper = new BinarySearchTokenMapper(new Murmur1HashPartitioner());
+		this(new Murmur1HashPartitioner());
 	}
+        
+        public TokenAwareSelection(HashPartitioner hashPartitioner) {
+            
+                this.tokenMapper = new BinarySearchTokenMapper(hashPartitioner);
+        }
 
 	@Override
 	public void initWithHosts(Map<HostToken, HostConnectionPool<CL>> hPools) {
@@ -63,7 +69,7 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 			
 		}));
 
-		this.tokenMapper.initSearchMecahnism(hPools.keySet());
+		this.tokenMapper.initSearchMechanism(hPools.keySet());
 	}
 
 	@Override
@@ -104,13 +110,13 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 		throw new RuntimeException("Not Implemented");
 	}
 
-    @Override
-    public HostToken getTokenForKey(String key) throws UnsupportedOperationException {
-        Long keyHash = tokenMapper.hash(key);
-        return tokenMapper.getToken(keyHash);
-    }
+        @Override
+        public HostToken getTokenForKey(String key) throws UnsupportedOperationException {
+            Long keyHash = tokenMapper.hash(key);
+            return tokenMapper.getToken(keyHash);
+        }
 
-    @Override
+        @Override
 	public boolean addHostPool(HostToken hostToken, HostConnectionPool<CL> hostPool) {
 		
 		HostConnectionPool<CL> prevPool = tokenPools.put(hostToken.getToken(), hostPool);
@@ -149,7 +155,7 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 		return keyHash;
 	}
 
-	
+	@Override
 	public String toString() {
 		return "TokenAwareSelection: " + tokenMapper.toString();
 	}
