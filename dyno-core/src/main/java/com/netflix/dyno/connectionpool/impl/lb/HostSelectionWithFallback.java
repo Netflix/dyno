@@ -323,6 +323,10 @@ public class HostSelectionWithFallback<CL> {
 		return dcPools;
 	}
 	
+	/**
+	 * hPools comes from discovery.
+	 * @param hPools
+	 */
 	public void initWithHosts(Map<Host, HostConnectionPool<CL>> hPools) {
 
 		// Get the list of tokens for these hosts
@@ -331,42 +335,41 @@ public class HostSelectionWithFallback<CL> {
 
 		Map<HostToken, HostConnectionPool<CL>> tokenPoolMap = new HashMap<HostToken, HostConnectionPool<CL>>();
 		
-		// Update inner state with the host tokens.
-		
+	        /* Initialize the hashtag with the first host (if hashtag is defined) */
+	        this.hashtag = allHostTokens.get(0).getHost().getHashtag();
+	        
+	        // Update inner state with the host tokens.
 		for (HostToken hToken : allHostTokens) {
+		          
+	                /**
+	                 * Checking for defined hashtags if all of them are the same.
+	                 * If not we need to throw an exception.
+	                 */
+		        String hashtagNew = hToken.getHost().getHashtag();
+		        if (this.hashtag!=null && !this.hashtag.equals(hashtagNew)){
+	                       logger.error("Hashtag mismatch across hashtags");
+	                       throw new RuntimeException("Hashtags are different across hosts");
+	                }
+	                this.hashtag = hashtagNew;
+
 			hostTokens.put(hToken.getHost(), hToken);
 			tokenPoolMap.put(hToken, hPools.get(hToken.getHost()));
 		}
 		
-		Set<String> remoteDCs = new HashSet<String>();
-
-		/* Initialize the hashtag with the first host (if hashtag is defined) */
-		this.hashtag = hPools.keySet().iterator().next().getHashtag();
-		
+		Set<String> remoteDCs = new HashSet<String>();		
 		for (Host host : hPools.keySet()) {
 			String dc = host.getRack();
 			if (localRack != null && !localRack.isEmpty() && dc != null && !dc.isEmpty() && !localRack.equals(dc)) {
 				remoteDCs.add(dc);
-			}
-			/**
-			 * Checking for defined hashtags if all of them are the same.
-			 * If not we need to throw an exception.
-			 */
-			if(this.hashtag != null) {
-			   String hashtagNew = host.getHashtag();
-			   if (!this.hashtag.equals(hashtagNew)){
-		               throw new RuntimeException("Hashtags are different across hosts");
-			   }
-			   this.hashtag = hashtagNew;
-			}
+			}			
 		}
 		
 		Map<HostToken, HostConnectionPool<CL>> localPools = getHostPoolsForDC(tokenPoolMap, localRack);
 		localSelector.initWithHosts(localPools);
 
-        if (localSelector.isTokenAware() && localRack != null) {
-            replicationFactor.set(calculateReplicationFactor(allHostTokens));
-        }
+                if (localSelector.isTokenAware() && localRack != null) {
+                   replicationFactor.set(calculateReplicationFactor(allHostTokens));
+                }
 
 		for (String dc : remoteDCs) {
 			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForDC(tokenPoolMap, dc);

@@ -22,6 +22,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
+
 
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
@@ -44,7 +47,7 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
  * @param <CL>
  */
 public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
-
+    
     private final BinarySearchTokenMapper tokenMapper;
 
     private final ConcurrentHashMap<Long, HostConnectionPool<CL>> tokenPools = new ConcurrentHashMap<Long, HostConnectionPool<CL>>();
@@ -78,9 +81,9 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
         String key = op.getKey();
 
         HostToken hToken = null;
-        if (hashtag == null || hashtag.isEmpty()) {
+        if (hashtag == null || hashtag.isEmpty()) {            
             hToken = this.getTokenForKey(key);
-        } else {            
+        } else {  
             String hashValue = StringUtils.substringBetween(key,Character.toString(hashtag.charAt(0)), Character.toString(hashtag.charAt(1)));
             hToken = this.getTokenForKey(hashValue);
         }
@@ -90,18 +93,10 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
             hostPool = tokenPools.get(hToken.getToken());
         }
         
-        if (hashtag == null || hashtag.isEmpty()) {
-            if (hostPool == null) {
-                throw new NoAvailableHostsException(
+        if (hostPool == null) {
+             throw new NoAvailableHostsException(
                         "Could not find host connection pool for key: " + key + ", hash: " + tokenMapper.hash(key));
-            }
-        } else {
-            if (hostPool == null) {
-                throw new NoAvailableHostsException(
-                        "Could not find host connection pool for hashtag: " + hashtag + ", hash: " + tokenMapper.hash(hashtag));
-            }
         }
-
         return hostPool;
     }
 

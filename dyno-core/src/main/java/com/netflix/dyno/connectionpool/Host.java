@@ -17,7 +17,6 @@ package com.netflix.dyno.connectionpool;
 
 import java.net.InetSocketAddress;
 
-import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
 
 /**
@@ -45,7 +44,7 @@ public class Host implements Comparable<Host> {
     private final InetSocketAddress socketAddress;
     private final String rack;
     private final String datacenter;
-    private final String hashtag;
+    private String hashtag;
     private Status status = Status.Down;
 
     public enum Status {
@@ -131,6 +130,10 @@ public class Host implements Comparable<Host> {
     public String getHashtag() {
         return hashtag;
     }
+    
+    public void setHashtag(String hashtag) {
+        this.hashtag = hashtag;
+    }
 
     public Host setStatus(Status condition) {
         status = condition;
@@ -171,6 +174,12 @@ public class Host implements Comparable<Host> {
             return false;
 
         Host other = (Host) obj;
+        /* we need a way to pass the information about the hashtag from the token map supplier
+         * to the host object. 
+         */
+        if (other.hashtag != null) {
+            setHashtag(other.hashtag);
+        }
         boolean equals = true;
 
         equals &= (hostname != null) ? hostname.equals(other.hostname) : other.hostname == null;
@@ -190,6 +199,10 @@ public class Host implements Comparable<Host> {
 
     @Override
     public String toString() {
+        if (this.hashtag  != null){
+            return "Host with Hashtag [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack
+                    + ", datacenter: " + datacenter + ", status: " + status.name() + ", hashtag=" + hashtag + "]";
+        }
         return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack
                 + ", datacenter: " + datacenter + ", status: " + status.name() + "]";
     }

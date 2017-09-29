@@ -62,125 +62,149 @@ public class DynoJedisDemo {
     protected final String localRack;
     protected final String clusterName;
 
-	public DynoJedisDemo(String clusterName, String localRack) {
-		this.clusterName =  clusterName;
+    public DynoJedisDemo(String clusterName, String localRack) {
+        this.clusterName = clusterName;
         this.localRack = localRack;
     }
 
-	public void initWithLocalHost() throws Exception {
+    public void initWithLocalHost() throws Exception {
 
-		final int port = 6379; 
-		
-		final Host localHost = new Host("localhost", port, "localrack", Status.Up);
+        final int port = 6379;
 
-		final HostSupplier localHostSupplier = new HostSupplier() {
+        final Host localHost = new Host("localhost", port, "localrack", Status.Up);
 
-			@Override
-			public Collection<Host> getHosts() {
-				return Collections.singletonList(localHost);
-			}
-		};
+        final HostSupplier localHostSupplier = new HostSupplier() {
 
-		final TokenMapSupplier tokenSupplier = new TokenMapSupplier() {
+            @Override
+            public Collection<Host> getHosts() {
+                return Collections.singletonList(localHost);
+            }
+        };
+
+        final TokenMapSupplier tokenSupplier = new TokenMapSupplier() {
 
             final HostToken localHostToken = new HostToken(100000L, localHost);
 
-			@Override
-			public List<HostToken> getTokens(Set<Host> activeHosts) {
-				return Collections.singletonList(localHostToken);
-			}
+            @Override
+            public List<HostToken> getTokens(Set<Host> activeHosts) {
+                return Collections.singletonList(localHostToken);
+            }
 
-			@Override
-			public HostToken getTokenForHost(Host host, Set<Host> activeHosts) {
-				return localHostToken;
-			}
-		};
+            @Override
+            public HostToken getTokenForHost(Host host, Set<Host> activeHosts) {
+                return localHostToken;
+            }
+        };
 
-		init(localHostSupplier, port, tokenSupplier);
-	}
-	
-	private void initWithRemoteCluster(final List<Host> hosts, final int port) throws Exception {
-		final HostSupplier clusterHostSupplier = new HostSupplier() {
+        init(localHostSupplier, port, tokenSupplier);
+    }
 
-			@Override
-			public Collection<Host> getHosts() {
-				return hosts;
-			}
-		};
+    private void initWithRemoteCluster(final List<Host> hosts, final int port) throws Exception {
+        final HostSupplier clusterHostSupplier = new HostSupplier() {
 
-		init(clusterHostSupplier, port, null);
-	}
-	
-	public void initWithRemoteClusterFromFile(final String filename, final int port) throws Exception {
-		initWithRemoteCluster(readHostsFromFile(filename, port), port);
-	}
-	
-	public void initWithRemoteClusterFromEurekaUrl(final String clusterName, final int port) throws Exception {
-		initWithRemoteCluster(getHostsFromDiscovery(clusterName), port);
-	}
+            @Override
+            public Collection<Host> getHosts() {
+                return hosts;
+            }
+        };
 
-	public void init(HostSupplier hostSupplier, int port, TokenMapSupplier tokenSupplier) throws Exception {
-		
-		client = new DynoJedisClient.Builder()
-		.withApplicationName("demo")
-		.withDynomiteClusterName("dyno_dev")
-		.withHostSupplier(hostSupplier)
-//		.withCPConfig(
-//                new ConnectionPoolConfigurationImpl("demo")
-                        //.setCompressionStrategy(ConnectionPoolConfiguration.CompressionStrategy.THRESHOLD)
-                        //.setCompressionThreshold(2)
-                        //.setLocalRack(this.localRack)
-//      )
-		.build();
-	}
+        init(clusterHostSupplier, port, null);
+    }
 
-	public void runSimpleTest() throws Exception {
+    public void initWithRemoteClusterFromFile(final String filename, final int port) throws Exception {
+        initWithRemoteCluster(readHostsFromFile(filename, port), port);
+    }
 
-		this.numKeys = 10;
+    public void initWithRemoteClusterFromEurekaUrl(final String clusterName, final int port) throws Exception {
+        initWithRemoteCluster(getHostsFromDiscovery(clusterName), port);
+    }
 
-		// write
-		for (int i=0; i<numKeys; i++) {
+    public void init(HostSupplier hostSupplier, int port, TokenMapSupplier tokenSupplier) throws Exception {
+
+        client = new DynoJedisClient.Builder().withApplicationName("demo").withDynomiteClusterName("dyno_dev")
+                .withHostSupplier(hostSupplier)
+                // .withCPConfig(
+                // new ConnectionPoolConfigurationImpl("demo")
+                // .setCompressionStrategy(ConnectionPoolConfiguration.CompressionStrategy.THRESHOLD)
+                // .setCompressionThreshold(2)
+                // .setLocalRack(this.localRack)
+                // )
+                .build();
+    }
+
+    public void runSimpleTest() throws Exception {
+
+        this.numKeys = 10;
+        System.out.println("Simple test selected");
+
+        // write
+        for (int i = 0; i < numKeys; i++) {
             System.out.println("Writing key/value => DynoClientTest-" + i + " / " + i);
-			client.set("DynoClientTest-" + i, "" + i);
-		}
-		// read
-		for (int i=0; i<numKeys; i++) {
-			OperationResult<String> result = client.d_get("DynoClientTest-"+i);
-			System.out.println("Reading Key: " + i + ", Value: " + result.getResult() + " " + result.getNode());
-		}
-	}
+            client.set("DynoClientTest-" + i, "" + i);
+        }
+        // read
+        for (int i = 0; i < numKeys; i++) {
+            OperationResult<String> result = client.d_get("DynoClientTest-" + i);
+            System.out.println("Reading Key: " + i + ", Value: " + result.getResult() + " " + result.getNode());
+        }
+    }
 
-	public void runPipelineEmptyResult() throws Exception {
-		DynoJedisPipeline pipeline  = client.pipelined();
-        DynoJedisPipeline pipeline2  = client.pipelined();
+    /**
+     * To run this test, the hashtag FP must be set on the Dynomite cluster. The
+     * assumed hashtag for this test is {} hence each key is foo-{<String>}. To
+     * validate that this test succeeds observe the cluster manually.
+     * 
+     * @throws Exception
+     */
+    public void runSimpleTestWithHashtag() throws Exception {
+        
+        this.numKeys = 10;
+        System.out.println("Simple test with hashtag selected");
 
-		try {
-			byte[] field1 = "field1".getBytes();
-			byte[] field2 = "field2".getBytes();
+        // write
+        for (int i = 0; i < numKeys; i++) {
+            System.out.println("Writing key/value => DynoClientTest-" + i + " / " + i);
+            client.set(i + "-{bar}", " " + i);
+        }
+        // read
+        for (int i = 0; i < numKeys; i++) {
+            OperationResult<String> result = client.d_get(i + "-{bar}");
+            System.out.println(
+                    "Reading Key: " + i + "-{bar}" + " , Value: " + result.getResult() + " " + result.getNode());
+        }
+    }
 
-			pipeline.hset("myHash".getBytes(), field1, "hello".getBytes());
-			pipeline.hset("myHash".getBytes(), field2, "world".getBytes());
+    public void runPipelineEmptyResult() throws Exception {
+        DynoJedisPipeline pipeline = client.pipelined();
+        DynoJedisPipeline pipeline2 = client.pipelined();
 
-			Thread.sleep(1000);
+        try {
+            byte[] field1 = "field1".getBytes();
+            byte[] field2 = "field2".getBytes();
 
-			Response<List<byte[]>> result = pipeline.hmget("myHash".getBytes(), field1, field2, "miss".getBytes());
+            pipeline.hset("myHash".getBytes(), field1, "hello".getBytes());
+            pipeline.hset("myHash".getBytes(), field2, "world".getBytes());
 
-			pipeline.sync();
+            Thread.sleep(1000);
 
-			System.out.println("TEST-1: hmget for 2 valid results and 1 non-existent field");
-            for (int i=0; i < result.get().size(); i++) {
+            Response<List<byte[]>> result = pipeline.hmget("myHash".getBytes(), field1, field2, "miss".getBytes());
+
+            pipeline.sync();
+
+            System.out.println("TEST-1: hmget for 2 valid results and 1 non-existent field");
+            for (int i = 0; i < result.get().size(); i++) {
                 byte[] val = result.get().get(i);
                 if (val != null) {
-                    System.out.println("TEST-1:Result => " + i + ") " +  new String(val) );
+                    System.out.println("TEST-1:Result => " + i + ") " + new String(val));
                 } else {
                     System.out.println("TEST-1:Result => " + i + ") " + val);
                 }
             }
 
-		} catch (Exception e) {
-			pipeline.discardPipelineAndReleaseConnection();
-			throw e;
-		}
+        } catch (Exception e) {
+            pipeline.discardPipelineAndReleaseConnection();
+            throw e;
+        }
 
         try {
             Response<List<byte[]>> result2 = pipeline2.hmget("foo".getBytes(), "miss1".getBytes(), "miss2".getBytes());
@@ -199,96 +223,97 @@ public class DynoJedisDemo {
             pipeline.discardPipelineAndReleaseConnection();
             throw e;
         }
-	}
+    }
 
-	public void runKeysTest() throws Exception {
+    public void runKeysTest() throws Exception {
         System.out.println("Writing 10,000 keys to dynomite...");
 
-		for (int i=0; i<500; i++) {
-			client.set("DynoClientTest_KEYS-TEST-key"+i, "value-"+i);
-		}
+        for (int i = 0; i < 500; i++) {
+            client.set("DynoClientTest_KEYS-TEST-key" + i, "value-" + i);
+        }
 
-		System.out.println("finished writing 10000 keys, querying for keys(\"DynoClientTest_KYES-TEST*\")");
+        System.out.println("finished writing 10000 keys, querying for keys(\"DynoClientTest_KYES-TEST*\")");
 
-		Set<String> result = client.keys("DynoClientTest_KEYS-TEST*");
+        Set<String> result = client.keys("DynoClientTest_KEYS-TEST*");
 
-		System.out.println("Got " + result.size() + " results, below");
+        System.out.println("Got " + result.size() + " results, below");
         System.out.println(result);
-	}
+    }
 
-	public void runScanTest(boolean populateKeys) throws Exception {
-		logger.info("SCAN TEST -- begin");
+    public void runScanTest(boolean populateKeys) throws Exception {
+        logger.info("SCAN TEST -- begin");
 
-		final String keyPattern = System.getProperty("dyno.demo.scan.key.pattern", "DynoClientTest_key-*");
-		final String keyPrefix = System.getProperty("dyno.demo.scan.key.prefix", "DynoClientTest_key-");
+        final String keyPattern = System.getProperty("dyno.demo.scan.key.pattern", "DynoClientTest_key-*");
+        final String keyPrefix = System.getProperty("dyno.demo.scan.key.prefix", "DynoClientTest_key-");
 
-		if (populateKeys) {
-			logger.info("Writing 500 keys to {} with prefix {}", this.clusterName, keyPrefix);
-			for (int i=0; i<500; i++) {
-				client.set(keyPrefix + i, "value-"+i);
-			}
-		}
+        if (populateKeys) {
+            logger.info("Writing 500 keys to {} with prefix {}", this.clusterName, keyPrefix);
+            for (int i = 0; i < 500; i++) {
+                client.set(keyPrefix + i, "value-" + i);
+            }
+        }
 
-		logger.info("Reading keys from {} with pattern {}", this.clusterName, keyPattern);
-		CursorBasedResult<String> cbi = null;
-		do {
-			cbi = client.dyno_scan(cbi, 10000, keyPattern);
+        logger.info("Reading keys from {} with pattern {}", this.clusterName, keyPattern);
+        CursorBasedResult<String> cbi = null;
+        do {
+            cbi = client.dyno_scan(cbi, 10000, keyPattern);
 
-			List<String> results = cbi.getStringResult();
-			for (String res: results) {
-				logger.info(res);
-			}
-		} while (!cbi.isComplete());
+            List<String> results = cbi.getStringResult();
+            for (String res : results) {
+                logger.info(res);
+            }
+        } while (!cbi.isComplete());
 
-		logger.info("SCAN TEST -- done");
-	}
+        logger.info("SCAN TEST -- done");
+    }
 
-	public void runSScanTest(boolean populateKeys) throws Exception {
-		logger.info("SET SCAN TEST -- begin");
+    public void runSScanTest(boolean populateKeys) throws Exception {
+        logger.info("SET SCAN TEST -- begin");
 
-		final String key = "DynoClientTest_Set";
+        final String key = "DynoClientTest_Set";
 
-		if (populateKeys) {
-			logger.info("Populating set in cluster {} with key {}", this.clusterName, key);
-			for (int i=0; i<50; i++) {
-				client.sadd(key, "value-"+i);
-			}
-		}
+        if (populateKeys) {
+            logger.info("Populating set in cluster {} with key {}", this.clusterName, key);
+            for (int i = 0; i < 50; i++) {
+                client.sadd(key, "value-" + i);
+            }
+        }
 
-		logger.info("Reading members of set from cluster {} with key {}", this.clusterName, key);
-		ScanResult<String> scanResult;
-		final Set<String> matches = new HashSet<>();
-		String cursor = "0";
-		do {
+        logger.info("Reading members of set from cluster {} with key {}", this.clusterName, key);
+        ScanResult<String> scanResult;
+        final Set<String> matches = new HashSet<>();
+        String cursor = "0";
+        do {
 
-			final ScanParams scanParams = new ScanParams().count(10);
-			scanParams.match("*");
-			scanResult = client.sscan(key, cursor, scanParams);
-			matches.addAll(scanResult.getResult());
-			cursor = scanResult.getStringCursor();
-			if ("0".equals(cursor)) {
-				break;
-			}
-		} while(true);
+            final ScanParams scanParams = new ScanParams().count(10);
+            scanParams.match("*");
+            scanResult = client.sscan(key, cursor, scanParams);
+            matches.addAll(scanResult.getResult());
+            cursor = scanResult.getStringCursor();
+            if ("0".equals(cursor)) {
+                break;
+            }
+        } while (true);
         logger.info("SET SCAN TEST -- done");
     }
-	
-	public void cleanup(int nKeys) throws Exception {
 
-		// writes for initial seeding
-		for (int i=0; i<nKeys; i++) {
-			System.out.println("Deleting : " + i);
-			client.del("DynoDemoTest" + i);
-		}
-	}
+    public void cleanup(int nKeys) throws Exception {
+
+        // writes for initial seeding
+        for (int i = 0; i < nKeys; i++) {
+            System.out.println("Deleting : " + i);
+            client.del("DynoDemoTest" + i);
+        }
+    }
 
     public void runMultiThreaded() throws Exception {
         this.runMultiThreaded(1000, true, 2, 2);
     }
 
-	public void runMultiThreaded(final int items, boolean doSeed, final int numReaders, final int numWriters) throws Exception {
+    public void runMultiThreaded(final int items, boolean doSeed, final int numReaders, final int numWriters)
+            throws Exception {
 
-		final int nKeys = items;
+        final int nKeys = items;
         if (doSeed) {
             // writes for initial seeding
             for (int i = 0; i < nKeys; i++) {
@@ -297,26 +322,27 @@ public class DynoJedisDemo {
             }
         }
 
-		final int nThreads = numReaders + numWriters + 1;
+        final int nThreads = numReaders + numWriters + 1;
 
-		final ExecutorService threadPool = Executors.newFixedThreadPool(nThreads);
+        final ExecutorService threadPool = Executors.newFixedThreadPool(nThreads);
 
-		final AtomicBoolean stop = new AtomicBoolean(false);
-		final CountDownLatch latch = new CountDownLatch(nThreads);
+        final AtomicBoolean stop = new AtomicBoolean(false);
+        final CountDownLatch latch = new CountDownLatch(nThreads);
 
-		final AtomicInteger success = new AtomicInteger(0);
-		final AtomicInteger failure = new AtomicInteger(0);
-		final AtomicInteger emptyReads = new AtomicInteger(0);
+        final AtomicInteger success = new AtomicInteger(0);
+        final AtomicInteger failure = new AtomicInteger(0);
+        final AtomicInteger emptyReads = new AtomicInteger(0);
 
-		startWrites(nKeys, numWriters, threadPool, stop, latch, success, failure);
-		startReads(nKeys, numReaders, threadPool, stop, latch, success, failure, emptyReads);
+        startWrites(nKeys, numWriters, threadPool, stop, latch, success, failure);
+        startReads(nKeys, numReaders, threadPool, stop, latch, success, failure, emptyReads);
 
-		threadPool.submit(new Callable<Void>() {
+        threadPool.submit(new Callable<Void>() {
 
             @Override
             public Void call() throws Exception {
                 while (!stop.get()) {
-                    System.out.println("Success: " + success.get() + ", failure: " + failure.get() + ", emptyReads: " + emptyReads.get());
+                    System.out.println("Success: " + success.get() + ", failure: " + failure.get() + ", emptyReads: "
+                            + emptyReads.get());
                     Thread.sleep(1000);
                 }
                 latch.countDown();
@@ -325,169 +351,170 @@ public class DynoJedisDemo {
 
         });
 
-		Thread.sleep(15 * 1000);
+        Thread.sleep(15 * 1000);
 
-		stop.set(true);
-		latch.await();
-		threadPool.shutdownNow();
+        stop.set(true);
+        latch.await();
+        threadPool.shutdownNow();
 
         executePostRunActions();
 
         System.out.println("Cleaning up keys");
-		cleanup(nKeys);
+        cleanup(nKeys);
 
-		System.out.println("FINAL RESULT \nSuccess: " + success.get() + ", failure: " + failure.get() + ", emptyReads: " + emptyReads.get());
-		
-	}
+        System.out.println("FINAL RESULT \nSuccess: " + success.get() + ", failure: " + failure.get() + ", emptyReads: "
+                + emptyReads.get());
+
+    }
 
     protected void executePostRunActions() {
         // nothing to do here
     }
 
-    protected void startWrites(final int nKeys, final int numWriters,
-			final ExecutorService threadPool, 
-			final AtomicBoolean stop, final CountDownLatch latch,
-			final AtomicInteger success, final AtomicInteger failure) {
+    protected void startWrites(final int nKeys, final int numWriters, final ExecutorService threadPool,
+            final AtomicBoolean stop, final CountDownLatch latch, final AtomicInteger success,
+            final AtomicInteger failure) {
 
-		for (int i=0; i<numWriters; i++) {
+        for (int i = 0; i < numWriters; i++) {
 
-			threadPool.submit(new Callable<Void>() {
+            threadPool.submit(new Callable<Void>() {
 
-				final Random random = new Random();
-				@Override
-				public Void call() throws Exception {
+                final Random random = new Random();
 
-					while (!stop.get()) {
-						int key = random.nextInt(nKeys);
-						int value = random.nextInt(nKeys);
+                @Override
+                public Void call() throws Exception {
 
-						try { 
-							client.set("DynoDemoTest"+key, ""+value);
-							success.incrementAndGet();
-						} catch (Exception e) {
-							System.out.println("WRITE FAILURE: " + e.getMessage());
-							failure.incrementAndGet();
-						}
-					}
+                    while (!stop.get()) {
+                        int key = random.nextInt(nKeys);
+                        int value = random.nextInt(nKeys);
 
-					latch.countDown();
-					return null;
-				}
+                        try {
+                            client.set("DynoDemoTest" + key, "" + value);
+                            success.incrementAndGet();
+                        } catch (Exception e) {
+                            System.out.println("WRITE FAILURE: " + e.getMessage());
+                            failure.incrementAndGet();
+                        }
+                    }
 
-			});
-		}
-	}
+                    latch.countDown();
+                    return null;
+                }
 
+            });
+        }
+    }
 
-	protected void startReads(final int nKeys, final int numReaders,
-			final ExecutorService threadPool, 
-			final AtomicBoolean stop, final CountDownLatch latch,
-			final AtomicInteger success, final AtomicInteger failure, final AtomicInteger emptyReads) {
+    protected void startReads(final int nKeys, final int numReaders, final ExecutorService threadPool,
+            final AtomicBoolean stop, final CountDownLatch latch, final AtomicInteger success,
+            final AtomicInteger failure, final AtomicInteger emptyReads) {
 
-		for (int i=0; i<numReaders; i++) {
+        for (int i = 0; i < numReaders; i++) {
 
-			threadPool.submit(new Callable<Void>() {
+            threadPool.submit(new Callable<Void>() {
 
-				final Random random = new Random();
-				@Override
-				public Void call() throws Exception {
+                final Random random = new Random();
 
-					while (!stop.get()) {
-						int key = random.nextInt(nKeys);
+                @Override
+                public Void call() throws Exception {
 
-						try { 
-							String value = client.get("DynoDemoTest"+key);
-							success.incrementAndGet();
-							if (value == null || value.isEmpty()) {
-								emptyReads.incrementAndGet();
-							}
-						} catch (Exception e) {
-							System.out.println("READ FAILURE: " + e.getMessage());
-							failure.incrementAndGet();
-						}
-					}
+                    while (!stop.get()) {
+                        int key = random.nextInt(nKeys);
 
-					latch.countDown();
-					return null;
-				}
-			});
-		}
-	}
+                        try {
+                            String value = client.get("DynoDemoTest" + key);
+                            success.incrementAndGet();
+                            if (value == null || value.isEmpty()) {
+                                emptyReads.incrementAndGet();
+                            }
+                        } catch (Exception e) {
+                            System.out.println("READ FAILURE: " + e.getMessage());
+                            failure.incrementAndGet();
+                        }
+                    }
 
-	public void stop() {
-		if (client != null) {
-			client.stopClient();
-		}
-	}
-	
-	private List<Host> readHostsFromFile(String filename, int port) throws Exception {
-		
-		List<Host> hosts = new ArrayList<Host>();
-		File file = new File(filename);
-		BufferedReader reader = new BufferedReader(new FileReader(file));
-		
-		try {
-			String line = null;
-			while ((line = reader.readLine()) != null) {
-				if (line.trim().isEmpty()) {
-					continue;
-				}
-				String[] parts = line.trim().split(" ");
-				if (parts.length != 2) {
-					throw new RuntimeException("Bad data format in file:" + line);
-				}
-				Host host = new Host(parts[0].trim(), port, parts[1].trim(), Status.Up);
-				hosts.add(host);
-			}
-		} finally {
-			reader.close();
-		}
-		return hosts;
-	}
-	
-	public void runBinarySinglePipeline() throws Exception {
+                    latch.countDown();
+                    return null;
+                }
+            });
+        }
+    }
 
-		for (int i=0; i<10; i++) {
-			DynoJedisPipeline pipeline = client.pipelined();
+    public void stop() {
+        if (client != null) {
+            client.stopClient();
+        }
+    }
 
-			Map<byte[], byte[]> bar = new HashMap<byte[], byte[]>();
-			bar.put("key__1".getBytes(), "value__1".getBytes());
-			bar.put("key__2".getBytes(), "value__2".getBytes());
+    private List<Host> readHostsFromFile(String filename, int port) throws Exception {
 
-			Response<String> hmsetResult = pipeline.hmset(("hash__" + i).getBytes(), bar);
+        List<Host> hosts = new ArrayList<Host>();
+        File file = new File(filename);
+        BufferedReader reader = new BufferedReader(new FileReader(file));
 
-			pipeline.sync();
+        try {
+            String line = null;
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) {
+                    continue;
+                }
+                String[] parts = line.trim().split(" ");
+                if (parts.length != 2) {
+                    throw new RuntimeException("Bad data format in file:" + line);
+                }
+                Host host = new Host(parts[0].trim(), port, parts[1].trim(), Status.Up);
+                hosts.add(host);
+            }
+        } finally {
+            reader.close();
+        }
+        return hosts;
+    }
 
-			System.out.println(hmsetResult.get());
-		}
+    public void runBinarySinglePipeline() throws Exception {
 
-		System.out.println("Reading all keys");
+        for (int i = 0; i < 10; i++) {
+            DynoJedisPipeline pipeline = client.pipelined();
 
-		DynoJedisPipeline readPipeline = client.pipelined();
-		Response<Map<byte[], byte[]>> resp = readPipeline.hgetAll("hash__1".getBytes());
-		readPipeline.sync();
+            Map<byte[], byte[]> bar = new HashMap<byte[], byte[]>();
+            bar.put("key__1".getBytes(), "value__1".getBytes());
+            bar.put("key__2".getBytes(), "value__2".getBytes());
+
+            Response<String> hmsetResult = pipeline.hmset(("hash__" + i).getBytes(), bar);
+
+            pipeline.sync();
+
+            System.out.println(hmsetResult.get());
+        }
+
+        System.out.println("Reading all keys");
+
+        DynoJedisPipeline readPipeline = client.pipelined();
+        Response<Map<byte[], byte[]>> resp = readPipeline.hgetAll("hash__1".getBytes());
+        readPipeline.sync();
 
         StringBuilder sb = new StringBuilder();
-        for (byte[] bytes: resp.get().keySet()) {
+        for (byte[] bytes : resp.get().keySet()) {
             if (sb.length() > 0) {
                 sb.append(",");
             }
             sb.append(new String(bytes));
         }
-		System.out.println("Got hash :" + sb.toString());
-	}
+        System.out.println("Got hash :" + sb.toString());
+    }
 
     public void runSinglePipelineWithCompression(boolean useBinary) throws Exception {
-        for (int i=0; i<3; i++) {
+        for (int i = 0; i < 3; i++) {
             DynoJedisPipeline pipeline = client.pipelined();
 
             // Map
-//            Map<String, String> map = new HashMap<String, String>();
-//            String value1 = generateValue(3);
-//            String value2 = generateValue(4);
-//            map.put("key__1", value1);
-//            map.put("key__2", value2);
-//            Response<String> hmsetResult = pipeline.hmset(("hash__" + i).getBytes(), bar);
+            // Map<String, String> map = new HashMap<String, String>();
+            // String value1 = generateValue(3);
+            // String value2 = generateValue(4);
+            // map.put("key__1", value1);
+            // map.put("key__2", value2);
+            // Response<String> hmsetResult = pipeline.hmset(("hash__" +
+            // i).getBytes(), bar);
 
             // Strings
             String value1 = generateValue(3);
@@ -500,11 +527,11 @@ public class DynoJedisDemo {
 
         System.out.println("Reading keys");
 
-        for (int i=0; i<3; i++) {
+        for (int i = 0; i < 3; i++) {
             DynoJedisPipeline readPipeline = client.pipelined();
             Response<String> resp = readPipeline.get("DynoJedisDemo__key__" + i);
             readPipeline.sync();
-            System.out.println("Result => " + i + ") " +  resp.get());
+            System.out.println("Result => " + i + ") " + resp.get());
         }
 
     }
@@ -516,10 +543,14 @@ public class DynoJedisDemo {
     }
 
     private static String generateValue(int kilobytes) {
-        StringBuilder sb = new StringBuilder(kilobytes * 512); // estimating 2 bytes per char
+        StringBuilder sb = new StringBuilder(kilobytes * 512); // estimating 2
+                                                               // bytes per char
         for (int i = 0; i < kilobytes; i++) {
             for (int j = 0; j < 10; j++) {
-                sb.append("abcdefghijklmnopqrstuvwxzy0123456789a1b2c3d4f5g6h7"); // 50 characters (~100 bytes)
+                sb.append("abcdefghijklmnopqrstuvwxzy0123456789a1b2c3d4f5g6h7"); // 50
+                                                                                 // characters
+                                                                                 // (~100
+                                                                                 // bytes)
                 sb.append(":");
                 sb.append("abcdefghijklmnopqrstuvwxzy0123456789a1b2c3d4f5g6h7");
                 sb.append(":");
@@ -529,327 +560,393 @@ public class DynoJedisDemo {
         return sb.toString();
 
     }
-	
-	public void runPipeline() throws Exception {
-		
-		int numThreads = 5; 
-		
-		final ExecutorService threadPool = Executors.newFixedThreadPool(numThreads);
-		final AtomicBoolean stop = new AtomicBoolean(false);
-		final CountDownLatch latch = new CountDownLatch(numThreads);
-		
-		for (int i=0; i<numThreads; i++) {
-			threadPool.submit(new Callable<Void>() {
 
-				final Random rand = new Random();
-				@Override
-				public Void call() throws Exception {
-					
-					final AtomicInteger iter = new AtomicInteger(0);
-					
-					while (!stop.get()) {
-						int index = rand.nextInt(5);
-						int i = iter.incrementAndGet();
-						DynoJedisPipeline pipeline = client.pipelined();
+    /**
+     * This demo runs a pipeline across ten different keys.
+     * The pipeline leverages the hash value {bar} to determine
+     * the node where to send the data.
+     * @throws Exception
+     */
+    public void runPipelineWithHashtag() throws Exception {
 
-						try {
-							Response<Long> resultA1 = pipeline.hset("DynoJedisDemo_pipeline-" + index, "a1", constructRandomValue(index));
-							Response<Long> resultA2 = pipeline.hset("DynoJedisDemo_pipeline-" + index, "a2", "value-" + i);
+        
+        DynoJedisPipeline pipeline = client.pipelined();
+        try {
 
-							pipeline.sync();
+            pipeline.set("pipeline-hashtag1-{bar}", "value-1");
+            pipeline.set("pipeline-hashtag2-{bar}", "value-2");
+            pipeline.set("pipeline-hashtag3-{bar}", "value-3");
+            pipeline.set("pipeline-hashtag4-{bar}", "value-4");
+            pipeline.set("pipeline-hashtag5-{bar}", "value-5");
+            pipeline.set("pipeline-hashtag6-{bar}", "value-6");
+            pipeline.set("pipeline-hashtag7-{bar}", "value-7");
+            pipeline.set("pipeline-hashtag8-{bar}", "value-8");
+            pipeline.set("pipeline-hashtag9-{bar}", "value-9");
+            pipeline.set("pipeline-hashtag10-{bar}", "value-10");
 
-							System.out.println(resultA1.get() + " "  + resultA2.get());
-							
-						} catch (Exception e) {
-							pipeline.discardPipelineAndReleaseConnection();
-							throw e;
-						}
-						
-					}
-					latch.countDown();
-					return null;
-				}
-			});
-		}
-		
-		Thread.sleep(5000);
-		stop.set(true);
-		latch.await();
-		
-		threadPool.shutdownNow();
-	}
 
-	private String constructRandomValue(int sizeInKB) {
+            Response<String> value1 = pipeline.get("pipeline-hashtag1-{bar}");
+            Response<String> value2 = pipeline.get("pipeline-hashtag2-{bar}");
+            Response<String> value3 = pipeline.get("pipeline-hashtag3-{bar}");
+            Response<String> value4 = pipeline.get("pipeline-hashtag4-{bar}");
+            Response<String> value5 = pipeline.get("pipeline-hashtag5-{bar}");
+            Response<String> value6 = pipeline.get("pipeline-hashtag6-{bar}");           
+            pipeline.sync();
+            
+            System.out.println(value1.get());
+            System.out.println(value2.get());
+            System.out.println(value3.get());
+            System.out.println(value4.get());
+            System.out.println(value5.get());
+            System.out.println(value6.get());
+        } catch (Exception e) {
+            pipeline.discardPipelineAndReleaseConnection();
+            throw e;
+        }
+    }
 
-		int requriredLength = sizeInKB * 1024;
+    public void runPipeline() throws Exception {
 
-		String s = randomValue;
-		int sLength = s.length();
+        int numThreads = 5;
 
-		StringBuilder sb = new StringBuilder();
-		int lengthSoFar = 0;
+        final ExecutorService threadPool = Executors.newFixedThreadPool(numThreads);
+        final AtomicBoolean stop = new AtomicBoolean(false);
+        final CountDownLatch latch = new CountDownLatch(numThreads);
 
-		do {
-			sb.append(s);
-			lengthSoFar += sLength;
-		} while (lengthSoFar < requriredLength);
+        for (int i = 0; i < numThreads; i++) {
+            threadPool.submit(new Callable<Void>() {
 
-		String ss = sb.toString();
+                final Random rand = new Random();
 
-        if(ss.length()>requriredLength) {
-			ss= sb.substring(0,requriredLength);
-		}
+                @Override
+                public Void call() throws Exception {
 
-		return ss;
-	}
-	private List<Host> getHostsFromDiscovery(final String clusterName) {
+                    final AtomicInteger iter = new AtomicInteger(0);
 
-		String env = System.getProperty("netflix.environment", "test");
-		String discoveryKey = String.format("dyno.demo.discovery.%s", env);
+                    while (!stop.get()) {
+                        int index = rand.nextInt(5);
+                        int i = iter.incrementAndGet();
+                        DynoJedisPipeline pipeline = client.pipelined();
 
-		if (!System.getProperties().containsKey(discoveryKey)) {
-			throw new IllegalArgumentException("Discovery URL not found");
-		}
+                        try {
+                            Response<Long> resultA1 = pipeline.hset("DynoJedisDemo_pipeline-" + index, "a1",
+                                    constructRandomValue(index));
+                            Response<Long> resultA2 = pipeline.hset("DynoJedisDemo_pipeline-" + index, "a2",
+                                    "value-" + i);
 
-		String region = System.getProperty("EC2_REGION");
-		final String discoveryUrl = String.format(System.getProperty(discoveryKey), region);
+                            pipeline.sync();
 
-		final String url = String.format("http://%s/%s", discoveryUrl, clusterName);
-		
-		HttpClient client = new DefaultHttpClient();
-		try {
-			HttpResponse response = client.execute(new HttpGet(url));
-			InputStream in = response.getEntity().getContent();
+                            System.out.println(resultA1.get() + " " + resultA2.get());
 
-			SAXParserFactory parserFactor = SAXParserFactory.newInstance();
-			
-			SAXParser parser = parserFactor.newSAXParser();
-			SAXHandler handler = new SAXHandler("instance", "public-hostname", "availability-zone", "status", "local-ipv4");
-			parser.parse(in, handler);
-			
-			List<Host> hosts = new ArrayList<Host>();
-			
-			for (Map<String, String> map : handler.getList()) {
-				String rack = map.get("availability-zone");
-				Status status = map.get("status").equalsIgnoreCase("UP") ? Status.Up : Status.Down;
+                        } catch (Exception e) {
+                            pipeline.discardPipelineAndReleaseConnection();
+                            throw e;
+                        }
+
+                    }
+                    latch.countDown();
+                    return null;
+                }
+            });
+        }
+
+        Thread.sleep(5000);
+        stop.set(true);
+        latch.await();
+
+        threadPool.shutdownNow();
+    }
+
+    private String constructRandomValue(int sizeInKB) {
+
+        int requriredLength = sizeInKB * 1024;
+
+        String s = randomValue;
+        int sLength = s.length();
+
+        StringBuilder sb = new StringBuilder();
+        int lengthSoFar = 0;
+
+        do {
+            sb.append(s);
+            lengthSoFar += sLength;
+        } while (lengthSoFar < requriredLength);
+
+        String ss = sb.toString();
+
+        if (ss.length() > requriredLength) {
+            ss = sb.substring(0, requriredLength);
+        }
+
+        return ss;
+    }
+
+    private List<Host> getHostsFromDiscovery(final String clusterName) {
+
+        String env = System.getProperty("netflix.environment", "test");
+        String discoveryKey = String.format("dyno.demo.discovery.%s", env);
+
+        if (!System.getProperties().containsKey(discoveryKey)) {
+            throw new IllegalArgumentException("Discovery URL not found");
+        }
+
+        String region = System.getProperty("EC2_REGION");
+        final String discoveryUrl = String.format(System.getProperty(discoveryKey), region);
+
+        final String url = String.format("http://%s/%s", discoveryUrl, clusterName);
+
+        HttpClient client = new DefaultHttpClient();
+        try {
+            HttpResponse response = client.execute(new HttpGet(url));
+            InputStream in = response.getEntity().getContent();
+
+            SAXParserFactory parserFactor = SAXParserFactory.newInstance();
+
+            SAXParser parser = parserFactor.newSAXParser();
+            SAXHandler handler = new SAXHandler("instance", "public-hostname", "availability-zone", "status",
+                    "local-ipv4");
+            parser.parse(in, handler);
+
+            List<Host> hosts = new ArrayList<Host>();
+
+            for (Map<String, String> map : handler.getList()) {
+                String rack = map.get("availability-zone");
+                Status status = map.get("status").equalsIgnoreCase("UP") ? Status.Up : Status.Down;
                 Host host = new Host(map.get("public-hostname"), map.get("local-ipv4"), rack, status);
-				hosts.add(host);
-				System.out.println("Host: " + host);
-			}
-			
-			return hosts;
-		} catch (Throwable e) {
-			throw new RuntimeException(e);
-		}
-	}
-	
-	
-	public void runLongTest() throws InterruptedException {
-		
-		final ExecutorService threadPool = Executors.newFixedThreadPool(2);
+                hosts.add(host);
+                System.out.println("Host: " + host);
+            }
 
-		final AtomicBoolean stop = new AtomicBoolean(false);
-		final CountDownLatch latch = new CountDownLatch(2);
+            return hosts;
+        } catch (Throwable e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-		final AtomicInteger success = new AtomicInteger(0);
-		final AtomicInteger failure = new AtomicInteger(0);
-		final AtomicInteger emptyReads = new AtomicInteger(0);
-		
-		threadPool.submit(new Callable<Void>() {
+    public void runLongTest() throws InterruptedException {
 
-			@Override
-			public Void call() throws Exception {
-				while (!stop.get()) {
-					System.out.println("Getting Value for key '0'");
-					String value = client.get("0");
-					System.out.println("Got Value for key '0' : " + value);
-					Thread.sleep(5000);
-				}
-				latch.countDown();
-				return null;
-			}
-			
-		});
+        final ExecutorService threadPool = Executors.newFixedThreadPool(2);
 
-		threadPool.submit(new Callable<Void>() {
+        final AtomicBoolean stop = new AtomicBoolean(false);
+        final CountDownLatch latch = new CountDownLatch(2);
 
-			@Override
-			public Void call() throws Exception {
-				while (!stop.get()) {
-					System.out.println("Success: " + success.get() + ", failure: " + failure.get() + ", emptyReads: " + emptyReads.get());
-					Thread.sleep(1000);
-				}
-				latch.countDown();
-				return null;
-			}
+        final AtomicInteger success = new AtomicInteger(0);
+        final AtomicInteger failure = new AtomicInteger(0);
+        final AtomicInteger emptyReads = new AtomicInteger(0);
 
-		});
+        threadPool.submit(new Callable<Void>() {
 
-		Thread.sleep(60*1000);
+            @Override
+            public Void call() throws Exception {
+                while (!stop.get()) {
+                    System.out.println("Getting Value for key '0'");
+                    String value = client.get("0");
+                    System.out.println("Got Value for key '0' : " + value);
+                    Thread.sleep(5000);
+                }
+                latch.countDown();
+                return null;
+            }
 
-		stop.set(true);
-		latch.await();
-		threadPool.shutdownNow();
-	}
-	
-	private class SAXHandler extends DefaultHandler {
+        });
 
-		private final List<Map<String, String>> list = new ArrayList<Map<String, String>>();
-		private final String rootElement; 
-		private final Set<String> interestElements = new HashSet<String>();
-		
-		private Map<String, String> currentPayload = null;
-		private String currentInterestElement = null;
-		
-		private SAXHandler(String root, String ... interests) {
-			
-			rootElement = root;
-			for (String s : interests) {
-				interestElements.add(s);
-			}
-		}
-		
-		@Override
-		public void startElement(String uri, String localName, String qName, Attributes attributes) throws SAXException {
-			
-			if (qName.equalsIgnoreCase(rootElement)) {
-				// prep for next instance
-				currentPayload = new HashMap<String, String>();
-				return;
-			}
-			
-			if (interestElements.contains(qName)) {
-				// note the element to be parsed. this will be used in chars callback
-				currentInterestElement = qName;
-			}
-		}
+        threadPool.submit(new Callable<Void>() {
 
-		@Override
-		public void endElement(String uri, String localName, String qName) throws SAXException {
+            @Override
+            public Void call() throws Exception {
+                while (!stop.get()) {
+                    System.out.println("Success: " + success.get() + ", failure: " + failure.get() + ", emptyReads: "
+                            + emptyReads.get());
+                    Thread.sleep(1000);
+                }
+                latch.countDown();
+                return null;
+            }
 
-			// add host to list
-			if (qName.equalsIgnoreCase(rootElement)) {
-				list.add(currentPayload);
-				currentPayload = null;
-			}
-		}
+        });
 
-		@Override
-		public void characters(char[] ch, int start, int length) throws SAXException {
+        Thread.sleep(60 * 1000);
 
-			String value = new String(ch, start, length);
-			
-			if (currentInterestElement != null && currentPayload != null) {
-				currentPayload.put(currentInterestElement, value);
-				currentInterestElement = null;
-			}
-		}
-		
-		public List<Map<String, String>> getList() {
-			return list;
-		}
-	};
+        stop.set(true);
+        latch.await();
+        threadPool.shutdownNow();
+    }
 
-	/**
-	 *
-	 * @param args Should contain:
-	 *             <ol>dynomite_cluster_name, e.g. dyno_sandbox_quorum</ol>
-	 *             <ol>
-	 *                 test number, in the set:
-	 *                 1 - simple test
-	 *                 2 - keys test
-	 *                 3 - multi-threaded
-	 *                 4 - scan test
-	 *                 5 - pipeline
-	 *             </ol>
-	 */
-	public static void main(String args[]) throws IOException {
+    private class SAXHandler extends DefaultHandler {
 
-		if (args.length < 2) {
-			System.out.println("Incorrect number of arguments.");
-			printUsage();
-			System.exit(1);
-		}
+        private final List<Map<String, String>> list = new ArrayList<Map<String, String>>();
+        private final String rootElement;
+        private final Set<String> interestElements = new HashSet<String>();
 
-		String clusterName = args[0];
-		int testNumber = Integer.valueOf(args[1]);
+        private Map<String, String> currentPayload = null;
+        private String currentInterestElement = null;
 
-		Properties props = new Properties();
-		props.load(DynoJedisDemo.class.getResourceAsStream("/demo.properties"));
-		for (String name: props.stringPropertyNames()) {
-			System.setProperty(name, props.getProperty(name));
-		}
+        private SAXHandler(String root, String... interests) {
 
-		if (!props.containsKey("EC2_AVAILABILITY_ZONE") && !props.containsKey("dyno.dyno_demo.lbStrategy")) {
-			throw new IllegalArgumentException("MUST set local for load balancing OR set the load balancing strategy to round robin");
-		}
+            rootElement = root;
+            for (String s : interests) {
+                interestElements.add(s);
+            }
+        }
 
-		String rack = props.getProperty("EC2_AVAILABILITY_ZONE", "us-east-1e");
-		String hostsFile = props.getProperty("dyno.demo.hostsFile");
-		int port = Integer.valueOf(props.getProperty("dyno.demo.port", "8102"));
+        @Override
+        public void startElement(String uri, String localName, String qName, Attributes attributes)
+                throws SAXException {
+
+            if (qName.equalsIgnoreCase(rootElement)) {
+                // prep for next instance
+                currentPayload = new HashMap<String, String>();
+                return;
+            }
+
+            if (interestElements.contains(qName)) {
+                // note the element to be parsed. this will be used in chars
+                // callback
+                currentInterestElement = qName;
+            }
+        }
+
+        @Override
+        public void endElement(String uri, String localName, String qName) throws SAXException {
+
+            // add host to list
+            if (qName.equalsIgnoreCase(rootElement)) {
+                list.add(currentPayload);
+                currentPayload = null;
+            }
+        }
+
+        @Override
+        public void characters(char[] ch, int start, int length) throws SAXException {
+
+            String value = new String(ch, start, length);
+
+            if (currentInterestElement != null && currentPayload != null) {
+                currentPayload.put(currentInterestElement, value);
+                currentInterestElement = null;
+            }
+        }
+
+        public List<Map<String, String>> getList() {
+            return list;
+        }
+    };
+
+    /**
+     *
+     * @param args
+     *            Should contain:
+     *            <ol>
+     *            dynomite_cluster_name, e.g. dyno_sandbox_quorum
+     *            </ol>
+     *            <ol>
+     *            test number, in the set: 
+     *            1 - simple test 
+     *            2 - keys test 
+     *            3 - simple test with hashtag
+     *            4-  multi-threaded 
+     *            5 - SCAN test 
+     *            6 - pipeline 
+     *            7 - run pipeline with hashtag 
+     *            7 - runn SSCAN test
+     *            </ol>
+     */
+    public static void main(String args[]) throws IOException {
+
+        if (args.length < 2) {
+            System.out.println("Incorrect number of arguments.");
+            printUsage();
+            System.exit(1);
+        }
+
+        String clusterName = args[0];
+        int testNumber = Integer.valueOf(args[1]);
+
+        Properties props = new Properties();
+        props.load(DynoJedisDemo.class.getResourceAsStream("/demo.properties"));
+        for (String name : props.stringPropertyNames()) {
+            System.setProperty(name, props.getProperty(name));
+        }
+
+        if (!props.containsKey("EC2_AVAILABILITY_ZONE") && !props.containsKey("dyno.dyno_demo.lbStrategy")) {
+            throw new IllegalArgumentException(
+                    "MUST set local for load balancing OR set the load balancing strategy to round robin");
+        }
+
+        String rack = props.getProperty("EC2_AVAILABILITY_ZONE", "us-east-1e");
+        String hostsFile = props.getProperty("dyno.demo.hostsFile");
+        int port = Integer.valueOf(props.getProperty("dyno.demo.port", "8102"));
 
         DynoJedisDemo demo = new DynoJedisDemo(clusterName, rack);
 
         try {
-			if (hostsFile != null) {
+            if (hostsFile != null) {
                 demo.initWithRemoteClusterFromFile(hostsFile, port);
             } else {
                 demo.initWithRemoteClusterFromEurekaUrl(clusterName, port);
             }
 
-			System.out.println("Connected");
+            System.out.println("Connected");
 
-			switch (testNumber) {
-				case 1: {
-					demo.runSimpleTest();
-					break;
-				}
-				case 2: {
-					demo.runKeysTest();
-					break;
-				}
-				case 3: {
-					demo.runMultiThreaded();
-					break;
-				}
-                case 4: {
-                	final boolean writeKeys = Boolean.valueOf(props.getProperty("dyno.demo.scan.populateKeys"));
-                    demo.runScanTest(writeKeys);
-                    break;
-                }
-                case 5: {
-                    demo.runPipeline();
-                    break;
-                }
-				case 6: {
-					demo.runSScanTest(true);
-					break;
-				}
-			}
+            switch (testNumber) {
+            case 1: {
+                demo.runSimpleTest();
+                break;
+            }
+            case 2: {
+                demo.runKeysTest();
+                break;
+            }
+            case 3: {
+                demo.runSimpleTestWithHashtag();
+                break;
+            }
+            case 4: {
+                demo.runMultiThreaded();
+                break;
+            }
+            case 5: {
+                final boolean writeKeys = Boolean.valueOf(props.getProperty("dyno.demo.scan.populateKeys"));
+                demo.runScanTest(writeKeys);
+                break;
+            }
+            case 6: {
+                demo.runPipeline();
+                break;
+            }
+            case 7: {
+                demo.runPipelineWithHashtag();
+                break;
+            }
+            case 8: {
+                demo.runSScanTest(true);
+                break;
+            }
+            }
 
-			//demo.runSinglePipeline();
-			//demo.runPipeline();
-			//demo.runBinarySinglePipeline();
-			//demo.runPipelineEmptyResult();
-            //demo.runSinglePipelineWithCompression(false);
-			//demo.runLongTest();
-            //demo.runSandboxTest();
+            // demo.runSinglePipeline();
+            // demo.runPipeline();
+            // demo.runBinarySinglePipeline();
+            // demo.runPipelineEmptyResult();
+            // demo.runSinglePipelineWithCompression(false);
+            // demo.runLongTest();
+            // demo.runSandboxTest();
 
-			Thread.sleep(1000);
-			
-			demo.cleanup(demo.numKeys);
-			
-		} catch (Throwable e) {
-			e.printStackTrace();
-		} finally {
-			demo.stop();
+            Thread.sleep(1000);
+
+           // demo.cleanup(demo.numKeys);
+
+        } catch (Throwable e) {
+            e.printStackTrace();
+        } finally {
+            demo.stop();
             System.out.println("Done");
 
-			System.out.flush();
-			System.err.flush();
-			System.exit(0);
-		}
-	}
+            System.out.flush();
+            System.err.flush();
+            System.exit(0);
+        }
+    }
 
     protected static void printUsage() {
         // todo
