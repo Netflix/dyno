@@ -45,10 +45,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -83,7 +81,7 @@ public class HostSelectionWithFallback<CL> {
 	// The selector for the local zone
 	private final HostSelectionStrategy<CL> localSelector;
 	// Track selectors for each remote DC
-	private final ConcurrentHashMap<String, HostSelectionStrategy<CL>> remoteDCSelectors = new ConcurrentHashMap<String, HostSelectionStrategy<CL>>();
+	private final ConcurrentHashMap<String, HostSelectionStrategy<CL>> remoteRackSelectors = new ConcurrentHashMap<String, HostSelectionStrategy<CL>>();
 
 	private final ConcurrentHashMap<Host, HostToken> hostTokens = new ConcurrentHashMap<Host, HostToken>();
 
@@ -205,7 +203,7 @@ public class HostSelectionWithFallback<CL> {
 
 			numTries--;
 			String remoteDC = remoteDCNames.getNextElement();
-			HostSelectionStrategy<CL> remoteDCSelector = remoteDCSelectors.get(remoteDC);
+			HostSelectionStrategy<CL> remoteDCSelector = remoteRackSelectors.get(remoteDC);
 
 			try {
 				
@@ -281,16 +279,16 @@ public class HostSelectionWithFallback<CL> {
 
 
 	private HostSelectionStrategy<CL> findSelector(Host host) {
-		String dc = host.getRack();
+		String rack = host.getRack();
 		if (localRack == null) {
 			return localSelector;
 		}
 
-		if (localRack.equals(dc)) {
+		if (localRack.equals(rack)) {
 			return localSelector;
 		}
 
-		HostSelectionStrategy<CL> remoteSelector = remoteDCSelectors.get(dc);
+		HostSelectionStrategy<CL> remoteSelector = remoteRackSelectors.get(rack);
 		return remoteSelector;
 	}
 
@@ -307,7 +305,7 @@ public class HostSelectionWithFallback<CL> {
 		}
 	}
 
-	private Map<HostToken, HostConnectionPool<CL>> getHostPoolsForDC(final Map<HostToken, HostConnectionPool<CL>> map, final String dc) {
+	private Map<HostToken, HostConnectionPool<CL>> getHostPoolsForDC(final Map<HostToken, HostConnectionPool<CL>> map, final String rack) {
 
 		Map<HostToken, HostConnectionPool<CL>> dcPools = 
 				CollectionUtils.filterKeys(map, new Predicate<HostToken>() {
@@ -317,7 +315,7 @@ public class HostSelectionWithFallback<CL> {
 						if (localRack == null) {
 							return true;
 						}
-						return dc.equals(x.getHost().getRack());
+						return rack.equals(x.getHost().getRack());
 					}
 				});
 		return dcPools;
@@ -337,23 +335,30 @@ public class HostSelectionWithFallback<CL> {
 		
 	        /* Initialize the hashtag with the first host (if hashtag is defined) */
 	        this.hashtag = allHostTokens.get(0).getHost().getHashtag();
+	        short numHosts = 0;
 	        
 	        // Update inner state with the host tokens.
 		for (HostToken hToken : allHostTokens) {
 		          
 	                /**
-	                 * Checking for defined hashtags if all of them are the same.
-	                 * If not we need to throw an exception.
+	                 * Checking hashtag consistency from all Dynomite hosts.
+	                 * If hashtags are not consistent, we need to throw an exception.
 	                 */
 		        String hashtagNew = hToken.getHost().getHashtag();
 		        if (this.hashtag!=null && !this.hashtag.equals(hashtagNew)){
-	                       logger.error("Hashtag mismatch across hashtags");
+	                       logger.error("Hashtag mismatch across hosts");
 	                       throw new RuntimeException("Hashtags are different across hosts");
-	                }
+	                }// addressing case hashtag = null, hashtag = {} ...
+		        else if (numHosts>0 && this.hashtag == null && hashtagNew !=null) {
+                            logger.error("Hashtag mismatch across hosts");
+                            throw new RuntimeException("Hashtags are different across hosts");
+		            
+		        }
 	                this.hashtag = hashtagNew;
 
 			hostTokens.put(hToken.getHost(), hToken);
 			tokenPoolMap.put(hToken, hPools.get(hToken.getHost()));
+			numHosts++;
 		}
 		
 		Set<String> remoteDCs = new HashSet<String>();		
@@ -375,10 +380,10 @@ public class HostSelectionWithFallback<CL> {
 			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForDC(tokenPoolMap, dc);
 			HostSelectionStrategy<CL> remoteSelector = selectorFactory.vendPoolSelectionStrategy();
 			remoteSelector.initWithHosts(dcPools);
-			remoteDCSelectors.put(dc, remoteSelector);
+			remoteRackSelectors.put(dc, remoteSelector);
 		}
 
-		remoteDCNames.swapWithList(remoteDCSelectors.keySet());
+		remoteDCNames.swapWithList(remoteRackSelectors.keySet());
 
         topology.set(getTokenPoolTopology());
 	}
@@ -472,8 +477,8 @@ public class HostSelectionWithFallback<CL> {
 
         if (localRack != null) {
             addTokens(topology, localRack, localSelector);
-            for (String remoteRack : remoteDCSelectors.keySet()) {
-                addTokens(topology, remoteRack, remoteDCSelectors.get(remoteRack));
+            for (String remoteRack : remoteRackSelectors.keySet()) {
+                addTokens(topology, remoteRack, remoteRackSelectors.get(remoteRack));
             }
         }
 
@@ -506,7 +511,7 @@ public class HostSelectionWithFallback<CL> {
 				"localDataCenter='" + localDataCenter + '\'' +
 				", localRack='" + localRack + '\'' +
 				", localSelector=" + localSelector +
-				", remoteDCSelectors=" + remoteDCSelectors +
+				", remoteDCSelectors=" + remoteRackSelectors +
 				", hostTokens=" + hostTokens +
 				", tokenSupplier=" + tokenSupplier +
 				", cpConfig=" + cpConfig +

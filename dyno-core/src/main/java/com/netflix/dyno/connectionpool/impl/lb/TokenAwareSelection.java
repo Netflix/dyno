@@ -73,7 +73,7 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
     }
 
     /**
-     * If a hashtag is provided by Dynomite then we use that to craete the key to hash.
+     * If a hashtag is provided by Dynomite then we use that to create the key to hash.
      */
     @Override
     public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op, String hashtag) throws NoAvailableHostsException {

@@ -22,15 +22,13 @@ import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
 /**
  * Class encapsulating information about a host.
  *
- * This is immutable except for the host status.
- * Note that the HostSupplier may not know the Dynomite port,
- * whereas the Host object created by the load balancer
- * may receive the port the cluster_describe REST call.
- * Hence, we must not use the port in the equality and hashCode
- * calculations.
+ * This is immutable except for the host status. Note that the HostSupplier may
+ * not know the Dynomite port, whereas the Host object created by the load
+ * balancer may receive the port the cluster_describe REST call. Hence, we must
+ * not use the port in the equality and hashCode calculations.
  *
  * @author poberai
- * @author ipapapanagiotou
+ * @author ipapapa
  *
  */
 public class Host implements Comparable<Host> {
@@ -62,7 +60,7 @@ public class Host implements Comparable<Host> {
     public Host(String hostname, int port, String rack, Status status) {
         this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
     }
-    
+
     public Host(String hostname, int port, String rack, Status status, String hashtag) {
         this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
     }
@@ -78,12 +76,13 @@ public class Host implements Comparable<Host> {
     public Host(String hostname, String ipAddress, String rack, Status status, String hashtag) {
         this(hostname, ipAddress, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
     }
-    
+
     public Host(String hostname, String ipAddress, int port, String rack, String datacenter, Status status) {
         this(hostname, ipAddress, port, rack, datacenter, status, null);
     }
 
-    public Host(String name, String ipAddress, int port, String rack, String datacenter, Status status, String hashtag) {
+    public Host(String name, String ipAddress, int port, String rack, String datacenter, Status status,
+            String hashtag) {
         this.hostname = name;
         this.ipAddress = ipAddress;
         this.port = port;
@@ -126,11 +125,11 @@ public class Host implements Comparable<Host> {
     public String getRack() {
         return rack;
     }
-    
+
     public String getHashtag() {
         return hashtag;
     }
-    
+
     public void setHashtag(String hashtag) {
         this.hashtag = hashtag;
     }
@@ -149,9 +148,9 @@ public class Host implements Comparable<Host> {
     }
 
     /**
-     * Equality checks will fail in collections between Host objects
-     * created from the HostSupplier, which may not know the Dynomite port, and
-     * the Host objects created by the load balancer.
+     * Equality checks will fail in collections between Host objects created
+     * from the HostSupplier, which may not know the Dynomite port, and the Host
+     * objects created by the load balancer.
      */
     @Override
     public int hashCode() {
@@ -174,8 +173,9 @@ public class Host implements Comparable<Host> {
             return false;
 
         Host other = (Host) obj;
-        /* we need a way to pass the information about the hashtag from the token map supplier
-         * to the host object. 
+        /*
+         * we need a way to pass the information about the hashtag from the
+         * token map supplier to the host object.
          */
         if (other.hashtag != null) {
             setHashtag(other.hashtag);
@@ -199,11 +199,9 @@ public class Host implements Comparable<Host> {
 
     @Override
     public String toString() {
-        if (this.hashtag  != null){
-            return "Host with Hashtag [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack
-                    + ", datacenter: " + datacenter + ", status: " + status.name() + ", hashtag=" + hashtag + "]";
-        }
-        return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack
-                + ", datacenter: " + datacenter + ", status: " + status.name() + "]";
+
+        return "Host with Hashtag [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: "
+                + rack + ", datacenter: " + datacenter + ", status: " + status.name() + ", hashtag=" + hashtag + "]";
+
     }
 }

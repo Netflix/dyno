@@ -158,7 +158,7 @@ public class DynoJedisDemo {
      */
     public void runSimpleTestWithHashtag() throws Exception {
         
-        this.numKeys = 10;
+        this.numKeys = 100;
         System.out.println("Simple test with hashtag selected");
 
         // write
