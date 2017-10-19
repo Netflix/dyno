@@ -180,6 +180,7 @@ public class Host implements Comparable<Host> {
         if (other.hashtag != null) {
             setHashtag(other.hashtag);
         }
+        
         boolean equals = true;
 
         equals &= (hostname != null) ? hostname.equals(other.hostname) : other.hostname == null;

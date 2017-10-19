@@ -361,11 +361,11 @@ public class HostSelectionWithFallback<CL> {
 			numHosts++;
 		}
 		
-		Set<String> remoteDCs = new HashSet<String>();		
+		Set<String> remoteRacks = new HashSet<String>();		
 		for (Host host : hPools.keySet()) {
-			String dc = host.getRack();
-			if (localRack != null && !localRack.isEmpty() && dc != null && !dc.isEmpty() && !localRack.equals(dc)) {
-				remoteDCs.add(dc);
+			String rack = host.getRack();
+			if (localRack != null && !localRack.isEmpty() && rack != null && !rack.isEmpty() && !localRack.equals(rack)) {
+				remoteRacks.add(rack);
 			}			
 		}
 		
@@ -376,11 +376,11 @@ public class HostSelectionWithFallback<CL> {
                    replicationFactor.set(calculateReplicationFactor(allHostTokens));
                 }
 
-		for (String dc : remoteDCs) {
-			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForDC(tokenPoolMap, dc);
+		for (String rack : remoteRacks) {
+			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForDC(tokenPoolMap, rack);
 			HostSelectionStrategy<CL> remoteSelector = selectorFactory.vendPoolSelectionStrategy();
 			remoteSelector.initWithHosts(dcPools);
-			remoteRackSelectors.put(dc, remoteSelector);
+			remoteRackSelectors.put(rack, remoteSelector);
 		}
 
 		remoteDCNames.swapWithList(remoteRackSelectors.keySet());
@@ -431,6 +431,15 @@ public class HostSelectionWithFallback<CL> {
 		if (hostToken == null) {
 			throw new DynoConnectException("Could not find host token for host: " + host);
 		}
+		
+		/**
+                 * If hashtags are not consistent, we need to throw an exception.
+                 */
+                String hashtagNew = hostToken.getHost().getHashtag();
+                if (this.hashtag!=null && !this.hashtag.equals(hashtagNew)){
+                       logger.error("Hashtag mismatch when adding a host");
+                       throw new RuntimeException("Hashtag mismatch when adding a host");
+                }		
 		
 		hostTokens.put(hostToken.getHost(), hostToken);
 		

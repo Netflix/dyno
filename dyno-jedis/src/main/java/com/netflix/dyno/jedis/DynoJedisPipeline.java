@@ -132,14 +132,17 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
      */
     private void checkKey(final String key) {
 
-        // Get hashtag from the first host of the active pool
+        /*
+         * Get hashtag from the first host of the active pool We cannot use the
+         * connection object because as of now we have not selected a
+         * connection. A connection is selected based on the key or hashtag
+         * respectively.
+         */
         String hashtag = connPool.getActivePools().iterator().next().getHost().getHashtag();
         if (hashtag == null || hashtag.isEmpty()) {
             if (theKey.get() != null) {
                 verifyKey(key);
-
             } else {
-
                 boolean success = theKey.compareAndSet(null, key);
                 if (!success) {
                     // someone already beat us to it. that's fine, just verify
@@ -149,10 +152,12 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
                     pipelined(key);
                 }
             }
-        } else { // We have a identified a hashtag in the Host object. That
-                 // means Dynomite has a defined hashtag.
-            // Producing the hashvalue out of the hashtag and using that as a
-            // reference to the pipeline
+        } else {
+            /*
+             * We have a identified a hashtag in the Host object. That means
+             * Dynomite has a defined hashtag. Producing the hashvalue out of
+             * the hashtag and using that as a reference to the pipeline
+             */
             String hashValue = StringUtils.substringBetween(key, Character.toString(hashtag.charAt(0)),
                     Character.toString(hashtag.charAt(1)));
             checkHashtag(key, hashValue);
