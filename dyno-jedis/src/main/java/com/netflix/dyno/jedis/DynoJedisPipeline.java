@@ -138,7 +138,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
          * connection. A connection is selected based on the key or hashtag
          * respectively.
          */
-        String hashtag = connPool.getActivePools().iterator().next().getHost().getHashtag();
+        String hashtag = connPool.getConfiguration().getHashtag();
         if (hashtag == null || hashtag.isEmpty()) {
             if (theKey.get() != null) {
                 verifyKey(key);

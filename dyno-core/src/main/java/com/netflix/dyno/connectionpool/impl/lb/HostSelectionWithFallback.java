@@ -90,7 +90,6 @@ public class HostSelectionWithFallback<CL> {
 	private final ConnectionPoolMonitor cpMonitor;
 
     private final AtomicInteger replicationFactor = new AtomicInteger(-1);
-    private String hashtag = null;
 
     // Represents the *initial* topology from the token supplier. This does not affect selection of a host connection
     // pool for traffic. It only affects metrics such as failover/fallback
@@ -170,7 +169,7 @@ public class HostSelectionWithFallback<CL> {
         HostConnectionPool<CL> hostPool;
         try {
             if (!localSelector.isEmpty()) {
-                hostPool = (op != null) ? localSelector.getPoolForOperation(op, hashtag) : localSelector.getPoolForToken(token);
+                hostPool = (op != null) ? localSelector.getPoolForOperation(op, cpConfig.getHashtag()) : localSelector.getPoolForToken(token);
                 if (isConnectionPoolActive(hostPool)) {
                     return hostPool;
                 }
@@ -208,7 +207,7 @@ public class HostSelectionWithFallback<CL> {
 			try {
 				
 				HostConnectionPool<CL> fallbackHostPool = 
-						(op != null) ? remoteDCSelector.getPoolForOperation(op,hashtag) : remoteDCSelector.getPoolForToken(token);
+						(op != null) ? remoteDCSelector.getPoolForOperation(op,cpConfig.getHashtag()) : remoteDCSelector.getPoolForToken(token);
 				
 				if (isConnectionPoolActive(fallbackHostPool)) {
 					return fallbackHostPool;
@@ -330,35 +329,12 @@ public class HostSelectionWithFallback<CL> {
 		// Get the list of tokens for these hosts
 		//tokenSupplier.initWithHosts(hPools.keySet());
 		List<HostToken> allHostTokens = tokenSupplier.getTokens(hPools.keySet());
-
 		Map<HostToken, HostConnectionPool<CL>> tokenPoolMap = new HashMap<HostToken, HostConnectionPool<CL>>();
-		
-	        /* Initialize the hashtag with the first host (if hashtag is defined) */
-	        this.hashtag = allHostTokens.get(0).getHost().getHashtag();
-	        short numHosts = 0;
 	        
 	        // Update inner state with the host tokens.
 		for (HostToken hToken : allHostTokens) {
-		          
-	                /**
-	                 * Checking hashtag consistency from all Dynomite hosts.
-	                 * If hashtags are not consistent, we need to throw an exception.
-	                 */
-		        String hashtagNew = hToken.getHost().getHashtag();
-		        if (this.hashtag!=null && !this.hashtag.equals(hashtagNew)){
-	                       logger.error("Hashtag mismatch across hosts");
-	                       throw new RuntimeException("Hashtags are different across hosts");
-	                }// addressing case hashtag = null, hashtag = {} ...
-		        else if (numHosts>0 && this.hashtag == null && hashtagNew !=null) {
-                            logger.error("Hashtag mismatch across hosts");
-                            throw new RuntimeException("Hashtags are different across hosts");
-		            
-		        }
-	                this.hashtag = hashtagNew;
-
 			hostTokens.put(hToken.getHost(), hToken);
 			tokenPoolMap.put(hToken, hPools.get(hToken.getHost()));
-			numHosts++;
 		}
 		
 		Set<String> remoteRacks = new HashSet<String>();		
@@ -431,15 +407,6 @@ public class HostSelectionWithFallback<CL> {
 		if (hostToken == null) {
 			throw new DynoConnectException("Could not find host token for host: " + host);
 		}
-		
-		/**
-                 * If hashtags are not consistent, we need to throw an exception.
-                 */
-                String hashtagNew = hostToken.getHost().getHashtag();
-                if (this.hashtag!=null && !this.hashtag.equals(hashtagNew)){
-                       logger.error("Hashtag mismatch when adding a host");
-                       throw new RuntimeException("Hashtag mismatch when adding a host");
-                }		
 		
 		hostTokens.put(hostToken.getHost(), hostToken);
 		

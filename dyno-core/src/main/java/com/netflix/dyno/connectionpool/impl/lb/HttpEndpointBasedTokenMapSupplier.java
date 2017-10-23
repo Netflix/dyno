@@ -153,7 +153,7 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
      * @param activeHosts
      * @return a random host
      */
-    private Host getRandomHost(Set<Host> activeHosts) {
+    public Host getRandomHost(Set<Host> activeHosts) {
 	Random random = new Random();
 
 	List<Host> hostsUp = new ArrayList<Host>(CollectionUtils.filter(activeHosts, new Predicate<Host>() {

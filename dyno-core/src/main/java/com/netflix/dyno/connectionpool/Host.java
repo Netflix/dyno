@@ -173,13 +173,6 @@ public class Host implements Comparable<Host> {
             return false;
 
         Host other = (Host) obj;
-        /*
-         * we need a way to pass the information about the hashtag from the
-         * token map supplier to the host object.
-         */
-        if (other.hashtag != null) {
-            setHashtag(other.hashtag);
-        }
         
         boolean equals = true;
 
@@ -201,7 +194,7 @@ public class Host implements Comparable<Host> {
     @Override
     public String toString() {
 
-        return "Host with Hashtag [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: "
+        return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: "
                 + rack + ", datacenter: " + datacenter + ", status: " + status.name() + ", hashtag=" + hashtag + "]";
 
     }

@@ -23,6 +23,7 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
+import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.connectionpool.impl.lb.HttpEndpointBasedTokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
@@ -124,7 +125,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         private final List<String> keys;
         private final List<byte[]> binaryKeys;
         private final OpName op;
-
 
         private MultiKeyOperation(final List<String> keys, final OpName o) {
             this.keys = keys;
@@ -3494,6 +3494,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             shadowConfig.withHostSupplier(shadowSupplier);
 
             setLoadBalancingStrategy(shadowConfig);
+            setHashtagConnectionPool(shadowSupplier, shadowConfig);
 
             String shadowAppName = shadowConfig.getName();
             DynoCPMonitor shadowCPMonitor = new DynoCPMonitor(shadowAppName);
@@ -3548,9 +3549,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             }
 
             cpConfig.withHostSupplier(hostSupplier);
-
             setLoadBalancingStrategy(cpConfig);
-
+            setHashtagConnectionPool(hostSupplier, cpConfig);
             JedisConnectionFactory connFactory = new JedisConnectionFactory(opMonitor, sslSocketFactory);
 
             return startConnectionPool(appName, connFactory, cpConfig, cpMonitor);
@@ -3606,6 +3606,59 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                     config.setLocalZoneAffinity(false);
                     Logger.warn(warningMessage);
                 }
+            }
+        }
+
+        /**
+         * Set the hash to the connection pool if is provided by Dynomite
+         * @param hostSupplier
+         */
+        private void setHashtagConnectionPool(HostSupplier hostSupplier, ConnectionPoolConfigurationImpl config) {
+            // Find the hosts from host supplier
+            Collection<Host> hosts = hostSupplier.getHosts();
+            // Convert the returned collection to an arraylist
+            ArrayList<Host> arrayHosts = new ArrayList<Host>(hosts);
+            Collections.sort(arrayHosts);
+            // Convert the arraylist to set
+            Set<Host> hostSet = new HashSet<Host>(arrayHosts);
+
+            // Take the token map supplier (aka the token topology from
+            // Dynomite)
+            TokenMapSupplier tokenMapSupplier = config.getTokenSupplier();
+
+            // Create a list of host/Tokens
+            List<HostToken> hostTokens;
+            if (tokenMapSupplier != null) {
+                hostTokens = tokenMapSupplier.getTokens(hostSet);
+            } else {
+                throw new DynoConnectException("TokenMapSupplier not provided");
+            }
+
+            String hashtag = hostTokens.get(0).getHost().getHashtag();
+            short numHosts = 0;
+            // Update inner state with the host tokens.
+            for (HostToken hToken : hostTokens) {
+                /**
+                 * Checking hashtag consistency from all Dynomite hosts. If
+                 * hashtags are not consistent, we need to throw an exception.
+                 */
+                String hashtagNew = hToken.getHost().getHashtag();
+
+                if (hashtag != null && !hashtag.equals(hashtagNew)) {
+                    Logger.error("Hashtag mismatch across hosts");
+                    throw new RuntimeException("Hashtags are different across hosts");
+                } // addressing case hashtag = null, hashtag = {} ...
+                else if (numHosts > 0 && hashtag == null && hashtagNew != null) {
+                    Logger.error("Hashtag mismatch across hosts");
+                    throw new RuntimeException("Hashtags are different across hosts");
+
+                }
+                hashtag = hashtagNew;
+                numHosts++;
+            }
+
+            if (hashtag != null) {
+                config.withHashtag(hashtag);
             }
         }
 
