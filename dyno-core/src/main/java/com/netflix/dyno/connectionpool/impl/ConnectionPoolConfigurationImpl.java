@@ -52,6 +52,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     private HostSupplier hostSupplier;
 	private TokenMapSupplier tokenSupplier;
 	private HostConnectionPoolFactory hostConnectionPoolFactory;
+	private String hashtag;
 
 	private final String name;
 	private int maxConnsPerHost = DEFAULT_MAX_CONNS_PER_HOST; 
@@ -122,6 +123,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         this.isDualWriteEnabled = config.isDualWriteEnabled();
         this.dualWriteClusterName = config.getDualWriteClusterName();
         this.dualWritePercentage = config.getDualWritePercentage();
+        this.hashtag = config.getHashtag();
     }
 	
 	@Override
@@ -264,6 +266,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 				", dualWritePercentage=" + dualWritePercentage +
 				", retryFactory=" + retryFactory +
 				", errorMonitorFactory=" + errorMonitorFactory +
+				", hashtag=" + hashtag + 
 				'}';
 	}
 
@@ -351,11 +354,20 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	public TokenMapSupplier getTokenSupplier() {
 		return tokenSupplier;
 	}
+	
+	public String getHashtag() {
+	    return hashtag;
+	}
 
 	public ConnectionPoolConfigurationImpl withTokenSupplier(TokenMapSupplier tSupplier) {
 		tokenSupplier = tSupplier;
 		return this;
 	}
+	
+       public ConnectionPoolConfigurationImpl withHashtag(String htag) {
+            hashtag = htag;
+            return this;
+        }
 
 	public ConnectionPoolConfigurationImpl withErrorMonitorFactory(ErrorMonitorFactory factory) {
 		errorMonitorFactory = factory;

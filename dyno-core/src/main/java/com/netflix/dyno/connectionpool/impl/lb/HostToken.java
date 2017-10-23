@@ -18,7 +18,7 @@ package com.netflix.dyno.connectionpool.impl.lb;
 import com.netflix.dyno.connectionpool.Host;
 
 /**
- * Simple class that ecapsulates a host and it's token on the dynomite toppology ring. 
+ * Simple class that encapsulates a host and it's token on the dynomite topology ring. 
  * The class must implements Comparable<Long> so that it can be stored in a sorted collection that can then be 
  * used in search algos like binary search for efficiently finding the owning token for a hash operation key. 
  * 
