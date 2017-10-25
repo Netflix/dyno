@@ -1,5 +1,5 @@
 plugins {
-    id 'nebula.netflixoss' version '3.6.0'
+    id 'nebula.netflixoss' version '3.6.4'
 }
 
 // Establish version and status
@@ -15,9 +15,6 @@ subprojects {
     apply plugin: 'idea'
     apply plugin: 'eclipse'
     apply plugin: 'nebula.compile-api'
-
-    sourceCompatibility = 1.7
-    targetCompatibility = 1.7
 
     repositories {
         jcenter()
@@ -49,6 +46,7 @@ project(':dyno-core') {
     
     dependencies {
         compileApi "org.apache.commons:commons-math:2.2"
+        compileApi "org.apache.commons:commons-lang3:3.6"
         compileApi "commons-io:commons-io:2.4"
     }
 }
@@ -61,8 +59,8 @@ project(':dyno-contrib') {
         compileApi  project(':dyno-core')
         compileApi "com.google.inject:guice:4.1.0"
         compileApi "com.netflix.archaius:archaius-core:0.7.5"
-        compileApi "com.netflix.servo:servo-core:0.12.16"
-        compileApi 'com.netflix.eureka:eureka-client:1.6.2'
+        compileApi "com.netflix.servo:servo-core:0.12.17"
+        compileApi 'com.netflix.eureka:eureka-client:1.8.1'
         compileApi 'org.apache.commons:commons-lang3:3.5'
         compileApi ('com.ecwid.consul:consul-api:1.2.1') {
             exclude group: 'org.apache.httpcomponents'

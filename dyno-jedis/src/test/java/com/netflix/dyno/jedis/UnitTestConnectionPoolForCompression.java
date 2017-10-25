@@ -1,5 +1,5 @@
 /**
- * Copyright 2017 Netflix, Inc.
+ * Copyright 2016 Netflix, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import com.netflix.dyno.connectionpool.*;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionContextImpl;
 import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
+import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
 import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -35,7 +36,7 @@ import java.util.concurrent.TimeoutException;
 import static org.mockito.Matchers.*;
 import static org.mockito.Mockito.when;
 
-public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
+public class UnitTestConnectionPoolForCompression implements ConnectionPool<Jedis> {
 
     Map<String, String> redis_data;
     @Mock
@@ -50,51 +51,44 @@ public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
 
     private final OperationMonitor opMonitor;
 
-    public UnitTestConnectionPool(ConnectionPoolConfiguration config, OperationMonitor opMonitor) {
+    public UnitTestConnectionPoolForCompression(ConnectionPoolConfiguration config, OperationMonitor opMonitor) {
         MockitoAnnotations.initMocks(this);
 
         this.config = config;
         this.opMonitor = opMonitor;
         this.redis_data = new HashMap<String, String>();
-
         when(client.set(anyString(), anyString())).thenAnswer(new Answer<String>() {
             @Override
             public String answer(InvocationOnMock invocation) throws Throwable {
-                String key = (String) invocation.getArguments()[0];
-                String value = (String) invocation.getArguments()[1];
+                String key = (String)invocation.getArguments()[0];
+                String value = (String)invocation.getArguments()[1];
                 redis_data.put(key, value);
-                return "OK";
+                return value;
             }
         });
 
-        when(client.get(anyString())).thenAnswer(new Answer<String>() {
+        when(client.get(CompressionTest.VALUE_1KB)).thenReturn(CompressionTest.VALUE_1KB);
 
+        when(client.get(CompressionTest.KEY_3KB)).thenAnswer(new Answer<String>() {
             @Override
             public String answer(InvocationOnMock invocation) throws Throwable {
-                String key = (String) invocation.getArguments()[0];
-                return redis_data.get(key);
+                return ZipUtils.compressStringToBase64String(CompressionTest.VALUE_3KB);
             }
         });
 
-        when(client.del(anyString())).thenAnswer(new Answer<Long>() {
-
-            @Override
-            public Long answer(InvocationOnMock invocation) throws Throwable {
-                String key = (String) invocation.getArguments()[0];
-                if (redis_data.remove(key) != null) {
-                    return (long) 1;
-                }
-                return (long) 0;
-            }
-        });
+        when(client.get(CompressionTest.KEY_1KB)).thenReturn(CompressionTest.VALUE_1KB);
 
         when(client.hmset(anyString(), anyMap())).thenAnswer(new Answer<String>() {
             @Override
             public String answer(InvocationOnMock invocation) throws Throwable {
                 Map<String, String> map = (Map<String, String>) invocation.getArguments()[1];
                 if (map != null) {
-                    if (map.containsKey(CommandTest.KEY_1KB)) {
-                        return "OK";
+                    if (map.containsKey(CompressionTest.KEY_3KB)) {
+                        if (ZipUtils.isCompressed(map.get(CompressionTest.KEY_3KB))) {
+                            return "OK";
+                        } else {
+                            throw new RuntimeException("Value was not compressed");
+                        }
                     }
                 } else {
                     throw new RuntimeException("Map is NULL");
@@ -104,7 +98,7 @@ public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
             }
         });
 
-        when(client.mget(Matchers.<String>anyVararg())).thenAnswer(new Answer<List<String>>() {
+        when(client.mget(Matchers.<String>anyVararg())).thenAnswer (new Answer<List<String>>() {
             @Override
             public List<String> answer(InvocationOnMock invocation) throws Throwable {
 
@@ -115,7 +109,7 @@ public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
                 for (int i = 0; i < keys.length; i++) {
                     // get the ith key, find the value in redis_data
                     // if found, return that else return nil
-                    String key = (String) keys[i];
+                    String key = (String)keys[i];
                     String value = redis_data.get(key);
                     values.add(i, value);
                 }
@@ -174,7 +168,11 @@ public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
     public <R> OperationResult<R> executeWithFailover(Operation<Jedis, R> op) throws DynoException {
         try {
             R r = op.execute(client, context);
-            opMonitor.recordSuccess(op.getName());
+            if (context.hasMetadata("compression") || context.hasMetadata("decompression")) {
+                opMonitor.recordSuccess(op.getName(), true);
+            } else {
+                opMonitor.recordSuccess(op.getName());
+            }
             return new OperationResultImpl<R>("Test", r, null);
         } finally {
             context.reset();
@@ -211,8 +209,7 @@ public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
             }
 
             @Override
-            public Boolean get(long timeout, TimeUnit unit)
-                    throws InterruptedException, ExecutionException, TimeoutException {
+            public Boolean get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
                 return true;
             }
         };
@@ -237,6 +234,7 @@ public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
     public boolean isIdle() {
         return false;
     }
+
 
     @Override
     public Future<Boolean> updateHosts(Collection activeHosts, Collection inactiveHosts) {

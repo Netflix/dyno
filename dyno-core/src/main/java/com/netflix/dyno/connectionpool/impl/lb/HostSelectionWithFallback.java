@@ -82,7 +82,7 @@ public class HostSelectionWithFallback<CL> {
 	// The selector for the local zone
 	private final HostSelectionStrategy<CL> localSelector;
 	// Track selectors for each remote DC
-	private final ConcurrentHashMap<String, HostSelectionStrategy<CL>> remoteDCSelectors = new ConcurrentHashMap<String, HostSelectionStrategy<CL>>();
+	private final ConcurrentHashMap<String, HostSelectionStrategy<CL>> remoteRackSelectors = new ConcurrentHashMap<String, HostSelectionStrategy<CL>>();
 
 	private final ConcurrentHashMap<Host, HostToken> hostTokens = new ConcurrentHashMap<Host, HostToken>();
 
@@ -170,7 +170,7 @@ public class HostSelectionWithFallback<CL> {
         HostConnectionPool<CL> hostPool;
         try {
             if (!localSelector.isEmpty()) {
-                hostPool = (op != null) ? localSelector.getPoolForOperation(op) : localSelector.getPoolForToken(token);
+                hostPool = (op != null) ? localSelector.getPoolForOperation(op, cpConfig.getHashtag()) : localSelector.getPoolForToken(token);
                 if (isConnectionPoolActive(hostPool)) {
                     return hostPool;
                 }
@@ -203,12 +203,12 @@ public class HostSelectionWithFallback<CL> {
 
 			numTries--;
 			String remoteDC = remoteDCNames.getNextElement();
-			HostSelectionStrategy<CL> remoteDCSelector = remoteDCSelectors.get(remoteDC);
+			HostSelectionStrategy<CL> remoteDCSelector = remoteRackSelectors.get(remoteDC);
 
 			try {
 				
 				HostConnectionPool<CL> fallbackHostPool = 
-						(op != null) ? remoteDCSelector.getPoolForOperation(op) : remoteDCSelector.getPoolForToken(token);
+						(op != null) ? remoteDCSelector.getPoolForOperation(op,cpConfig.getHashtag()) : remoteDCSelector.getPoolForToken(token);
 				
 				if (isConnectionPoolActive(fallbackHostPool)) {
 					return fallbackHostPool;
@@ -279,16 +279,16 @@ public class HostSelectionWithFallback<CL> {
 
 
 	private HostSelectionStrategy<CL> findSelector(Host host) {
-		String dc = host.getRack();
+		String rack = host.getRack();
 		if (localRack == null) {
 			return localSelector;
 		}
 
-		if (localRack.equals(dc)) {
+		if (localRack.equals(rack)) {
 			return localSelector;
 		}
 
-		HostSelectionStrategy<CL> remoteSelector = remoteDCSelectors.get(dc);
+		HostSelectionStrategy<CL> remoteSelector = remoteRackSelectors.get(rack);
 		return remoteSelector;
 	}
 
@@ -305,7 +305,7 @@ public class HostSelectionWithFallback<CL> {
 		}
 	}
 
-	private Map<HostToken, HostConnectionPool<CL>> getHostPoolsForDC(final Map<HostToken, HostConnectionPool<CL>> map, final String dc) {
+	private Map<HostToken, HostConnectionPool<CL>> getHostPoolsForDC(final Map<HostToken, HostConnectionPool<CL>> map, final String rack) {
 
 		Map<HostToken, HostConnectionPool<CL>> dcPools = 
 				CollectionUtils.filterKeys(map, new Predicate<HostToken>() {
@@ -315,51 +315,52 @@ public class HostSelectionWithFallback<CL> {
 						if (localRack == null) {
 							return true;
 						}
-						return dc.equals(x.getHost().getRack());
+						return rack.equals(x.getHost().getRack());
 					}
 				});
 		return dcPools;
 	}
 	
+	/**
+	 * hPools comes from discovery.
+	 * @param hPools
+	 */
 	public void initWithHosts(Map<Host, HostConnectionPool<CL>> hPools) {
 
 		// Get the list of tokens for these hosts
 		//tokenSupplier.initWithHosts(hPools.keySet());
 		List<HostToken> allHostTokens = tokenSupplier.getTokens(hPools.keySet());
-
 		Map<HostToken, HostConnectionPool<CL>> tokenPoolMap = new HashMap<HostToken, HostConnectionPool<CL>>();
-		
-		// Update inner state with the host tokens.
-		
+	        
+	        // Update inner state with the host tokens.
 		for (HostToken hToken : allHostTokens) {
 			hostTokens.put(hToken.getHost(), hToken);
 			tokenPoolMap.put(hToken, hPools.get(hToken.getHost()));
 		}
 		
-		Set<String> remoteDCs = new HashSet<String>();
-
+		Set<String> remoteRacks = new HashSet<String>();		
 		for (Host host : hPools.keySet()) {
-			String dc = host.getRack();
-			if (localRack != null && !localRack.isEmpty() && dc != null && !dc.isEmpty() && !localRack.equals(dc)) {
-				remoteDCs.add(dc);
-			}
+			String rack = host.getRack();
+			if (localRack != null && !localRack.isEmpty() && rack != null && !rack.isEmpty() && !localRack.equals(rack)) {
+				remoteRacks.add(rack);
+			}			
 		}
-
+		
 		Map<HostToken, HostConnectionPool<CL>> localPools = getHostPoolsForDC(tokenPoolMap, localRack);
 		localSelector.initWithHosts(localPools);
 
-        if (localSelector.isTokenAware() && localRack != null) {
-            replicationFactor.set(calculateReplicationFactor(allHostTokens));
-        }
+                if (localSelector.isTokenAware() && localRack != null) {
+                   replicationFactor.set(calculateReplicationFactor(allHostTokens));
+                }
 
-		for (String dc : remoteDCs) {
-			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForDC(tokenPoolMap, dc);
+		for (String rack : remoteRacks) {
+			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForDC(tokenPoolMap, rack);
 			HostSelectionStrategy<CL> remoteSelector = selectorFactory.vendPoolSelectionStrategy();
 			remoteSelector.initWithHosts(dcPools);
-			remoteDCSelectors.put(dc, remoteSelector);
+			remoteRackSelectors.put(rack, remoteSelector);
 		}
 
-		remoteDCNames.swapWithList(remoteDCSelectors.keySet());
+		remoteDCNames.swapWithList(remoteRackSelectors.keySet());
 
         topology.set(getTokenPoolTopology());
 	}
@@ -459,8 +460,8 @@ public class HostSelectionWithFallback<CL> {
 
         if (localRack != null) {
             addTokens(topology, localRack, localSelector);
-            for (String remoteRack : remoteDCSelectors.keySet()) {
-                addTokens(topology, remoteRack, remoteDCSelectors.get(remoteRack));
+            for (String remoteRack : remoteRackSelectors.keySet()) {
+                addTokens(topology, remoteRack, remoteRackSelectors.get(remoteRack));
             }
         }
 
@@ -493,7 +494,7 @@ public class HostSelectionWithFallback<CL> {
 				"localDataCenter='" + localDataCenter + '\'' +
 				", localRack='" + localRack + '\'' +
 				", localSelector=" + localSelector +
-				", remoteDCSelectors=" + remoteDCSelectors +
+				", remoteDCSelectors=" + remoteRackSelectors +
 				", hostTokens=" + hostTokens +
 				", tokenSupplier=" + tokenSupplier +
 				", cpConfig=" + cpConfig +

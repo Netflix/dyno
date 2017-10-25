@@ -23,6 +23,7 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
+import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.connectionpool.impl.lb.HttpEndpointBasedTokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
@@ -44,7 +45,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.CompressionStrategy;
 
-
 public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, MultiKeyCommands {
 
     private static final Logger Logger = org.slf4j.LoggerFactory.getLogger(DynoJedisClient.class);
@@ -59,7 +59,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     protected final ConnectionPoolMonitor cpMonitor;
 
-    public DynoJedisClient(String name, String clusterName, ConnectionPool<Jedis> pool, DynoOPMonitor operationMonitor, ConnectionPoolMonitor cpMonitor) {
+    public DynoJedisClient(String name, String clusterName, ConnectionPool<Jedis> pool, DynoOPMonitor operationMonitor,
+            ConnectionPoolMonitor cpMonitor) {
         this.appName = name;
         this.clusterName = clusterName;
         this.connPool = pool;
@@ -90,13 +91,13 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             this.binaryKey = null;
             this.op = o;
         }
-        
+
         private BaseKeyOperation(final byte[] k, final OpName o) {
-        	this.key = null;
-        	this.binaryKey = null;
-        	this.op = o;
+            this.key = null;
+            this.binaryKey = null;
+            this.op = o;
         }
-        
+
         @Override
         public String getName() {
             return op.name();
@@ -106,16 +107,18 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         public String getKey() {
             return this.key;
         }
-        
+
         public byte[] getBinaryKey() {
-        	return this.binaryKey;
+            return this.binaryKey;
         }
-        
+
     }
 
-    /* A poor man's solution for multikey operation. This is similar to basekeyoperation just that it takes a
-       list of keys as arguments. For token aware, we just use the first key in the list. Ideally we should be doing
-       a scatter gatter
+    /**
+     * A poor man's solution for multikey operation. This is similar to
+     * basekeyoperation just that it takes a list of keys as arguments. For
+     * token aware, we just use the first key in the list. Ideally we should be
+     * doing a scatter gather
      */
     private abstract class MultiKeyOperation<T> implements Operation<Jedis, T> {
 
@@ -125,12 +128,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         private MultiKeyOperation(final List<String> keys, final OpName o) {
             this.keys = keys;
-            this.binaryKeys = null;
-            this.op = o;
-        }
-
-        private MultiKeyOperation(final byte[] k, final OpName o) {
-            this.keys = null;
             this.binaryKeys = null;
             this.op = o;
         }
@@ -151,38 +148,39 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     }
 
-
     /**
      * The following commands are supported
      *
      * <ul>
-     *     <lh>String Operations</lh>
-     *     <li>{@link #get(String) GET}</li>
-     *     <li>{@link #getSet(String, String) GETSET}</li>
-     *     <li>{@link #set(String, String) SET}</li>
-     *     <li>{@link #setex(String, int, String) SETEX}</li>
+     * <lh>String Operations</lh>
+     * <li>{@link #get(String) GET}</li>
+     * <li>{@link #getSet(String, String) GETSET}</li>
+     * <li>{@link #set(String, String) SET}</li>
+     * <li>{@link #setex(String, int, String) SETEX}</li>
      * </ul>
      * <ul>
-     *     <lh>Hash Operations</lh>
-     *     <li>{@link #hget(String, String) HGET}</li>
-     *     <li>{@link #hgetAll(String) HGETALL}</li>
-     *     <li>{@link #hmget(String, String...) HMGET}</li>
-     *     <li>{@link #hmset(String, Map) HMSET}</li>
-     *     <li>{@link #hscan(String, String) HSCAN}</li>
-     *     <li>{@link #hset(String, String, String) HSET}</li>
-     *     <li>{@link #hsetnx(String, String, String) HSETNX}</li>
-     *     <li>{@link #hvals(String) HVALS}</li>
+     * <lh>Hash Operations</lh>
+     * <li>{@link #hget(String, String) HGET}</li>
+     * <li>{@link #hgetAll(String) HGETALL}</li>
+     * <li>{@link #hmget(String, String...) HMGET}</li>
+     * <li>{@link #hmset(String, Map) HMSET}</li>
+     * <li>{@link #hscan(String, String) HSCAN}</li>
+     * <li>{@link #hset(String, String, String) HSET}</li>
+     * <li>{@link #hsetnx(String, String, String) HSETNX}</li>
+     * <li>{@link #hvals(String) HVALS}</li>
      * </ul>
      * 
      * <ul>
-     *     <li>{@link #get(byte[]) GET}</li>
-     *     <li>{@link #set(byte[], byte[]) SET}</li>
-     *     <li>{@link #setex(byte[], int, byte[]) SETEX}</li>
+     * <li>{@link #get(byte[]) GET}</li>
+     * <li>{@link #set(byte[], byte[]) SET}</li>
+     * <li>{@link #setex(byte[], int, byte[]) SETEX}</li>
      * </ul>
      *
-     * @param <T> the parameterized type
+     * @param <T>
+     *            the parameterized type
      */
-    private abstract class CompressionValueOperation<T> extends BaseKeyOperation<T> implements CompressionOperation<Jedis, T> {
+    private abstract class CompressionValueOperation<T> extends BaseKeyOperation<T>
+            implements CompressionOperation<Jedis, T> {
 
         private CompressionValueOperation(String k, OpName o) {
             super(k, o);
@@ -193,7 +191,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
          * {@link ConnectionPoolConfiguration#getValueCompressionThreshold()}
          *
          * @param value
-         * @return 
+         * @return
          */
         @Override
         public String compressValue(String value, ConnectionContext ctx) {
@@ -201,14 +199,16 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
 
             try {
-                // prefer speed over accuracy here so rather than using getBytes() to get the actual size
+                // prefer speed over accuracy here so rather than using
+                // getBytes() to get the actual size
                 // just estimate using 2 bytes per character
                 if ((2 * value.length()) > thresholdBytes) {
                     result = ZipUtils.compressStringToBase64String(value);
                     ctx.setMetadata("compression", true);
                 }
             } catch (IOException e) {
-                Logger.warn("UNABLE to compress [" + value + "] for key [" + getKey() + "]; sending value uncompressed");
+                Logger.warn(
+                        "UNABLE to compress [" + value + "] for key [" + getKey() + "]; sending value uncompressed");
             }
 
             return result;
@@ -234,13 +234,15 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
      * The following commands are supported
      *
      * <ul>
-     *     <lh>String Operations</lh>
-     *     <li>{@link #mget(String...) MGET}</li>
+     * <lh>String Operations</lh>
+     * <li>{@link #mget(String...) MGET}</li>
      * </ul>
      *
-     * @param <T> the parameterized type
+     * @param <T>
+     *            the parameterized type
      */
-    private abstract class CompressionValueMultiKeyOperation<T> extends MultiKeyOperation<T> implements CompressionOperation<Jedis, T> {
+    private abstract class CompressionValueMultiKeyOperation<T> extends MultiKeyOperation<T>
+            implements CompressionOperation<Jedis, T> {
 
         private CompressionValueMultiKeyOperation(List<String> keys, OpName o) {
             super(keys, o);
@@ -259,14 +261,16 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
 
             try {
-                // prefer speed over accuracy here so rather than using getBytes() to get the actual size
+                // prefer speed over accuracy here so rather than using
+                // getBytes() to get the actual size
                 // just estimate using 2 bytes per character
                 if ((2 * value.length()) > thresholdBytes) {
                     result = ZipUtils.compressStringToBase64String(value);
                     ctx.setMetadata("compression", true);
                 }
             } catch (IOException e) {
-                Logger.warn("UNABLE to compress [" + value + "] for key [" + getKey() + "]; sending value uncompressed");
+                Logger.warn(
+                        "UNABLE to compress [" + value + "] for key [" + getKey() + "]; sending value uncompressed");
             }
 
             return result;
@@ -395,7 +399,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public Long expire(final String key, final int seconds) {
         return d_expire(key, seconds).getResult();
     }
-    
+
     public OperationResult<Long> d_expire(final String key, final int seconds) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.EXPIRE) {
@@ -407,7 +411,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         });
     }
-
 
     @Override
     public Long expireAt(final String key, final long unixTime) {
@@ -570,27 +573,27 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     public OperationResult<Map<String, String>> d_hgetAll(final String key) {
-       if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-           return connPool.executeWithFailover(new BaseKeyOperation<Map<String, String>>(key, OpName.HGETALL) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<Map<String, String>>(key, OpName.HGETALL) {
                 @Override
                 public Map<String, String> execute(Jedis client, ConnectionContext state) throws DynoException {
                     return client.hgetAll(key);
                 }
-           });
-        } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<Map<String, String>>(key, OpName.HGETALL) {
-                @Override
-                public Map<String, String> execute(final Jedis client, final ConnectionContext state) {
-                    return CollectionUtils.transform(
-                            client.hgetAll(key),
-                            new CollectionUtils.MapEntryTransform<String, String, String>() {
-                                @Override
-                                public String get(String key, String val) {
-                                    return decompressValue(val, state);
-                                }
-                            });
-                }
             });
+        } else {
+            return connPool
+                    .executeWithFailover(new CompressionValueOperation<Map<String, String>>(key, OpName.HGETALL) {
+                        @Override
+                        public Map<String, String> execute(final Jedis client, final ConnectionContext state) {
+                            return CollectionUtils.transform(client.hgetAll(key),
+                                    new CollectionUtils.MapEntryTransform<String, String, String>() {
+                                        @Override
+                                        public String get(String key, String val) {
+                                            return decompressValue(val, state);
+                                        }
+                                    });
+                        }
+                    });
         }
     }
 
@@ -610,7 +613,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         });
     }
-    
+
     /* not supported by RedisPipeline 2.7.3 */
     public Double hincrByFloat(final String key, final String field, final double value) {
         return d_hincrByFloat(key, field, value).getResult();
@@ -669,7 +672,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         });
     }
 
-
     @Override
     public ScanResult<Map.Entry<String, String>> hscan(final String key, final int cursor) {
         throw new UnsupportedOperationException("This function is deprecated, use hscan(String, String)");
@@ -680,29 +682,32 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_hscan(key, cursor).getResult();
     }
 
-    public OperationResult<ScanResult<Map.Entry<String, String>>> d_hscan(final String key, final String cursor){
+    public OperationResult<ScanResult<Map.Entry<String, String>>> d_hscan(final String key, final String cursor) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
-                @Override
-                public ScanResult<Map.Entry<String, String>> execute(Jedis client, ConnectionContext state) {
-                    return client.hscan(key,cursor);
-                }
-            });
+            return connPool.executeWithFailover(
+                    new BaseKeyOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
+                        @Override
+                        public ScanResult<Map.Entry<String, String>> execute(Jedis client, ConnectionContext state) {
+                            return client.hscan(key, cursor);
+                        }
+                    });
         } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
-                @Override
-                public ScanResult<Map.Entry<String, String>> execute(final Jedis client, final ConnectionContext state) {
-                    return  new ScanResult<>(cursor, new ArrayList(CollectionUtils.transform(
-                            client.hscan(key,cursor).getResult(),
-                            new CollectionUtils.Transform<Map.Entry<String,String>, Map.Entry<String,String>>() {
-                                @Override
-                                public Map.Entry<String,String> get(Map.Entry<String,String> entry) {
-                                    entry.setValue(decompressValue(entry.getValue(),state));
-                                    return entry;
-                                }
-                            })));
-                }
-            });
+            return connPool.executeWithFailover(
+                    new CompressionValueOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
+                        @Override
+                        public ScanResult<Map.Entry<String, String>> execute(final Jedis client,
+                                final ConnectionContext state) {
+                            return new ScanResult<>(cursor, new ArrayList(CollectionUtils.transform(
+                                    client.hscan(key, cursor).getResult(),
+                                    new CollectionUtils.Transform<Map.Entry<String, String>, Map.Entry<String, String>>() {
+                                        @Override
+                                        public Map.Entry<String, String> get(Map.Entry<String, String> entry) {
+                                            entry.setValue(decompressValue(entry.getValue(), state));
+                                            return entry;
+                                        }
+                                    })));
+                        }
+                    });
         }
     }
 
@@ -714,22 +719,22 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return "0";
     }
 
-    private List<OperationResult<ScanResult<String>>> scatterGatherScan(final CursorBasedResult<String> cursor, final int count, final String... pattern) {
-        return new ArrayList<>(
-                connPool.executeWithRing(new BaseKeyOperation<ScanResult<String>>("SCAN", OpName.SCAN) {
-                    @Override
-                    public ScanResult<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                        if (pattern != null && pattern.length > 0) {
-                            ScanParams sp = new ScanParams().count(count);
-                            for (String s: pattern) {
-                                sp.match(s);
-                            }
-                            return client.scan(getCursorValue(state, cursor), sp);
-                        } else {
-                            return client.scan(getCursorValue(state, cursor));
-                        }
+    private List<OperationResult<ScanResult<String>>> scatterGatherScan(final CursorBasedResult<String> cursor,
+            final int count, final String... pattern) {
+        return new ArrayList<>(connPool.executeWithRing(new BaseKeyOperation<ScanResult<String>>("SCAN", OpName.SCAN) {
+            @Override
+            public ScanResult<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                if (pattern != null && pattern.length > 0) {
+                    ScanParams sp = new ScanParams().count(count);
+                    for (String s : pattern) {
+                        sp.match(s);
                     }
-                }));
+                    return client.scan(getCursorValue(state, cursor), sp);
+                } else {
+                    return client.scan(getCursorValue(state, cursor));
+                }
+            }
+        }));
     }
 
     @Override
@@ -754,7 +759,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_hmget(key, fields).getResult();
     }
 
-
     public OperationResult<List<String>> d_hmget(final String key, final String... fields) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
             return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.HMGET) {
@@ -769,11 +773,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 public List<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
                     return new ArrayList<String>(CollectionUtils.transform(client.hmget(key, fields),
                             new CollectionUtils.Transform<String, String>() {
-                        @Override
-                        public String get(String s) {
-                            return decompressValue(s, state);
-                        }
-                    }));
+                                @Override
+                                public String get(String s) {
+                                    return decompressValue(s, state);
+                                }
+                            }));
                 }
             });
         }
@@ -796,19 +800,17 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.HMSET) {
                 @Override
                 public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return client.hmset(key,
-                            CollectionUtils.transform(hash, new CollectionUtils.MapEntryTransform<String, String, String>() {
+                    return client.hmset(key, CollectionUtils.transform(hash,
+                            new CollectionUtils.MapEntryTransform<String, String, String>() {
                                 @Override
                                 public String get(String key, String val) {
                                     return compressValue(val, state);
                                 }
-                            })
-                    );
+                            }));
                 }
             });
         }
     }
-
 
     @Override
     public Long hset(final String key, final String field, final String value) {
@@ -936,7 +938,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_linsert(key, where, pivot, value).getResult();
     }
 
-    public OperationResult<Long> d_linsert(final String key, final LIST_POSITION where, final String pivot, final String value) {
+    public OperationResult<Long> d_linsert(final String key, final LIST_POSITION where, final String pivot,
+            final String value) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.LINSERT) {
 
@@ -1117,7 +1120,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         });
     }
 
-
     public Long pttl(final String key) {
         return d_pttl(key).getResult();
     }
@@ -1133,39 +1135,39 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         });
     }
-    
+
     @Override
     public String rename(String oldkey, String newkey) {
         return d_rename(oldkey, newkey).getResult();
     }
-   
+
     public OperationResult<String> d_rename(final String oldkey, final String newkey) {
 
-    	   return connPool.executeWithFailover(new BaseKeyOperation<String>(oldkey, OpName.RENAME) {
+        return connPool.executeWithFailover(new BaseKeyOperation<String>(oldkey, OpName.RENAME) {
 
-               @Override
-               public String execute(Jedis client, ConnectionContext state) {
-                   return client.rename(oldkey, newkey);
-               }
+            @Override
+            public String execute(Jedis client, ConnectionContext state) {
+                return client.rename(oldkey, newkey);
+            }
 
-           });
+        });
     }
-    
+
     @Override
     public Long renamenx(String oldkey, String newkey) {
         return d_renamenx(oldkey, newkey).getResult();
     }
-   
+
     public OperationResult<Long> d_renamenx(final String oldkey, final String newkey) {
 
-    	   return connPool.executeWithFailover(new BaseKeyOperation<Long>(oldkey, OpName.RENAMENX) {
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(oldkey, OpName.RENAMENX) {
 
-               @Override
-               public Long execute(Jedis client, ConnectionContext state) {
-                   return client.renamenx(oldkey, newkey);
-               }
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.renamenx(oldkey, newkey);
+            }
 
-           });
+        });
     }
 
     public String restore(final String key, final Integer ttl, final byte[] serializedValue) {
@@ -1343,9 +1345,9 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public String set(final String key, final String value, final String nxxx, final String expx, final long time) {
         return d_set(key, value, nxxx, expx, time).getResult();
     }
-    
 
-    public OperationResult<String> d_set(final String key, final String value, final String nxxx, final String expx, final long time) {
+    public OperationResult<String> d_set(final String key, final String value, final String nxxx, final String expx,
+            final long time) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
             return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
                 @Override
@@ -1363,7 +1365,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
     }
-    
+
     @Override
     public Boolean setbit(final String key, final long offset, final boolean value) {
         return d_setbit(key, offset, value).getResult();
@@ -1561,7 +1563,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         });
     }
-    
+
     @Override
     public Set<String> spop(String key, long count) {
         throw new UnsupportedOperationException("not yet implemented");
@@ -1605,13 +1607,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         });
     }
-    
-    
+
     @Override
     public ScanResult<String> sscan(final String key, final int cursor) {
         return d_sscan(key, cursor).getResult();
     }
-    
+
     public OperationResult<ScanResult<String>> d_sscan(final String key, final int cursor) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<String>>(key, OpName.SSCAN) {
@@ -1623,12 +1624,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         });
     }
-    
+
     @Override
     public ScanResult<String> sscan(final String key, final String cursor) {
         return d_sscan(key, cursor).getResult();
     }
-    
+
     public OperationResult<ScanResult<String>> d_sscan(final String key, final String cursor) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<String>>(key, OpName.SSCAN) {
@@ -1640,12 +1641,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         });
     }
-    
-	@Override
-	public ScanResult<String> sscan(final String key, final String cursor, final ScanParams params) {
+
+    @Override
+    public ScanResult<String> sscan(final String key, final String cursor, final ScanParams params) {
         return d_sscan(key, cursor, params).getResult();
-	}
-	
+    }
+
     public OperationResult<ScanResult<String>> d_sscan(final String key, final String cursor, final ScanParams params) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<String>>(key, OpName.SSCAN) {
@@ -1761,22 +1762,23 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-	public Long zadd(String key, double score, String member, ZAddParams params) {
-		return d_zadd(key, score, member, params).getResult();
-	}
-    
-    public OperationResult<Long> d_zadd(final String key, final double score, final String member, final ZAddParams params) {
-    	
-    	return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZADD) {
+    public Long zadd(String key, double score, String member, ZAddParams params) {
+        return d_zadd(key, score, member, params).getResult();
+    }
+
+    public OperationResult<Long> d_zadd(final String key, final double score, final String member,
+            final ZAddParams params) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZADD) {
 
             @Override
             public Long execute(Jedis client, ConnectionContext state) {
-            	return client.zadd(key, score, member, params);
+                return client.zadd(key, score, member, params);
             }
 
         });
     }
-    
+
     @Override
     public Long zcard(final String key) {
         return d_zcard(key).getResult();
@@ -2014,39 +2016,38 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         });
     }
-    
+
     @Override
     public ScanResult<Tuple> zscan(final String key, final int cursor) {
-    	return d_zscan(key, cursor).getResult();
+        return d_zscan(key, cursor).getResult();
     }
-    
-    public OperationResult<ScanResult<Tuple>> d_zscan(final String key, final int cursor){
-    	
-        return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Tuple>>(key, OpName.ZSCAN) {
-        	 @Override
-             public ScanResult<Tuple> execute(Jedis client, ConnectionContext state) {
-                 return client.zscan(key, cursor);
-             }
 
-         });
+    public OperationResult<ScanResult<Tuple>> d_zscan(final String key, final int cursor) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Tuple>>(key, OpName.ZSCAN) {
+            @Override
+            public ScanResult<Tuple> execute(Jedis client, ConnectionContext state) {
+                return client.zscan(key, cursor);
+            }
+
+        });
     }
-    
+
     @Override
     public ScanResult<Tuple> zscan(final String key, final String cursor) {
-    	return d_zscan(key, cursor).getResult();
+        return d_zscan(key, cursor).getResult();
     }
-    
-    public OperationResult<ScanResult<Tuple>> d_zscan(final String key, final String cursor){
-    	
+
+    public OperationResult<ScanResult<Tuple>> d_zscan(final String key, final String cursor) {
+
         return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Tuple>>(key, OpName.ZSCAN) {
-        	 @Override
-             public ScanResult<Tuple> execute(Jedis client, ConnectionContext state) {
-                 return client.zscan(key, cursor);
-             }
+            @Override
+            public ScanResult<Tuple> execute(Jedis client, ConnectionContext state) {
+                return client.zscan(key, cursor);
+            }
 
-         });
+        });
     }
-
 
     @Override
     public Set<String> zrangeByScore(String key, double min, double max) {
@@ -2087,7 +2088,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_zrangeByScore(key, min, max, offset, count).getResult();
     }
 
-    public OperationResult<Set<String>> d_zrangeByScore(final String key, final Double min, final Double max, final Integer offset, final Integer count) {
+    public OperationResult<Set<String>> d_zrangeByScore(final String key, final Double min, final Double max,
+            final Integer offset, final Integer count) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZRANGEBYSCORE) {
 
@@ -2121,7 +2123,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_zrangeByScore(key, min, max, offset, count).getResult();
     }
 
-    public OperationResult<Set<String>> d_zrangeByScore(final String key, final String min, final String max, final Integer offset, final Integer count) {
+    public OperationResult<Set<String>> d_zrangeByScore(final String key, final String min, final String max,
+            final Integer offset, final Integer count) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZRANGEBYSCORE) {
 
@@ -2138,7 +2141,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_zrevrangeByScore(key, max, min, offset, count).getResult();
     }
 
-    public OperationResult<Set<String>> d_zrevrangeByScore(final String key, final Double max, final Double min, final Integer offset, final Integer count) {
+    public OperationResult<Set<String>> d_zrevrangeByScore(final String key, final Double max, final Double min,
+            final Integer offset, final Integer count) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZREVRANGEBYSCORE) {
 
@@ -2189,7 +2193,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_zrevrangeByScoreWithScores(key, min, max).getResult();
     }
 
-    public OperationResult<Set<Tuple>> d_zrevrangeByScoreWithScores(final String key, final Double max, final Double min) {
+    public OperationResult<Set<Tuple>> d_zrevrangeByScoreWithScores(final String key, final Double max,
+            final Double min) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZREVRANGEBYSCOREWITHSCORES) {
 
@@ -2206,7 +2211,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_zrangeByScoreWithScores(key, min, max, offset, count).getResult();
     }
 
-    public OperationResult<Set<Tuple>> d_zrangeByScoreWithScores(final String key, final Double min, final Double max, final Integer offset, final Integer count) {
+    public OperationResult<Set<Tuple>> d_zrangeByScoreWithScores(final String key, final Double min, final Double max,
+            final Integer offset, final Integer count) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZRANGEBYSCOREWITHSCORES) {
 
@@ -2223,7 +2229,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_zrevrangeByScore(key, max, min, offset, count).getResult();
     }
 
-    public OperationResult<Set<String>> d_zrevrangeByScore(final String key, final String max, final String min, final Integer offset, final Integer count) {
+    public OperationResult<Set<String>> d_zrevrangeByScore(final String key, final String max, final String min,
+            final Integer offset, final Integer count) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZREVRANGEBYSCORE) {
 
@@ -2257,7 +2264,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_zrevrangeByScoreWithScores(key, max, min).getResult();
     }
 
-    public OperationResult<Set<Tuple>> d_zrevrangeByScoreWithScores(final String key, final String max, final String min) {
+    public OperationResult<Set<Tuple>> d_zrevrangeByScoreWithScores(final String key, final String max,
+            final String min) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZREVRANGEBYSCOREWITHSCORES) {
 
@@ -2274,7 +2282,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_zrangeByScoreWithScores(key, min, max, offset, count).getResult();
     }
 
-    public OperationResult<Set<Tuple>> d_zrangeByScoreWithScores(final String key, final String min, final String max, final Integer offset, final Integer count) {
+    public OperationResult<Set<Tuple>> d_zrangeByScoreWithScores(final String key, final String min, final String max,
+            final Integer offset, final Integer count) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZRANGEBYSCOREWITHSCORES) {
 
@@ -2291,7 +2300,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_zrevrangeByScoreWithScores(key, max, min, offset, count).getResult();
     }
 
-    public OperationResult<Set<Tuple>> d_zrevrangeByScoreWithScores(final String key, final Double max, final Double min, final Integer offset, final Integer count) {
+    public OperationResult<Set<Tuple>> d_zrevrangeByScoreWithScores(final String key, final Double max,
+            final Double min, final Integer offset, final Integer count) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZREVRANGEBYSCOREWITHSCORES) {
 
@@ -2308,7 +2318,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_zrevrangeByScoreWithScores(key, max, min, offset, count).getResult();
     }
 
-    public OperationResult<Set<Tuple>> d_zrevrangeByScoreWithScores(final String key, final String max, final String min, final Integer offset, final Integer count) {
+    public OperationResult<Set<Tuple>> d_zrevrangeByScoreWithScores(final String key, final String max,
+            final String min, final Integer offset, final Integer count) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZREVRANGEBYSCOREWITHSCORES) {
 
@@ -2319,7 +2330,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         });
     }
-    
+
     @Override
     public Long zremrangeByScore(String key, String start, String end) {
         return d_zremrangeByScore(key, start, end).getResult();
@@ -2356,7 +2367,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         });
     }
-    
 
     @Override
     public List<String> blpop(String arg) {
@@ -2365,7 +2375,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public List<String> blpop(int timeout, String key) {
-        return d_blpop(timeout,key).getResult();
+        return d_blpop(timeout, key).getResult();
     }
 
     public OperationResult<List<String>> d_blpop(final int timeout, final String key) {
@@ -2374,7 +2384,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             @Override
             public List<String> execute(Jedis client, ConnectionContext state) {
-                return client.blpop(timeout,key);
+                return client.blpop(timeout, key);
             }
 
         });
@@ -2387,7 +2397,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public List<String> brpop(int timeout, String key) {
-        return d_brpop(timeout,key).getResult();
+        return d_brpop(timeout, key).getResult();
     }
 
     public OperationResult<List<String>> d_brpop(final int timeout, final String key) {
@@ -2396,12 +2406,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             @Override
             public List<String> execute(Jedis client, ConnectionContext state) {
-                return client.brpop(timeout,key);
+                return client.brpop(timeout, key);
             }
 
         });
     }
-
 
     @Override
     public String echo(String string) {
@@ -2522,7 +2531,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     /**
      * Use this with care, especially in the context of production databases.
      *
-     * @param pattern Specifies the mach set for keys
+     * @param pattern
+     *            Specifies the mach set for keys
      * @return a collection of operation results
      * @see <a href="http://redis.io/commands/KEYS">keys</a>
      */
@@ -2530,32 +2540,37 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         Logger.warn("Executing d_keys for pattern: " + pattern);
 
-        Collection<OperationResult<Set<String>>> results = connPool.executeWithRing(new BaseKeyOperation<Set<String>>(pattern, OpName.KEYS) {
+        Collection<OperationResult<Set<String>>> results = connPool
+                .executeWithRing(new BaseKeyOperation<Set<String>>(pattern, OpName.KEYS) {
 
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.keys(pattern);
-            }
-        });
+                    @Override
+                    public Set<String> execute(Jedis client, ConnectionContext state) throws DynoException {
+                        return client.keys(pattern);
+                    }
+                });
 
         return results;
     }
-    
+
     @Override
     public Long pexpire(String key, long milliseconds) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     /**
-     * Get values for all the keys provided. Returns a list of string values corresponding to individual keys.
-     * If one of the key is missing, the return list has null as its corresponding value.
+     * Get values for all the keys provided. Returns a list of string values
+     * corresponding to individual keys. If one of the key is missing, the
+     * return list has null as its corresponding value.
      *
-     * @param keys: variable list of keys to query
+     * @param keys:
+     *            variable list of keys to query
      * @return list of string values
      * @see <a href="http://redis.io/commands/MGET">mget</a>
      */
     @Override
-    public List<String> mget(String... keys) { return d_mget(keys).getResult(); }
+    public List<String> mget(String... keys) {
+        return d_mget(keys).getResult();
+    }
 
     public OperationResult<List<String>> d_mget(final String... keys) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
@@ -2567,18 +2582,20 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 }
             });
         } else {
-            return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<List<String>>(Arrays.asList(keys), OpName.MGET) {
-                @Override
-                public List<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return new ArrayList<String>(CollectionUtils.transform(client.mget(keys),
-                            new CollectionUtils.Transform<String, String>() {
-                                @Override
-                                public String get(String s) {
-                                    return decompressValue(s, state);
-                                }
-                            }));
-                }
-            });
+            return connPool.executeWithFailover(
+                    new CompressionValueMultiKeyOperation<List<String>>(Arrays.asList(keys), OpName.MGET) {
+                        @Override
+                        public List<String> execute(final Jedis client, final ConnectionContext state)
+                                throws DynoException {
+                            return new ArrayList<String>(CollectionUtils.transform(client.mget(keys),
+                                    new CollectionUtils.Transform<String, String>() {
+                                        @Override
+                                        public String get(String s) {
+                                            return decompressValue(s, state);
+                                        }
+                                    }));
+                        }
+                    });
         }
     }
 
@@ -2640,14 +2657,14 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public Long zinterstore(String dstkey, ZParams params, String... sets) {
         throw new UnsupportedOperationException("not yet implemented");
     }
-    
+
     @Override
-    public  Set<String> zrevrangeByLex(String key, String max, String min) {
+    public Set<String> zrevrangeByLex(String key, String max, String min) {
         throw new UnsupportedOperationException("not yet implemented");
     }
-    
+
     @Override
-    public  Set<String> zrevrangeByLex(String key, String max, String min, int offset, int count) {
+    public Set<String> zrevrangeByLex(String key, String max, String min, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -2690,23 +2707,22 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public Long bitop(BitOP op, String destKey, String... srcKeys) {
         throw new UnsupportedOperationException("not yet implemented");
     }
-    
+
     /******************* Jedis Binary Commands **************/
     @Override
     public String set(final byte[] key, final byte[] value) {
-        return d_set(key,value).getResult();
+        return d_set(key, value).getResult();
     }
-    
-    
+
     public OperationResult<String> d_set(final byte[] key, final byte[] value) {
         return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
-           @Override
-           public String execute(Jedis client, ConnectionContext state) throws DynoException {
+            @Override
+            public String execute(Jedis client, ConnectionContext state) throws DynoException {
                 return client.set(key, value);
-           }
-         });
+            }
+        });
     }
-    
+
     @Override
     public byte[] get(final byte[] key) {
         return d_get(key).getResult();
@@ -2719,24 +2735,23 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 return client.get(key);
             }
         });
-      
+
     }
-    
+
     @Override
     public String setex(final byte[] key, final int seconds, final byte[] value) {
         return d_setex(key, seconds, value).getResult();
     }
 
-
     public OperationResult<String> d_setex(final byte[] key, final Integer seconds, final byte[] value) {
         return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SETEX) {
             @Override
             public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                 return client.setex(key, seconds, value);
+                return client.setex(key, seconds, value);
             }
-         });
+        });
     }
-    
+
     @Override
     public String set(byte[] key, byte[] value, byte[] nxxx, byte[] expx, long time) {
         throw new UnsupportedOperationException("not yet implemented");
@@ -2816,7 +2831,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public Long setnx(byte[] key, byte[] value) {
         throw new UnsupportedOperationException("not yet implemented");
     }
-
 
     @Override
     public Long decrBy(byte[] key, long integer) {
@@ -3009,7 +3023,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public List<byte[]> srandmember(final byte[] key, final int count){
+    public List<byte[]> srandmember(final byte[] key, final int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -3054,192 +3068,190 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Set<byte[]> zrevrange(byte[] key, long start, long end)  {
+    public Set<byte[]> zrevrange(byte[] key, long start, long end) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<Tuple> zrangeWithScores(byte[] key, long start, long end)  {
+    public Set<Tuple> zrangeWithScores(byte[] key, long start, long end) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<Tuple> zrevrangeWithScores(byte[] key, long start, long end)  {
+    public Set<Tuple> zrevrangeWithScores(byte[] key, long start, long end) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long zcard(byte[] key)  {
+    public Long zcard(byte[] key) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Double zscore(byte[] key, byte[] member)  {
+    public Double zscore(byte[] key, byte[] member) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public List<byte[]> sort(byte[] key)  {
+    public List<byte[]> sort(byte[] key) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public List<byte[]> sort(byte[] key, SortingParams sortingParameters)  {
+    public List<byte[]> sort(byte[] key, SortingParams sortingParameters) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long zcount(byte[] key, double min, double max)  {
+    public Long zcount(byte[] key, double min, double max) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long zcount(byte[] key, byte[] min, byte[] max)  {
+    public Long zcount(byte[] key, byte[] min, byte[] max) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrangeByScore(byte[] key, double min, double max)  {
+    public Set<byte[]> zrangeByScore(byte[] key, double min, double max) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrangeByScore(byte[] key, byte[] min, byte[] max)  {
+    public Set<byte[]> zrangeByScore(byte[] key, byte[] min, byte[] max) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrevrangeByScore(byte[] key, double max, double min)  {
+    public Set<byte[]> zrevrangeByScore(byte[] key, double max, double min) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrangeByScore(byte[] key, double min, double max, int offset, int count)  {
+    public Set<byte[]> zrangeByScore(byte[] key, double min, double max, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrevrangeByScore(byte[] key, byte[] max, byte[] min)  {
+    public Set<byte[]> zrevrangeByScore(byte[] key, byte[] max, byte[] min) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrangeByScore(byte[] key, byte[] min, byte[] max, int offset, int count)  {
+    public Set<byte[]> zrangeByScore(byte[] key, byte[] min, byte[] max, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrevrangeByScore(byte[] key, double max, double min, int offset, int count)  {
+    public Set<byte[]> zrevrangeByScore(byte[] key, double max, double min, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<Tuple> zrangeByScoreWithScores(byte[] key, double min, double max)  {
+    public Set<Tuple> zrangeByScoreWithScores(byte[] key, double min, double max) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, double max, double min)  {
+    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, double max, double min) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<Tuple> zrangeByScoreWithScores(byte[] key, double min, double max, int offset, int count)  {
+    public Set<Tuple> zrangeByScoreWithScores(byte[] key, double min, double max, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrevrangeByScore(byte[] key, byte[] max, byte[] min, int offset, int count)  {
+    public Set<byte[]> zrevrangeByScore(byte[] key, byte[] max, byte[] min, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<Tuple> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max)  {
+    public Set<Tuple> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, byte[] max, byte[] min)  {
+    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, byte[] max, byte[] min) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<Tuple> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max, int offset, int count)  {
+    public Set<Tuple> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, double max, double min, int offset, int count)  {
+    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, double max, double min, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, byte[] max, byte[] min, int offset, int count)  {
+    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, byte[] max, byte[] min, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long zremrangeByRank(byte[] key, long start, long end)  {
+    public Long zremrangeByRank(byte[] key, long start, long end) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long zremrangeByScore(byte[] key, double start, double end)  {
+    public Long zremrangeByScore(byte[] key, double start, double end) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long zremrangeByScore(byte[] key, byte[] start, byte[] end)  {
+    public Long zremrangeByScore(byte[] key, byte[] start, byte[] end) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long zlexcount(final byte[] key, final byte[] min, final byte[] max)  {
+    public Long zlexcount(final byte[] key, final byte[] min, final byte[] max) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrangeByLex(final byte[] key, final byte[] min, final byte[] max)  {
+    public Set<byte[]> zrangeByLex(final byte[] key, final byte[] min, final byte[] max) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrangeByLex(final byte[] key, final byte[] min, final byte[] max, int offset,
-        int count)  {
+    public Set<byte[]> zrangeByLex(final byte[] key, final byte[] min, final byte[] max, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrevrangeByLex(final byte[] key, final byte[] max, final byte[] min)  {
+    public Set<byte[]> zrevrangeByLex(final byte[] key, final byte[] max, final byte[] min) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrevrangeByLex(final byte[] key, final byte[] max, final byte[] min, int offset,
-        int count)  {
+    public Set<byte[]> zrevrangeByLex(final byte[] key, final byte[] max, final byte[] min, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long zremrangeByLex(final byte[] key, final byte[] min, final byte[] max)  {
+    public Long zremrangeByLex(final byte[] key, final byte[] min, final byte[] max) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long linsert(byte[] key, BinaryClient.LIST_POSITION where, byte[] pivot, byte[] value)  {
+    public Long linsert(byte[] key, BinaryClient.LIST_POSITION where, byte[] pivot, byte[] value) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long lpushx(byte[] key, byte[]... arg)  {
+    public Long lpushx(byte[] key, byte[]... arg) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long rpushx(byte[] key, byte[]... arg)  {
+    public Long rpushx(byte[] key, byte[]... arg) {
         throw new UnsupportedOperationException("not yet implemented");
     }
-    
+
     @Override
     public List<byte[]> blpop(byte[] arg) {
         throw new UnsupportedOperationException("not yet implemented");
@@ -3249,39 +3261,39 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public List<byte[]> brpop(byte[] arg) {
         throw new UnsupportedOperationException("not yet implemented");
     }
-    
+
     @Override
-    public Long del(byte[] key)  {
+    public Long del(byte[] key) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public byte[] echo(byte[] arg)  {
+    public byte[] echo(byte[] arg) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long move(byte[] key, int dbIndex)  {
+    public Long move(byte[] key, int dbIndex) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long bitcount(final byte[] key)  {
+    public Long bitcount(final byte[] key) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long bitcount(final byte[] key, long start, long end)  {
+    public Long bitcount(final byte[] key, long start, long end) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long pfadd(final byte[] key, final byte[]... elements)  {
+    public Long pfadd(final byte[] key, final byte[]... elements) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public long pfcount(final byte[] key)  {
+    public long pfcount(final byte[] key) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -3323,7 +3335,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         final Map<String, ScanResult<String>> results = new LinkedHashMap<>();
 
         List<OperationResult<ScanResult<String>>> opResults = scatterGatherScan(cursor, count, pattern);
-        for (OperationResult<ScanResult<String>> opResult: opResults) {
+        for (OperationResult<ScanResult<String>> opResult : opResults) {
             results.put(opResult.getNode().getHostAddress(), opResult.getResult());
         }
 
@@ -3408,7 +3420,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             discoveryClient = client;
             return this;
         }
-        
+
         public Builder withDiscoveryClient(EurekaClient client) {
             discoveryClient = client;
             return this;
@@ -3429,7 +3441,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
-        public Builder withConnectionPoolMonitor(ConnectionPoolMonitor cpMonitor){
+        public Builder withConnectionPoolMonitor(ConnectionPoolMonitor cpMonitor) {
             this.cpMonitor = cpMonitor;
             return this;
         }
@@ -3438,7 +3450,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             this.sslSocketFactory = sslSocketFactory;
             return this;
         }
-
 
         public DynoJedisClient build() {
             assert (appName != null);
@@ -3460,21 +3471,21 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             ConnectionPoolConfigurationImpl shadowConfig = new ConnectionPoolConfigurationImpl(cpConfig);
             Logger.info("Dyno Client Shadow Config runtime properties: " + shadowConfig.toString());
 
-            // Ensure that if the shadow cluster is down it will not block client application startup
+            // Ensure that if the shadow cluster is down it will not block
+            // client application startup
             shadowConfig.setFailOnStartupIfNoHosts(false);
-
-           
 
             HostSupplier shadowSupplier = null;
             if (dualWriteHostSupplier == null) {
                 if (hostSupplier != null && hostSupplier instanceof EurekaHostsSupplier) {
                     EurekaHostsSupplier eurekaSupplier = (EurekaHostsSupplier) hostSupplier;
-                    shadowSupplier = EurekaHostsSupplier.newInstance(shadowConfig.getDualWriteClusterName(), eurekaSupplier);
+                    shadowSupplier = EurekaHostsSupplier.newInstance(shadowConfig.getDualWriteClusterName(),
+                            eurekaSupplier);
                 } else if (discoveryClient != null) {
                     shadowSupplier = new EurekaHostsSupplier(shadowConfig.getDualWriteClusterName(), discoveryClient);
                 } else {
-                    throw new DynoConnectException("HostSupplier for DualWrite cluster is REQUIRED if you are not " +
-                        "using EurekaHostsSupplier implementation or using a EurekaClient");
+                    throw new DynoConnectException("HostSupplier for DualWrite cluster is REQUIRED if you are not "
+                            + "using EurekaHostsSupplier implementation or using a EurekaClient");
                 }
             } else {
                 shadowSupplier = dualWriteHostSupplier;
@@ -3483,6 +3494,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             shadowConfig.withHostSupplier(shadowSupplier);
 
             setLoadBalancingStrategy(shadowConfig);
+            setHashtagConnectionPool(shadowSupplier, shadowConfig);
 
             String shadowAppName = shadowConfig.getName();
             DynoCPMonitor shadowCPMonitor = new DynoCPMonitor(shadowAppName);
@@ -3490,11 +3502,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             JedisConnectionFactory connFactory = new JedisConnectionFactory(shadowOPMonitor, sslSocketFactory);
 
-            final ConnectionPoolImpl<Jedis> shadowPool =
-                    startConnectionPool(shadowAppName, connFactory, shadowConfig, shadowCPMonitor);
+            final ConnectionPoolImpl<Jedis> shadowPool = startConnectionPool(shadowAppName, connFactory, shadowConfig,
+                    shadowCPMonitor);
 
             // Construct a connection pool with the shadow cluster settings
-            DynoJedisClient shadowClient = new DynoJedisClient(shadowAppName, dualWriteClusterName, shadowPool, shadowOPMonitor, shadowCPMonitor);
+            DynoJedisClient shadowClient = new DynoJedisClient(shadowAppName, dualWriteClusterName, shadowPool,
+                    shadowOPMonitor, shadowCPMonitor);
 
             // Construct an instance of our DualWriter client
             DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
@@ -3507,12 +3520,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                     dualWriteDial.setRange(shadowConfig.getDualWritePercentage());
                 }
 
-                return new DynoDualWriterClient(appName, clusterName, pool, opMonitor, cpMonitor, shadowClient, dualWriteDial);
+                return new DynoDualWriterClient(appName, clusterName, pool, opMonitor, cpMonitor, shadowClient,
+                        dualWriteDial);
             } else {
                 return new DynoDualWriterClient(appName, clusterName, pool, opMonitor, cpMonitor, shadowClient);
             }
         }
-
 
         private DynoJedisClient buildDynoJedisClient() {
             DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
@@ -3523,29 +3536,28 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return new DynoJedisClient(appName, clusterName, pool, opMonitor, cpMonitor);
         }
 
-        private ConnectionPoolImpl<Jedis> createConnectionPool(String appName, DynoOPMonitor opMonitor, ConnectionPoolMonitor cpMonitor) {
+        private ConnectionPoolImpl<Jedis> createConnectionPool(String appName, DynoOPMonitor opMonitor,
+                ConnectionPoolMonitor cpMonitor) {
 
             if (hostSupplier == null) {
                 if (discoveryClient == null) {
-                    throw new DynoConnectException("HostSupplier not provided. Cannot initialize EurekaHostsSupplier " +
-                            "which requires a DiscoveryClient");
+                    throw new DynoConnectException("HostSupplier not provided. Cannot initialize EurekaHostsSupplier "
+                            + "which requires a DiscoveryClient");
                 } else {
                     hostSupplier = new EurekaHostsSupplier(clusterName, discoveryClient);
                 }
             }
 
             cpConfig.withHostSupplier(hostSupplier);
-
             setLoadBalancingStrategy(cpConfig);
-
+            setHashtagConnectionPool(hostSupplier, cpConfig);
             JedisConnectionFactory connFactory = new JedisConnectionFactory(opMonitor, sslSocketFactory);
 
             return startConnectionPool(appName, connFactory, cpConfig, cpMonitor);
         }
 
         private ConnectionPoolImpl<Jedis> startConnectionPool(String appName, JedisConnectionFactory connFactory,
-                                                              ConnectionPoolConfigurationImpl cpConfig,
-                                                              ConnectionPoolMonitor cpMonitor) {
+                ConnectionPoolConfigurationImpl cpConfig, ConnectionPoolMonitor cpMonitor) {
 
             final ConnectionPoolImpl<Jedis> pool = new ConnectionPoolImpl<Jedis>(connFactory, cpConfig, cpMonitor);
 
@@ -3578,31 +3590,84 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         private void setLoadBalancingStrategy(ConnectionPoolConfigurationImpl config) {
             if (ConnectionPoolConfiguration.LoadBalancingStrategy.TokenAware == config.getLoadBalancingStrategy()) {
                 if (config.getTokenSupplier() == null) {
-                    Logger.warn("TOKEN AWARE selected and no token supplier found, using default HttpEndpointBasedTokenMapSupplier()");
+                    Logger.warn(
+                            "TOKEN AWARE selected and no token supplier found, using default HttpEndpointBasedTokenMapSupplier()");
                     config.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier());
                 }
 
                 if (config.getLocalRack() == null && config.localZoneAffinity()) {
-                    String warningMessage =
-                            "DynoJedisClient for app=[" + config.getName() + "] is configured for local rack affinity "+
-                                    "but cannot determine the local rack! DISABLING rack affinity for this instance. " +
-                                    "To make the client aware of the local rack either use " +
-                                    "ConnectionPoolConfigurationImpl.setLocalRack() when constructing the client " +
-                                    "instance or ensure EC2_AVAILABILTY_ZONE is set as an environment variable, e.g. " +
-                                    "run with -DEC2_AVAILABILITY_ZONE=us-east-1c";
+                    String warningMessage = "DynoJedisClient for app=[" + config.getName()
+                            + "] is configured for local rack affinity "
+                            + "but cannot determine the local rack! DISABLING rack affinity for this instance. "
+                            + "To make the client aware of the local rack either use "
+                            + "ConnectionPoolConfigurationImpl.setLocalRack() when constructing the client "
+                            + "instance or ensure EC2_AVAILABILTY_ZONE is set as an environment variable, e.g. "
+                            + "run with -DEC2_AVAILABILITY_ZONE=us-east-1c";
                     config.setLocalZoneAffinity(false);
                     Logger.warn(warningMessage);
                 }
             }
         }
 
-    }
+        /**
+         * Set the hash to the connection pool if is provided by Dynomite
+         * @param hostSupplier
+         */
+        private void setHashtagConnectionPool(HostSupplier hostSupplier, ConnectionPoolConfigurationImpl config) {
+            // Find the hosts from host supplier
+            Collection<Host> hosts = hostSupplier.getHosts();
+            // Convert the returned collection to an arraylist
+            ArrayList<Host> arrayHosts = new ArrayList<Host>(hosts);
+            Collections.sort(arrayHosts);
+            // Convert the arraylist to set
+            Set<Host> hostSet = new HashSet<Host>(arrayHosts);
 
+            // Take the token map supplier (aka the token topology from
+            // Dynomite)
+            TokenMapSupplier tokenMapSupplier = config.getTokenSupplier();
+
+            // Create a list of host/Tokens
+            List<HostToken> hostTokens;
+            if (tokenMapSupplier != null) {
+                hostTokens = tokenMapSupplier.getTokens(hostSet);
+            } else {
+                throw new DynoConnectException("TokenMapSupplier not provided");
+            }
+
+            String hashtag = hostTokens.get(0).getHost().getHashtag();
+            short numHosts = 0;
+            // Update inner state with the host tokens.
+            for (HostToken hToken : hostTokens) {
+                /**
+                 * Checking hashtag consistency from all Dynomite hosts. If
+                 * hashtags are not consistent, we need to throw an exception.
+                 */
+                String hashtagNew = hToken.getHost().getHashtag();
+
+                if (hashtag != null && !hashtag.equals(hashtagNew)) {
+                    Logger.error("Hashtag mismatch across hosts");
+                    throw new RuntimeException("Hashtags are different across hosts");
+                } // addressing case hashtag = null, hashtag = {} ...
+                else if (numHosts > 0 && hashtag == null && hashtagNew != null) {
+                    Logger.error("Hashtag mismatch across hosts");
+                    throw new RuntimeException("Hashtags are different across hosts");
+
+                }
+                hashtag = hashtagNew;
+                numHosts++;
+            }
+
+            if (hashtag != null) {
+                config.withHashtag(hashtag);
+            }
+        }
+
+    }
 
     /**
      * Used for unit testing ONLY
      */
-    /*package*/ static class TestBuilder {
+    /* package */ static class TestBuilder {
         private ConnectionPool cp;
         private String appName;
 
@@ -3622,121 +3687,117 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     }
 
-	@Override
-	public Long exists(String... arg0) {
+    @Override
+    public Long exists(String... arg0) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public ScanResult<String> scan(String arg0, ScanParams arg1) {
+    @Override
+    public ScanResult<String> scan(String arg0, ScanParams arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Long geoadd(byte[] arg0, Map<byte[], GeoCoordinate> arg1) {
+    @Override
+    public Long geoadd(byte[] arg0, Map<byte[], GeoCoordinate> arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Long geoadd(byte[] arg0, double arg1, double arg2, byte[] arg3) {
+    @Override
+    public Long geoadd(byte[] arg0, double arg1, double arg2, byte[] arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Double geodist(byte[] arg0, byte[] arg1, byte[] arg2) {
+    @Override
+    public Double geodist(byte[] arg0, byte[] arg1, byte[] arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Double geodist(byte[] arg0, byte[] arg1, byte[] arg2, GeoUnit arg3) {
+    @Override
+    public Double geodist(byte[] arg0, byte[] arg1, byte[] arg2, GeoUnit arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public List<byte[]> geohash(byte[] arg0, byte[]... arg1) {
+    @Override
+    public List<byte[]> geohash(byte[] arg0, byte[]... arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public List<GeoCoordinate> geopos(byte[] arg0, byte[]... arg1) {
+    @Override
+    public List<GeoCoordinate> geopos(byte[] arg0, byte[]... arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public List<GeoRadiusResponse> georadius(byte[] arg0, double arg1,
-			double arg2, double arg3, GeoUnit arg4) {
+    @Override
+    public List<GeoRadiusResponse> georadius(byte[] arg0, double arg1, double arg2, double arg3, GeoUnit arg4) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public List<GeoRadiusResponse> georadius(byte[] arg0, double arg1,
-			double arg2, double arg3, GeoUnit arg4, GeoRadiusParam arg5) {
+    @Override
+    public List<GeoRadiusResponse> georadius(byte[] arg0, double arg1, double arg2, double arg3, GeoUnit arg4,
+            GeoRadiusParam arg5) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public List<GeoRadiusResponse> georadiusByMember(byte[] arg0, byte[] arg1,
-			double arg2, GeoUnit arg3) {
+    @Override
+    public List<GeoRadiusResponse> georadiusByMember(byte[] arg0, byte[] arg1, double arg2, GeoUnit arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public List<GeoRadiusResponse> georadiusByMember(byte[] arg0, byte[] arg1,
-			double arg2, GeoUnit arg3, GeoRadiusParam arg4) {
+    @Override
+    public List<GeoRadiusResponse> georadiusByMember(byte[] arg0, byte[] arg1, double arg2, GeoUnit arg3,
+            GeoRadiusParam arg4) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public ScanResult<Entry<byte[], byte[]>> hscan(byte[] arg0, byte[] arg1) {
+    @Override
+    public ScanResult<Entry<byte[], byte[]>> hscan(byte[] arg0, byte[] arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public ScanResult<Entry<byte[], byte[]>> hscan(byte[] arg0, byte[] arg1,
-			ScanParams arg2) {
+    @Override
+    public ScanResult<Entry<byte[], byte[]>> hscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public String set(byte[] arg0, byte[] arg1, byte[] arg2) {
+    @Override
+    public String set(byte[] arg0, byte[] arg1, byte[] arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public ScanResult<byte[]> sscan(byte[] arg0, byte[] arg1) {
+    @Override
+    public ScanResult<byte[]> sscan(byte[] arg0, byte[] arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public ScanResult<byte[]> sscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
+    @Override
+    public ScanResult<byte[]> sscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Long zadd(byte[] arg0, Map<byte[], Double> arg1, ZAddParams arg2) {
+    @Override
+    public Long zadd(byte[] arg0, Map<byte[], Double> arg1, ZAddParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Long zadd(byte[] arg0, double arg1, byte[] arg2, ZAddParams arg3) {
+    @Override
+    public Long zadd(byte[] arg0, double arg1, byte[] arg2, ZAddParams arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Double zincrby(byte[] arg0, double arg1, byte[] arg2,
-			ZIncrByParams arg3) {
+    @Override
+    public Double zincrby(byte[] arg0, double arg1, byte[] arg2, ZIncrByParams arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public ScanResult<Tuple> zscan(byte[] arg0, byte[] arg1) {
+    @Override
+    public ScanResult<Tuple> zscan(byte[] arg0, byte[] arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public ScanResult<Tuple> zscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
+    @Override
+    public ScanResult<Tuple> zscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
     @Override
     public List<byte[]> bitfield(byte[] key, byte[]... arguments) {
@@ -3744,68 +3805,66 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-	public Long bitpos(String arg0, boolean arg1) {
+    public Long bitpos(String arg0, boolean arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Long bitpos(String arg0, boolean arg1, BitPosParams arg2) {
+    @Override
+    public Long bitpos(String arg0, boolean arg1, BitPosParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Long geoadd(String arg0, Map<String, GeoCoordinate> arg1) {
+    @Override
+    public Long geoadd(String arg0, Map<String, GeoCoordinate> arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Long geoadd(String arg0, double arg1, double arg2, String arg3) {
+    @Override
+    public Long geoadd(String arg0, double arg1, double arg2, String arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Double geodist(String arg0, String arg1, String arg2) {
+    @Override
+    public Double geodist(String arg0, String arg1, String arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Double geodist(String arg0, String arg1, String arg2, GeoUnit arg3) {
+    @Override
+    public Double geodist(String arg0, String arg1, String arg2, GeoUnit arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public List<String> geohash(String arg0, String... arg1) {
+    @Override
+    public List<String> geohash(String arg0, String... arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public List<GeoCoordinate> geopos(String arg0, String... arg1) {
+    @Override
+    public List<GeoCoordinate> geopos(String arg0, String... arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public List<GeoRadiusResponse> georadius(String arg0, double arg1,
-			double arg2, double arg3, GeoUnit arg4) {
+    @Override
+    public List<GeoRadiusResponse> georadius(String arg0, double arg1, double arg2, double arg3, GeoUnit arg4) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public List<GeoRadiusResponse> georadius(String arg0, double arg1,
-			double arg2, double arg3, GeoUnit arg4, GeoRadiusParam arg5) {
+    @Override
+    public List<GeoRadiusResponse> georadius(String arg0, double arg1, double arg2, double arg3, GeoUnit arg4,
+            GeoRadiusParam arg5) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public List<GeoRadiusResponse> georadiusByMember(String arg0, String arg1,
-			double arg2, GeoUnit arg3) {
+    @Override
+    public List<GeoRadiusResponse> georadiusByMember(String arg0, String arg1, double arg2, GeoUnit arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public List<GeoRadiusResponse> georadiusByMember(String arg0, String arg1,
-			double arg2, GeoUnit arg3, GeoRadiusParam arg4) {
+    @Override
+    public List<GeoRadiusResponse> georadiusByMember(String arg0, String arg1, double arg2, GeoUnit arg3,
+            GeoRadiusParam arg4) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
     @Override
     public List<Long> bitfield(String key, String... arguments) {
@@ -3813,35 +3872,33 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-	public ScanResult<Entry<String, String>> hscan(String arg0, String arg1,
-			ScanParams arg2) {
+    public ScanResult<Entry<String, String>> hscan(String arg0, String arg1, ScanParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public String psetex(String arg0, long arg1, String arg2) {
+    @Override
+    public String psetex(String arg0, long arg1, String arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public String set(String arg0, String arg1, String arg2) {
+    @Override
+    public String set(String arg0, String arg1, String arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Long zadd(String arg0, Map<String, Double> arg1, ZAddParams arg2) {
+    @Override
+    public Long zadd(String arg0, Map<String, Double> arg1, ZAddParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Double zincrby(String arg0, double arg1, String arg2,
-			ZIncrByParams arg3) {
+    @Override
+    public Double zincrby(String arg0, double arg1, String arg2, ZIncrByParams arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public ScanResult<Tuple> zscan(String arg0, String arg1, ScanParams arg2) {
+    @Override
+    public ScanResult<Tuple> zscan(String arg0, String arg1, ScanParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
 }
