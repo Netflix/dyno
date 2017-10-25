@@ -205,4 +205,6 @@ public interface ConnectionPoolConfiguration {
      */
     int getDualWritePercentage();
 
+    String getHashtag();
+
 }

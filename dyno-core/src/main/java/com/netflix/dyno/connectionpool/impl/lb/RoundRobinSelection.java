@@ -48,7 +48,7 @@ public class RoundRobinSelection<CL> implements HostSelectionStrategy<CL> {
 	}
 
 	@Override
-	public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op) throws NoAvailableHostsException {
+	public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op, String hashtag) throws NoAvailableHostsException {
 		
 		int numTries = circularList.getSize();
 		HostConnectionPool<CL> lastPool = null;

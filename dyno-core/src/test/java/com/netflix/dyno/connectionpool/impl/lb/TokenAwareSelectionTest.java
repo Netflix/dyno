@@ -136,12 +136,13 @@ public class TokenAwareSelectionTest {
 		};
 	}
 
+
 	private void runTest(long start, long end, Map<String, Integer> result, TokenAwareSelection<Integer> tokenAwareSelector) {
 
 		for (long i=start; i<=end; i++) {
 
 			BaseOperation<Integer, Long> op = getTestOperation(i);
-			HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op);
+			HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op, null);
 
 			String hostName = pool.getHost().getHostAddress();
 
@@ -161,7 +162,7 @@ public class TokenAwareSelectionTest {
 		for (long i=start; i<=end; i++) {
 
 			BaseOperation<Integer, Long> op = getTestOperation(i);
-			HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op);
+			HostConnectionPool<Integer> pool = tokenAwareSelector.getPoolForOperation(op, null);
 
 			int port = pool.getHost().getPort();
 
@@ -239,7 +240,7 @@ public class TokenAwareSelectionTest {
 	
 	
 	@SuppressWarnings("unchecked")
-	private HostConnectionPool<Integer> getMockHostConnectionPool(final HostToken hostToken) {
+	public HostConnectionPool<Integer> getMockHostConnectionPool(final HostToken hostToken) {
 
 		HostConnectionPool<Integer> mockHostPool = mock(HostConnectionPool.class);
 		when(mockHostPool.isActive()).thenReturn(true);

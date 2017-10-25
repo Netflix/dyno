@@ -25,6 +25,7 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
 import com.netflix.dyno.jedis.JedisConnectionFactory.JedisConnection;
 
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,55 +62,105 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
     // the cached pipeline
     private volatile Pipeline jedisPipeline = null;
-    // the cached row key for the pipeline. all subsequent requests to pipeline must be the same. this is used to check that.
+    // the cached row key for the pipeline. all subsequent requests to pipeline
+    // must be the same. this is used to check that.
     private final AtomicReference<String> theKey = new AtomicReference<String>(null);
+    private final AtomicReference<String> hashtag = new AtomicReference<String>(null);
     // used for tracking errors
     private final AtomicReference<DynoException> pipelineEx = new AtomicReference<DynoException>(null);
 
     private static final String DynoPipeline = "DynoPipeline";
 
-    DynoJedisPipeline(ConnectionPoolImpl<Jedis> cPool, DynoJedisPipelineMonitor operationMonitor, ConnectionPoolMonitor connPoolMonitor) {
+    DynoJedisPipeline(ConnectionPoolImpl<Jedis> cPool, DynoJedisPipelineMonitor operationMonitor,
+            ConnectionPoolMonitor connPoolMonitor) {
         this.connPool = cPool;
         this.opMonitor = operationMonitor;
         this.cpMonitor = connPoolMonitor;
     }
 
+    private void pipelined(final String key) {
+        try {
+            try {
+                connection = connPool.getConnectionForOperation(new BaseOperation<Jedis, String>() {
+
+                    @Override
+                    public String getName() {
+                        return DynoPipeline;
+                    }
+
+                    @Override
+                    public String getKey() {
+                        return key;
+                    }
+
+                });
+            } catch (NoAvailableHostsException nahe) {
+                cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, nahe);
+                discardPipelineAndReleaseConnection();
+                throw nahe;
+            }
+        } catch (NoAvailableHostsException nahe) {
+            cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, nahe);
+            discardPipelineAndReleaseConnection();
+            throw nahe;
+        }
+        Jedis jedis = ((JedisConnection) connection).getClient();
+        jedisPipeline = jedis.pipelined();
+        cpMonitor.incOperationSuccess(connection.getHost(), 0);
+    }
+
+    private void checkHashtag(final String key, final String hashtagValue) {
+        if (this.hashtag.get() != null) {
+            verifyHashtagValue(hashtagValue);
+        } else {
+            boolean success = this.hashtag.compareAndSet(null, hashtagValue);
+            if (!success) {
+                verifyHashtagValue(hashtagValue);
+            } else {
+                pipelined(key);
+            }
+        }
+
+    }
+
+    /**
+     * Checks that a pipeline is associated with a single key. If there is a
+     * hashtag defined in the first host of the connectionpool then we check
+     * that first.
+     * 
+     * @param key
+     */
     private void checkKey(final String key) {
 
-        if (theKey.get() != null) {
-            verifyKey(key);
-
-        } else {
-
-            boolean success = theKey.compareAndSet(null, key);
-            if (!success) {
-                // someone already beat us to it. that's fine, just verify that the key is the same
+        /*
+         * Get hashtag from the first host of the active pool We cannot use the
+         * connection object because as of now we have not selected a
+         * connection. A connection is selected based on the key or hashtag
+         * respectively.
+         */
+        String hashtag = connPool.getConfiguration().getHashtag();
+        if (hashtag == null || hashtag.isEmpty()) {
+            if (theKey.get() != null) {
                 verifyKey(key);
             } else {
-
-                try {
-                    connection = connPool.getConnectionForOperation(new BaseOperation<Jedis, String>() {
-
-                        @Override
-                        public String getName() {
-                            return DynoPipeline;
-                        }
-
-                        @Override
-                        public String getKey() {
-                            return key;
-                        }
-                    });
-                } catch (NoAvailableHostsException nahe) {
-                    cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, nahe);
-                    discardPipelineAndReleaseConnection();
-                    throw nahe;
+                boolean success = theKey.compareAndSet(null, key);
+                if (!success) {
+                    // someone already beat us to it. that's fine, just verify
+                    // that the key is the same
+                    verifyKey(key);
+                } else {
+                    pipelined(key);
                 }
             }
-
-            Jedis jedis = ((JedisConnection) connection).getClient();
-            jedisPipeline = jedis.pipelined();
-            cpMonitor.incOperationSuccess(connection.getHost(), 0);
+        } else {
+            /*
+             * We have a identified a hashtag in the Host object. That means
+             * Dynomite has a defined hashtag. Producing the hashvalue out of
+             * the hashtag and using that as a reference to the pipeline
+             */
+            String hashValue = StringUtils.substringBetween(key, Character.toString(hashtag.charAt(0)),
+                    Character.toString(hashtag.charAt(1)));
+            checkHashtag(key, hashValue);
         }
     }
 
@@ -117,7 +168,19 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
         if (!theKey.get().equals(key)) {
             try {
-                throw new RuntimeException("Must have same key for Redis Pipeline in Dynomite");
+                throw new RuntimeException("Must have same key for Redis Pipeline in Dynomite. This key: " + key);
+            } finally {
+                discardPipelineAndReleaseConnection();
+            }
+        }
+    }
+
+    private void verifyHashtagValue(final String hashtagValue) {
+
+        if (!this.hashtag.get().equals(hashtagValue)) {
+            try {
+                throw new RuntimeException(
+                        "Must have same hashtag for Redis Pipeline in Dynomite. This hashvalue: " + hashtagValue);
             } finally {
                 discardPipelineAndReleaseConnection();
             }
@@ -148,7 +211,8 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
 
     /**
-     * As long as jdk 7 and below is supported we need to define our own function interfaces
+     * As long as jdk 7 and below is supported we need to define our own
+     * function interfaces
      */
     private interface Func0<R> {
         R call();
@@ -202,15 +266,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
         @Override
         public List<String> get() {
-            return new ArrayList<String>(CollectionUtils.transform(
-                    response.get(),
-                    new CollectionUtils.Transform<String, String>(){
+            return new ArrayList<String>(
+                    CollectionUtils.transform(response.get(), new CollectionUtils.Transform<String, String>() {
                         @Override
                         public String get(String s) {
                             return decompressValue(s);
                         }
-                    }
-            ));
+                    }));
         }
     }
 
@@ -244,15 +306,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
         @Override
         public Map<String, String> get() {
-            return CollectionUtils.transform(
-                    response.get(),
+            return CollectionUtils.transform(response.get(),
                     new CollectionUtils.MapEntryTransform<String, String, String>() {
                         @Override
                         public String get(String key, String val) {
                             return decompressValue(val);
                         }
-                    }
-            );
+                    });
         }
     }
 
@@ -271,15 +331,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
         @Override
         public Map<byte[], byte[]> get() {
-            return CollectionUtils.transform(
-                    response.get(),
+            return CollectionUtils.transform(response.get(),
                     new CollectionUtils.MapEntryTransform<byte[], byte[], byte[]>() {
                         @Override
                         public byte[] get(byte[] key, byte[] val) {
                             return decompressValue(val);
                         }
-                    }
-            );
+                    });
         }
 
     }
@@ -289,8 +347,10 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         abstract Response<R> execute(Pipeline jedisPipeline) throws DynoException;
 
         Response<R> execute(final byte[] key, final OpName opName) {
-            // For now simply convert the key into a String. Properly supporting this
-            // functionality requires significant changes to plumb this throughout for the LB
+            // For now simply convert the key into a String. Properly supporting
+            // this
+            // functionality requires significant changes to plumb this
+            // throughout for the LB
             return execute(new String(key), opName);
         }
 
@@ -333,7 +393,8 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
             int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
 
             try {
-                // prefer speed over accuracy here so rather than using getBytes() to get the actual size
+                // prefer speed over accuracy here so rather than using
+                // getBytes() to get the actual size
                 // just estimate using 2 bytes per character
                 if ((2 * value.length()) > thresholdBytes) {
                     result = ZipUtils.compressStringToBase64String(value);
@@ -358,7 +419,6 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
             return value;
         }
-
 
     }
 
@@ -629,8 +689,8 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
 
     /**
-     * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
-     * interface is not yet implemented.
+     * This method is a BinaryRedisPipeline command which dyno does not yet
+     * properly support, therefore the interface is not yet implemented.
      */
     public Response<byte[]> hget(final byte[] key, final byte[] field) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
@@ -676,8 +736,8 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
 
     /**
-     * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
-     * interface is not yet implemented.
+     * This method is a BinaryRedisPipeline command which dyno does not yet
+     * properly support, therefore the interface is not yet implemented.
      */
     public Response<Map<byte[], byte[]>> hgetAll(final byte[] key) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
@@ -718,7 +778,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
             }
         }.execute(key, OpName.HINCRBY);
     }
-    
+
     /* not supported by RedisPipeline 2.7.3 */
     public Response<Double> hincrByFloat(final String key, final String field, final double value) {
         return new PipelineOperation<Double>() {
@@ -741,13 +801,10 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }.execute(key, OpName.HKEYS);
 
     }
-    
- 
 
     public Response<ScanResult<Map.Entry<String, String>>> hscan(final String key, int cursor) {
         throw new UnsupportedOperationException("'HSCAN' cannot be called in pipeline");
     }
-
 
     @Override
     public Response<Long> hlen(final String key) {
@@ -762,8 +819,8 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
 
     /**
-     * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
-     * interface is not yet implemented.
+     * This method is a BinaryRedisPipeline command which dyno does not yet
+     * properly support, therefore the interface is not yet implemented.
      */
     public Response<List<byte[]>> hmget(final byte[] key, final byte[]... fields) {
         return new PipelineOperation<List<byte[]>>() {
@@ -818,8 +875,9 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
 
     /**
-     * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
-     * interface is not yet implemented since only a few binary commands are present.
+     * This method is a BinaryRedisPipeline command which dyno does not yet
+     * properly support, therefore the interface is not yet implemented since
+     * only a few binary commands are present.
      */
     public Response<String> hmset(final byte[] key, final Map<byte[], byte[]> hash) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
@@ -842,15 +900,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
                     return new PipelineResponse(null).apply(new Func0<Response<String>>() {
                         @Override
                         public Response<String> call() {
-                            return jedisPipeline.hmset(key,
-                                    CollectionUtils.transform(hash,
-                                            new CollectionUtils.MapEntryTransform<byte[], byte[], byte[]>() {
-                                                @Override
-                                                public byte[] get(byte[] key, byte[] val) {
-                                                    return compressValue(val);
-                                                }
-                                            }
-                                    ));
+                            return jedisPipeline.hmset(key, CollectionUtils.transform(hash,
+                                    new CollectionUtils.MapEntryTransform<byte[], byte[], byte[]>() {
+                                        @Override
+                                        public byte[] get(byte[] key, byte[] val) {
+                                            return compressValue(val);
+                                        }
+                                    }));
                         }
                     });
                 }
@@ -880,14 +936,13 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
                     return new PipelineResponse(null).apply(new Func0<Response<String>>() {
                         @Override
                         public Response<String> call() {
-                            return jedisPipeline.hmset(key,
-                                    CollectionUtils.transform(hash, new CollectionUtils.MapEntryTransform<String, String, String>() {
+                            return jedisPipeline.hmset(key, CollectionUtils.transform(hash,
+                                    new CollectionUtils.MapEntryTransform<String, String, String>() {
                                         @Override
                                         public String get(String key, String val) {
                                             return compressValue(val);
                                         }
-                                    })
-                            );
+                                    }));
                         }
                     });
                 }
@@ -921,8 +976,8 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
 
     /**
-     * This method is a BinaryRedisPipeline command which dyno does not yet properly support, therefore the
-     * interface is not yet implemented.
+     * This method is a BinaryRedisPipeline command which dyno does not yet
+     * properly support, therefore the interface is not yet implemented.
      */
     public Response<Long> hset(final byte[] key, final byte[] field, final byte[] value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
@@ -1021,7 +1076,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }.execute(key, OpName.INCRBY);
 
     }
-    
+
     /* not supported by RedisPipeline 2.7.3 */
     public Response<Double> incrByFloat(final String key, final double increment) {
         return new PipelineOperation<Double>() {
@@ -1034,7 +1089,6 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }.execute(key, OpName.INCRBYFLOAT);
 
     }
-
 
     @Override
     public Response<String> lindex(final String key, final long index) {
@@ -1191,11 +1245,11 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }.execute(key, OpName.PERSIST);
 
     }
-    
+
     /* not supported by RedisPipeline 2.7.3 */
     public Response<String> rename(final String oldkey, final String newkey) {
         return new PipelineOperation<String>() {
-        	
+
             @Override
             Response<String> execute(Pipeline jedisPipeline) throws DynoException {
                 return jedisPipeline.rename(oldkey, newkey);
@@ -1203,11 +1257,11 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }.execute(oldkey, OpName.RENAME);
 
     }
-    
+
     /* not supported by RedisPipeline 2.7.3 */
     public Response<Long> renamenx(final String oldkey, final String newkey) {
         return new PipelineOperation<Long>() {
-        	
+
             @Override
             Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
                 return jedisPipeline.renamenx(oldkey, newkey);
@@ -1444,12 +1498,11 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }.execute(key, OpName.SPOP);
 
     }
-    
+
     @Override
     public Response<Set<String>> spop(final String key, final long count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
-
 
     @Override
     public Response<String> srandmember(final String key) {
@@ -1476,7 +1529,6 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }.execute(key, OpName.SREM);
 
     }
-    
 
     /**
      * This method is not supported by the BinaryRedisPipeline interface.
@@ -1485,14 +1537,12 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         throw new UnsupportedOperationException("'SSCAN' cannot be called in pipeline");
     }
 
-    
     /**
      * This method is not supported by the BinaryRedisPipeline interface.
      */
     public Response<ScanResult<String>> sscan(final String key, final String cursor) {
         throw new UnsupportedOperationException("'SSCAN' cannot be called in pipeline");
     }
-
 
     @Override
     public Response<Long> strlen(final String key) {
@@ -1558,10 +1608,10 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }.execute(key, OpName.ZADD);
 
     }
-    
-	@Override
-	public Response<Long> zadd(final String key, final Map<String, Double> scoreMembers) {
-		return new PipelineOperation<Long>() {
+
+    @Override
+    public Response<Long> zadd(final String key, final Map<String, Double> scoreMembers) {
+        return new PipelineOperation<Long>() {
 
             @Override
             Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
@@ -1570,7 +1620,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
 
         }.execute(key, OpName.ZADD);
 
-	}
+    }
 
     @Override
     public Response<Long> zcard(final String key) {
@@ -1651,7 +1701,8 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
 
     @Override
-    public Response<Set<String>> zrangeByScore(final String key, final double min, final double max, final int offset, final int count) {
+    public Response<Set<String>> zrangeByScore(final String key, final double min, final double max, final int offset,
+            final int count) {
         return new PipelineOperation<Set<String>>() {
 
             @Override
@@ -1677,7 +1728,8 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
 
     @Override
-    public Response<Set<Tuple>> zrangeByScoreWithScores(final String key, final double min, final double max, final int offset, final int count) {
+    public Response<Set<Tuple>> zrangeByScoreWithScores(final String key, final double min, final double max,
+            final int offset, final int count) {
         return new PipelineOperation<Set<Tuple>>() {
 
             @Override
@@ -1716,7 +1768,8 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
 
     @Override
-    public Response<Set<String>> zrevrangeByScore(final String key, final double max, final double min, final int offset, final int count) {
+    public Response<Set<String>> zrevrangeByScore(final String key, final double max, final double min,
+            final int offset, final int count) {
         return new PipelineOperation<Set<String>>() {
 
             @Override
@@ -1742,7 +1795,8 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     }
 
     @Override
-    public Response<Set<Tuple>> zrevrangeByScoreWithScores(final String key, final double max, final double min, final int offset, final int count) {
+    public Response<Set<Tuple>> zrevrangeByScoreWithScores(final String key, final double max, final double min,
+            final int offset, final int count) {
         return new PipelineOperation<Set<Tuple>>() {
 
             @Override
@@ -1870,7 +1924,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
         }.execute(key, OpName.ZSCORE);
 
     }
-    
+
     /**
      * This method is not supported by the BinaryRedisPipeline interface.
      */
@@ -1943,90 +1997,82 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
     public Response<Set<String>> zrevrangeByLex(String key, String max, String min) {
         throw new UnsupportedOperationException("not yet implemented");
     }
-    
+
     @Override
     public Response<Set<String>> zrevrangeByLex(String key, String max, String min, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
-
-	@Override
-	public Response<Long> geoadd(String arg0, Map<String, GeoCoordinate> arg1) {
+    @Override
+    public Response<Long> geoadd(String arg0, Map<String, GeoCoordinate> arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Response<Long> geoadd(String arg0, double arg1, double arg2,
-			String arg3) {
+    @Override
+    public Response<Long> geoadd(String arg0, double arg1, double arg2, String arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Response<Double> geodist(String arg0, String arg1, String arg2) {
+    @Override
+    public Response<Double> geodist(String arg0, String arg1, String arg2) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Response<Double> geodist(String arg0, String arg1, String arg2,
-			GeoUnit arg3) {
+    @Override
+    public Response<Double> geodist(String arg0, String arg1, String arg2, GeoUnit arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Response<List<String>> geohash(String arg0, String... arg1) {
+    @Override
+    public Response<List<String>> geohash(String arg0, String... arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Response<List<GeoCoordinate>> geopos(String arg0, String... arg1) {
+    @Override
+    public Response<List<GeoCoordinate>> geopos(String arg0, String... arg1) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Response<List<GeoRadiusResponse>> georadius(String arg0,
-			double arg1, double arg2, double arg3, GeoUnit arg4) {
+    @Override
+    public Response<List<GeoRadiusResponse>> georadius(String arg0, double arg1, double arg2, double arg3,
+            GeoUnit arg4) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Response<List<GeoRadiusResponse>> georadius(String arg0,
-			double arg1, double arg2, double arg3, GeoUnit arg4,
-			GeoRadiusParam arg5) {
+    @Override
+    public Response<List<GeoRadiusResponse>> georadius(String arg0, double arg1, double arg2, double arg3, GeoUnit arg4,
+            GeoRadiusParam arg5) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Response<List<GeoRadiusResponse>> georadiusByMember(String arg0,
-			String arg1, double arg2, GeoUnit arg3) {
+    @Override
+    public Response<List<GeoRadiusResponse>> georadiusByMember(String arg0, String arg1, double arg2, GeoUnit arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Response<List<GeoRadiusResponse>> georadiusByMember(String arg0,
-			String arg1, double arg2, GeoUnit arg3, GeoRadiusParam arg4) {
+    @Override
+    public Response<List<GeoRadiusResponse>> georadiusByMember(String arg0, String arg1, double arg2, GeoUnit arg3,
+            GeoRadiusParam arg4) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
+    }
 
-	@Override
-	public Response<Long> zadd(String arg0, Map<String, Double> arg1,
-			ZAddParams arg2) {
+    @Override
+    public Response<Long> zadd(String arg0, Map<String, Double> arg1, ZAddParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
 
-	}
+    }
 
-	@Override
-	public Response<Long> zadd(String arg0, double arg1, String arg2,
-			ZAddParams arg3) {
+    @Override
+    public Response<Long> zadd(String arg0, double arg1, String arg2, ZAddParams arg3) {
         throw new UnsupportedOperationException("not yet implemented");
 
-	}
+    }
 
-	@Override
-	public Response<Double> zincrby(String arg0, double arg1, String arg2,
-			ZIncrByParams arg3) {
+    @Override
+    public Response<Double> zincrby(String arg0, double arg1, String arg2, ZIncrByParams arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-	}
-    
+    }
+
     public void sync() {
         long startTime = System.nanoTime() / 1000;
         try {
@@ -2086,7 +2132,8 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
                 connection.getContext().reset();
                 connection.getParentConnectionPool().returnConnection(connection);
                 if (pipelineEx.get() != null) {
-                    connPool.getHealthTracker().trackConnectionError(connection.getParentConnectionPool(), pipelineEx.get());
+                    connPool.getHealthTracker().trackConnectionError(connection.getParentConnectionPool(),
+                            pipelineEx.get());
                     pipelineEx.set(null);
                 }
                 connection = null;

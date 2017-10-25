@@ -47,7 +47,8 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
  *      "ip": "52.208.92.24",
  *      "rack": "dyno_sandbox--euwest1c",
  *      "token": "1383429731",
- *      "zone": "eu-west-1c"
+ *      "zone": "eu-west-1c",
+ *      "hashtag" : "{}"
  *  },
  *  {
  *      "dc": "us-east-1",
@@ -55,7 +56,8 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
  *      "ip": "52.90.147.135",
  *      "rack": "dyno_sandbox--useast1c",
  *      "token": "1383429731",
- *      "zone": "us-east-1c"
+ *      "zone": "us-east-1c",
+ *      "hashtag" : "{}"
  *  },
  *  {
  *      "dc": "us-east-1",
@@ -63,7 +65,8 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
  *      "ip": "52.23.207.227",
  *      "rack": "dyno_sandbox--useast1e",
  *      "token": "1383429731",
- *      "zone": "us-east-1e"
+ *      "zone": "us-east-1e",
+ *      "hashtag" : "{}"      
  *  },
  *  {
  *      "dc": "eu-west-1",
@@ -71,7 +74,8 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
  *      "ip": "52.209.165.110",
  *      "rack": "dyno_sandbox--euwest1a",
  *      "token": "1383429731",
- *      "zone": "eu-west-1a"
+ *      "zone": "eu-west-1a",
+ *      "hashtag" : "{}"
  *  },
  *  {
  *      "dc": "eu-west-1",
@@ -79,7 +83,9 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
  *      "ip": "52.16.89.77",
  *      "rack": "dyno_sandbox--euwest1b",
  *      "token": "1383429731",
- *      "zone": "eu-west-1b"
+ *      "zone": "eu-west-1b",
+ *      "hashtag" : "{}"
+      
  *  },
  *  {
  *      "dc": "us-east-1",
@@ -87,12 +93,15 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
  *      "ip": "54.208.235.30",
  *      "rack": "dyno_sandbox--useast1d",
  *      "token": "1383429731",
- *      "zone": "us-east-1d"
+ *      "zone": "us-east-1d",
+ *      "hashtag" : "{}"
+
  *  }
  *]
  * </pre>
  *
  * @author poberai
+ * @author ipapapa
  *
  */
 public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
@@ -218,12 +227,13 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
                 String zone = (String) jItem.get("zone");
                 String datacenter = (String) jItem.get("dc");
                 String portStr = (String) jItem.get("port");
+                String hashtag = (String) jItem.get("hashtag");
                 int port = Host.DEFAULT_PORT;
                 if (portStr != null) {
                     port = Integer.valueOf(portStr);
                 }
 
-                Host host = new Host(hostname, ipAddress, port, zone, datacenter, Status.Up);
+                Host host = new Host(hostname, ipAddress, port, zone, datacenter, Status.Up, hashtag);
 
                 if (isLocalDatacenterHost(host)) {
                     HostToken hostToken = new HostToken(token, host);
