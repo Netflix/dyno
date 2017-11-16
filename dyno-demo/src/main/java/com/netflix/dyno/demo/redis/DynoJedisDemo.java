@@ -123,12 +123,12 @@ public class DynoJedisDemo {
 
         client = new DynoJedisClient.Builder().withApplicationName("demo").withDynomiteClusterName("dyno_dev")
                 .withHostSupplier(hostSupplier)
-                // .withCPConfig(
-                // new ConnectionPoolConfigurationImpl("demo")
-                // .setCompressionStrategy(ConnectionPoolConfiguration.CompressionStrategy.THRESHOLD)
-                // .setCompressionThreshold(2)
-                // .setLocalRack(this.localRack)
-                // )
+//                 .withCPConfig(
+//                 new ConnectionPoolConfigurationImpl("demo")
+//                 .setCompressionStrategy(ConnectionPoolConfiguration.CompressionStrategy.THRESHOLD)
+//                 .setCompressionThreshold(2048)
+//                 .setLocalRack(this.localRack)
+//                 )
                 .build();
     }
 
@@ -503,36 +503,66 @@ public class DynoJedisDemo {
         System.out.println("Got hash :" + sb.toString());
     }
 
-    public void runSinglePipelineWithCompression(boolean useBinary) throws Exception {
-        for (int i = 0; i < 3; i++) {
+    public void runCompressionInPipelineTest() throws Exception {
+        final int maxNumKeys = 100;
+        final int maxPipelineSize = 10;
+        final int maxOperations = 500;
+        final Random rand = new Random();
+
+
+        for (int operationIter = 0; operationIter < maxOperations; operationIter++) {
+
             DynoJedisPipeline pipeline = client.pipelined();
+            int pipelineSize = 1 + rand.nextInt(maxPipelineSize) ;
 
-            // Map
-            // Map<String, String> map = new HashMap<String, String>();
-            // String value1 = generateValue(3);
-            // String value2 = generateValue(4);
-            // map.put("key__1", value1);
-            // map.put("key__2", value2);
-            // Response<String> hmsetResult = pipeline.hmset(("hash__" +
-            // i).getBytes(), bar);
+            // key to be used in pipeline
+            String key = "hash__" + rand.nextInt(maxNumKeys);
 
-            // Strings
-            String value1 = generateValue(3);
-            Response<String> resp = pipeline.set("DynoJedisDemo__key__" + i, value1);
+            // Map of field -> value
+            Map<String, String> map = new HashMap<>();
 
-            pipeline.sync();
+            // List of fields to be later used in HMGet
+            List<String> fields = new ArrayList<>(pipelineSize);
 
-            System.out.println(resp.get());
+            // Create a map of field -> value, also accumulate all fields
+            for (int pipelineIter = 0; pipelineIter < pipelineSize; pipelineIter++) {
+                String field = "field_" + pipelineIter;
+                fields.add(field);
+                String prefixSuffix = key + "_" + field;
+                String value = prefixSuffix + "_" + generateValue(pipelineIter) + "_" + prefixSuffix;
+                map.put(field, value);
+            }
+
+            Response<String> HMSetResult = pipeline.hmset(key, map);
+            Response<List<String>> HMGetResult = pipeline.hmget(key, fields.toArray(new String[fields.size()]));
+            try {
+                pipeline.sync();
+            } catch (Exception e) {
+                pipeline.discardPipelineAndReleaseConnection();
+                System.out.println("Exception while writing key " + key + " fields: " + fields);
+                throw e;
+            }
+
+            if (!HMSetResult.get().equals("OK")) {
+                System.out.println("Result mismatch for HMSet key: '" + key + "' fields: '" + fields + "' result: '" + HMSetResult.get() + "'");
+            }
+            if ((operationIter % 100) == 0) {
+                System.out.println("\n>>>>>>>> " + operationIter + " operations performed....");
+            }
+            List<String> HMGetResultStrings = HMGetResult.get();
+            for (int i = 0; i < HMGetResultStrings.size(); i++) {
+                String prefixSuffix = key + "_" + fields.get(i);
+                String value = HMGetResultStrings.get(i);
+                if (value.startsWith(prefixSuffix) && value.endsWith(prefixSuffix)) {
+                    continue;
+                }
+                else {
+                    System.out.println("Result mismatch key: '" + key + "' field: '" + fields.get(i) + "' value: '" + HMGetResultStrings.get(i) + "'");
+                }
+
+            }
         }
-
-        System.out.println("Reading keys");
-
-        for (int i = 0; i < 3; i++) {
-            DynoJedisPipeline readPipeline = client.pipelined();
-            Response<String> resp = readPipeline.get("DynoJedisDemo__key__" + i);
-            readPipeline.sync();
-            System.out.println("Result => " + i + ") " + resp.get());
-        }
+        System.out.println("Compression test Done: " + maxOperations + " pipeline operations performed.");
 
     }
 
@@ -922,6 +952,10 @@ public class DynoJedisDemo {
                 demo.runSScanTest(true);
                 break;
             }
+            case 9: {
+                    demo.runCompressionInPipelineTest();
+                    break;
+                }
             }
 
             // demo.runSinglePipeline();
