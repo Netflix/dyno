@@ -103,6 +103,12 @@ public interface ConnectionPoolConfiguration {
      * Returns the {@link TokenMapSupplier} to use for this connection pool.
      */
     TokenMapSupplier getTokenSupplier();
+            
+    /**
+     * Returns the {@link HashPartitioner} for this connection pool.
+     * @return 
+     */
+    HashPartitioner getHashPartitioner();
     
     /**
      * Returns the interval for which pings are issued on connections.

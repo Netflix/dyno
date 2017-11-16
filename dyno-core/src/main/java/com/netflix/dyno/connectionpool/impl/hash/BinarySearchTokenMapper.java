@@ -70,7 +70,7 @@ public class BinarySearchTokenMapper implements HashPartitioner {
 		return tokenMap.get(token);
 	}
 
-	public void initSearchMecahnism(Collection<HostToken> hostTokens) {
+	public void initSearchMechanism(Collection<HostToken> hostTokens) {
 
 		for (HostToken hostToken : hostTokens) {
 			tokenMap.put(hostToken.getToken(), hostToken);

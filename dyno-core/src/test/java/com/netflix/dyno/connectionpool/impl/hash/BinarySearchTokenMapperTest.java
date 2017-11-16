@@ -33,7 +33,7 @@ public class BinarySearchTokenMapperTest {
 	public void testSearchToken() throws Exception {
 
 		final BinarySearchTokenMapper tokenMapper = new BinarySearchTokenMapper(new Murmur1HashPartitioner());
-		tokenMapper.initSearchMecahnism(getTestTokens());
+		tokenMapper.initSearchMechanism(getTestTokens());
 
 		Long failures = 0L;
 
@@ -57,7 +57,7 @@ public class BinarySearchTokenMapperTest {
 	public void testAddToken() throws Exception {
 
 		final BinarySearchTokenMapper tokenMapper = new BinarySearchTokenMapper(new Murmur1HashPartitioner());
-		tokenMapper.initSearchMecahnism(getTestTokens());
+		tokenMapper.initSearchMechanism(getTestTokens());
 
 		Long failures = 0L;
 
@@ -82,7 +82,7 @@ public class BinarySearchTokenMapperTest {
 	public void testRemoveToken() throws Exception {
 
 		final BinarySearchTokenMapper tokenMapper = new BinarySearchTokenMapper(new Murmur1HashPartitioner());
-		tokenMapper.initSearchMecahnism(getTestTokens());
+		tokenMapper.initSearchMechanism(getTestTokens());
 
 		Long failures = 0L;
 
