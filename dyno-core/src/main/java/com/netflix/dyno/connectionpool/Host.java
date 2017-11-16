@@ -22,15 +22,13 @@ import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
 /**
  * Class encapsulating information about a host.
  *
- * This is immutable except for the host status.
- * Note that the HostSupplier may not know the Dynomite port,
- * whereas the Host object created by the load balancer
- * may receive the port the cluster_describe REST call.
- * Hence, we must not use the port in the equality and hashCode
- * calculations.
+ * This is immutable except for the host status. Note that the HostSupplier may
+ * not know the Dynomite port, whereas the Host object created by the load
+ * balancer may receive the port the cluster_describe REST call. Hence, we must
+ * not use the port in the equality and hashCode calculations.
  *
  * @author poberai
- * @author ipapapanagiotou
+ * @author ipapapa
  *
  */
 public class Host implements Comparable<Host> {
@@ -44,6 +42,7 @@ public class Host implements Comparable<Host> {
     private final InetSocketAddress socketAddress;
     private final String rack;
     private final String datacenter;
+    private String hashtag;
     private Status status = Status.Down;
     private String password = null;
 
@@ -52,32 +51,46 @@ public class Host implements Comparable<Host> {
     }
 
     public Host(String hostname, int port, String rack) {
-        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down);
+        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down, null);
     }
 
     public Host(String hostname, String rack, Status status) {
-        this(hostname, null, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status);
+        this(hostname, null, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
     }
 
     public Host(String hostname, int port, String rack, Status status) {
-        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), status);
+        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
+    }
+
+    public Host(String hostname, int port, String rack, Status status, String hashtag) {
+        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
     }
 
     public Host(String hostname, String ipAddress, int port, String rack) {
-        this(hostname, ipAddress, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down);
+        this(hostname, ipAddress, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down, null);
     }
 
     public Host(String hostname, String ipAddress, String rack, Status status) {
-        this(hostname, ipAddress, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status);
+        this(hostname, ipAddress, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
     }
 
-    public Host(String name, String ipAddress, int port, String rack, String datacenter, Status status) {
+    public Host(String hostname, String ipAddress, String rack, Status status, String hashtag) {
+        this(hostname, ipAddress, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
+    }
+
+    public Host(String hostname, String ipAddress, int port, String rack, String datacenter, Status status) {
+        this(hostname, ipAddress, port, rack, datacenter, status, null);
+    }
+
+    public Host(String name, String ipAddress, int port, String rack, String datacenter, Status status,
+            String hashtag) {
         this.hostname = name;
         this.ipAddress = ipAddress;
         this.port = port;
         this.rack = rack;
         this.status = status;
         this.datacenter = datacenter;
+        this.hashtag = hashtag;
 
         // Used for the unit tests to prevent host name resolution
         if (port != -1) {
@@ -122,6 +135,14 @@ public class Host implements Comparable<Host> {
         return rack;
     }
 
+    public String getHashtag() {
+        return hashtag;
+    }
+
+    public void setHashtag(String hashtag) {
+        this.hashtag = hashtag;
+    }
+
     public Host setStatus(Status condition) {
         status = condition;
         return this;
@@ -136,9 +157,9 @@ public class Host implements Comparable<Host> {
     }
 
     /**
-     * Equality checks will fail in collections between Host objects
-     * created from the HostSupplier, which may not know the Dynomite port, and
-     * the Host objects created by the load balancer.
+     * Equality checks will fail in collections between Host objects created
+     * from the HostSupplier, which may not know the Dynomite port, and the Host
+     * objects created by the load balancer.
      */
     @Override
     public int hashCode() {
@@ -161,6 +182,7 @@ public class Host implements Comparable<Host> {
             return false;
 
         Host other = (Host) obj;
+        
         boolean equals = true;
 
         equals &= (hostname != null) ? hostname.equals(other.hostname) : other.hostname == null;
@@ -180,7 +202,9 @@ public class Host implements Comparable<Host> {
 
     @Override
     public String toString() {
-        return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: " + rack
-                + ", datacenter: " + datacenter + ", status: " + status.name() + "]";
+
+        return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: "
+                + rack + ", datacenter: " + datacenter + ", status: " + status.name() + ", hashtag=" + hashtag + "]";
+
     }
 }

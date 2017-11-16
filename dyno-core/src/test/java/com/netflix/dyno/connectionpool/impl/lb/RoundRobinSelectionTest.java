@@ -33,122 +33,124 @@ import com.netflix.dyno.connectionpool.HostConnectionPool;
 
 public class RoundRobinSelectionTest {
 
-	/**
-	cqlsh:dyno_bootstrap> select "availabilityZone","hostname","token" from tokens where "appId" = 'dynomite_redis_puneet';
+    /**
+     * cqlsh:dyno_bootstrap> select "availabilityZone","hostname","token" from
+     * tokens where "appId" = 'dynomite_redis_puneet';
+     * 
+     * availabilityZone | hostname | token
+     * ------------------+--------------------------------------------+------------
+     * us-east-1c | ec2-54-83-179-213.compute-1.amazonaws.com | 1383429731
+     * us-east-1c | ec2-54-224-184-99.compute-1.amazonaws.com | 309687905
+     * us-east-1c | ec2-54-91-190-159.compute-1.amazonaws.com | 3530913377
+     * us-east-1c | ec2-54-81-31-218.compute-1.amazonaws.com | 2457171554
+     * us-east-1e | ec2-54-198-222-153.compute-1.amazonaws.com | 309687905
+     * us-east-1e | ec2-54-198-239-231.compute-1.amazonaws.com | 2457171554
+     * us-east-1e | ec2-54-226-212-40.compute-1.amazonaws.com | 1383429731
+     * us-east-1e | ec2-54-197-178-229.compute-1.amazonaws.com | 3530913377
+     * 
+     * cqlsh:dyno_bootstrap>
+     */
 
-		availabilityZone | hostname                                   | token
-		------------------+--------------------------------------------+------------
-			us-east-1c |  ec2-54-83-179-213.compute-1.amazonaws.com | 1383429731
-			us-east-1c |  ec2-54-224-184-99.compute-1.amazonaws.com |  309687905
-			us-east-1c |  ec2-54-91-190-159.compute-1.amazonaws.com | 3530913377
-			us-east-1c |   ec2-54-81-31-218.compute-1.amazonaws.com | 2457171554
-			us-east-1e | ec2-54-198-222-153.compute-1.amazonaws.com |  309687905
-			us-east-1e | ec2-54-198-239-231.compute-1.amazonaws.com | 2457171554
-			us-east-1e |  ec2-54-226-212-40.compute-1.amazonaws.com | 1383429731
-			us-east-1e | ec2-54-197-178-229.compute-1.amazonaws.com | 3530913377
+    private final HostToken h1 = new HostToken(309687905L, new Host("h1", -1, "r1", Status.Up));
+    private final HostToken h2 = new HostToken(1383429731L, new Host("h2", -1, "r1", Status.Up));
+    private final HostToken h3 = new HostToken(2457171554L, new Host("h3", -1, "r1", Status.Up));
+    private final HostToken h4 = new HostToken(3530913377L, new Host("h4", -1, "r1", Status.Up));
 
-	cqlsh:dyno_bootstrap> 
-	 */
+    private final BaseOperation<Integer, Integer> testOperation = new BaseOperation<Integer, Integer>() {
 
+        @Override
+        public String getName() {
+            return "TestOperation";
+        }
 
-	private final HostToken h1 = new HostToken(309687905L, new Host("h1", -1, "r1", Status.Up));
-	private final HostToken h2 = new HostToken(1383429731L, new Host("h2", -1, "r1", Status.Up));
-	private final HostToken h3 = new HostToken(2457171554L, new Host("h3", -1, "r1", Status.Up));
-	private final HostToken h4 = new HostToken(3530913377L, new Host("h4", -1, "r1", Status.Up));
+        @Override
+        public String getKey() {
+            return null;
+        }
+    };
 
-	private final BaseOperation<Integer, Integer> testOperation = new BaseOperation<Integer, Integer>() {
+    @Test
+    public void testRoundRobin() throws Exception {
 
-		@Override
-		public String getName() {
-			return "TestOperation";
-		}
+        TreeMap<HostToken, HostConnectionPool<Integer>> pools = new TreeMap<HostToken, HostConnectionPool<Integer>>(
+                new Comparator<HostToken>() {
 
-		@Override
-		public String getKey() {
-			return null;
-		}
-	};
+                    @Override
+                    public int compare(HostToken o1, HostToken o2) {
+                        return o1.getHost().getHostAddress().compareTo(o2.getHost().getHostAddress());
+                    }
+                });
 
-	@Test
-	public void testRoundRobin() throws Exception {
+        // instantiate 3 host connection pools
+        pools.put(h1, getMockHostConnectionPool(h1));
+        pools.put(h2, getMockHostConnectionPool(h2));
+        pools.put(h3, getMockHostConnectionPool(h3));
 
-		TreeMap<HostToken, HostConnectionPool<Integer>> pools = new TreeMap<HostToken, HostConnectionPool<Integer>>(new Comparator<HostToken>() {
+        RoundRobinSelection<Integer> rrSelection = new RoundRobinSelection<Integer>();
+        rrSelection.initWithHosts(pools);
 
-			@Override
-			public int compare(HostToken o1, HostToken o2) {
-				return o1.getHost().getHostAddress().compareTo(o2.getHost().getHostAddress());
-			}
-		});
+        Map<String, Integer> result = new HashMap<String, Integer>();
 
-		// instantiate 3 host connection pools
-		pools.put(h1, getMockHostConnectionPool(h1));
-		pools.put(h2, getMockHostConnectionPool(h2));
-		pools.put(h3, getMockHostConnectionPool(h3));
+        runTest(300, result, rrSelection);
+        verifyTest(result, hostCount("h1", 100), hostCount("h2", 100), hostCount("h3", 100));
 
-		RoundRobinSelection<Integer> rrSelection = new RoundRobinSelection<Integer>();
-		rrSelection.initWithHosts(pools);
+        // Add a new host
+        rrSelection.addHostPool(h4, getMockHostConnectionPool(h4));
 
-		Map<String, Integer> result = new HashMap<String, Integer>();
+        runTest(400, result, rrSelection);
+        verifyTest(result, hostCount("h1", 200), hostCount("h2", 200), hostCount("h3", 200), hostCount("h4", 100));
 
-		runTest(300, result, rrSelection);
-		verifyTest(result, hostCount("h1", 100), hostCount("h2", 100), hostCount("h3", 100));
+        // remove an old host
+        rrSelection.removeHostPool(h2);
 
-		// Add a new host
-		rrSelection.addHostPool(h4, getMockHostConnectionPool(h4));
+        runTest(600, result, rrSelection);
+        verifyTest(result, hostCount("h1", 400), hostCount("h2", 200), hostCount("h3", 400), hostCount("h4", 300));
+    }
 
-		runTest(400, result, rrSelection);
-		verifyTest(result, hostCount("h1", 200), hostCount("h2", 200), hostCount("h3", 200), hostCount("h4", 100));
+    private void runTest(int iterations, Map<String, Integer> result, RoundRobinSelection<Integer> rrSelection) {
 
-		// remove an old host
-		rrSelection.removeHostPool(h2);
+        for (int i = 1; i <= iterations; i++) {
 
-		runTest(600, result, rrSelection);
-		verifyTest(result, hostCount("h1", 400), hostCount("h2", 200), hostCount("h3", 400), hostCount("h4", 300));
-	}
+            HostConnectionPool<Integer> pool = rrSelection.getPoolForOperation(testOperation, null);
+            String hostName = pool.getHost().getHostAddress();
 
-	private void runTest(int iterations, Map<String, Integer> result, RoundRobinSelection<Integer> rrSelection) {
+            Integer count = result.get(hostName);
+            if (count == null) {
+                count = 0;
+            }
+            result.put(hostName, ++count);
+        }
+    }
 
-		for (int i=1; i<=iterations; i++) {
+    private void verifyTest(Map<String, Integer> result, HostCount... hostCounts) {
 
-			HostConnectionPool<Integer> pool = rrSelection.getPoolForOperation(testOperation);
-			String hostName = pool.getHost().getHostAddress();
+        for (HostCount hostCount : hostCounts) {
+            Integer resultCount = result.get(hostCount.host);
+            Assert.assertEquals(hostCount.count, resultCount);
+        }
+    }
 
-			Integer count = result.get(hostName);
-			if (count == null) {
-				count = 0;
-			}
-			result.put(hostName, ++count);
-		}
-	}
+    private static class HostCount {
+        private final String host;
+        private final Integer count;
 
-	private void verifyTest(Map<String, Integer> result, HostCount ... hostCounts) {
+        private HostCount(String host, Integer count) {
+            this.host = host;
+            this.count = count;
+        }
+    }
 
-		for (HostCount hostCount : hostCounts) {
-			Integer resultCount = result.get(hostCount.host);
-			Assert.assertEquals(hostCount.count, resultCount);
-		}
-	}
+    private HostCount hostCount(String host, Integer count) {
+        return new HostCount(host, count);
+    }
 
-	private static class HostCount {
-		private final String host; 
-		private final Integer count; 
-		private HostCount(String host, Integer count) {
-			this.host = host;
-			this.count = count;
-		}
-	}
+    @SuppressWarnings("unchecked")
+    private HostConnectionPool<Integer> getMockHostConnectionPool(final HostToken hostToken) {
 
-	private HostCount hostCount(String host, Integer count) {
-		return new HostCount(host, count);
-	}
+        HostConnectionPool<Integer> mockHostPool = mock(HostConnectionPool.class);
+        when(mockHostPool.isActive()).thenReturn(true);
+        when(mockHostPool.getHost()).thenReturn(hostToken.getHost());
 
-	@SuppressWarnings("unchecked")
-	private HostConnectionPool<Integer> getMockHostConnectionPool(final HostToken hostToken) {
-
-		HostConnectionPool<Integer> mockHostPool = mock(HostConnectionPool.class);
-		when(mockHostPool.isActive()).thenReturn(true);
-		when(mockHostPool.getHost()).thenReturn(hostToken.getHost());
-
-		return mockHostPool;
-	}
+        return mockHostPool;
+    }
 }

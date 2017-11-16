@@ -37,11 +37,12 @@ public interface HostSelectionStrategy<CL> {
 	/**
 	 * 
 	 * @param op
+	 * @param hashtag
 	 * @return
 	 * @throws NoAvailableHostsException
 	 */
-	HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op) throws NoAvailableHostsException;
-
+         HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op, String hashtag)
+            throws NoAvailableHostsException;
 	/**
 	 * 
 	 * @param ops
@@ -113,5 +114,7 @@ public interface HostSelectionStrategy<CL> {
 		 */
 		public HostSelectionStrategy<CL> vendPoolSelectionStrategy();
 	}
+
+
 
 }

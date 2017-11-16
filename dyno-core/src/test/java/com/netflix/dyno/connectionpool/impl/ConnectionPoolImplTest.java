@@ -718,6 +718,7 @@ public class ConnectionPoolImplTest {
 									public String getKey() {
 										return "TestOperation";
 									}
+
 								});
 							} catch (DynoException e) {
 //								System.out.println("FAILED Test Worker operation: " + e.getMessage());
