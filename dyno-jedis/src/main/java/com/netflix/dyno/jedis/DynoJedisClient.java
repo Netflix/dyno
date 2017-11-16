@@ -3630,10 +3630,16 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             List<HostToken> hostTokens;
             if (tokenMapSupplier != null) {
                 hostTokens = tokenMapSupplier.getTokens(hostSet);
+                /* Dyno cannot reach the TokenMapSupplier endpoint, 
+                 * therefore no nodes can be retrieved.
+                 */
+                if (hostTokens.isEmpty()) {
+                    throw new DynoConnectException("No hosts in the TokenMapSupplier");
+                }
             } else {
                 throw new DynoConnectException("TokenMapSupplier not provided");
             }
-
+            
             String hashtag = hostTokens.get(0).getHost().getHashtag();
             short numHosts = 0;
             // Update inner state with the host tokens.
