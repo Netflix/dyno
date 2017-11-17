@@ -42,10 +42,12 @@ import java.io.IOException;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.commons.lang3.ArrayUtils;
 
 import static com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.CompressionStrategy;
 
-public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, MultiKeyCommands {
+public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, MultiKeyCommands,
+        ScriptingCommands {
 
     private static final Logger Logger = org.slf4j.LoggerFactory.getLogger(DynoJedisClient.class);
 
@@ -427,6 +429,62 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             }
 
         });
+    }
+
+    @Override
+    public Object eval(String script, int keyCount, String... params) { return d_eval(script, keyCount, params).getResult(); }
+
+    public OperationResult<Object> d_eval(final String script, final int keyCount, final String... params) {
+        if (keyCount == 0) {
+            throw new DynoException("Need at least one key in script");
+        }
+        return connPool.executeWithFailover(new BaseKeyOperation<Object>(params[0], OpName.EVAL) {
+            @Override
+            public Object execute(Jedis client, ConnectionContext state) {
+                return client.eval(script, keyCount, params);
+            }
+        });
+    }
+
+    @Override
+    public Object eval(String script, List<String> keys, List<String> args) {
+        String[] params = (String[])ArrayUtils.addAll(keys.toArray(), args.toArray());
+        return eval(script, keys.size(), params);
+    }
+
+    @Override
+    public Object eval(String script) {
+        return eval(script, 0);
+    }
+
+    @Override
+    public Object evalsha(String sha1, int keyCount, String... params) {
+        throw new UnsupportedOperationException("This function is Not Implemented. Please use eval instead.");
+    }
+
+    @Override
+    public Object evalsha(String sha1, List<String> keys, List<String> args) {
+        throw new UnsupportedOperationException("This function is Not Implemented. Please use eval instead.");
+    }
+
+    @Override
+    public Object evalsha(String script) {
+        throw new UnsupportedOperationException("This function is Not Implemented. Please use eval instead.");
+    }
+
+    @Override
+    public Boolean scriptExists(String sha1) {
+        throw new UnsupportedOperationException("This function is Not Implemented");
+    }
+
+    @Override
+    public List<Boolean> scriptExists(String... sha1) {
+        throw new UnsupportedOperationException("This function is Not Implemented");
+    }
+
+    @Override
+    public String scriptLoad(String script) {
+        throw new UnsupportedOperationException("This function is Not Implemented");
     }
 
     @Override

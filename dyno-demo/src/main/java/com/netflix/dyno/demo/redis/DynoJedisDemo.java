@@ -862,6 +862,19 @@ public class DynoJedisDemo {
         }
     };
 
+    public void runEvalTest() throws Exception {
+
+        client.set("EvalTest", "true");
+        List<String> keys = Arrays.asList("EvalTest");
+        List<String> args = Arrays.asList("true");
+        Object obj = client.eval("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end", keys, args);
+        if (obj.toString().equals("1"))
+            System.out.println("EVAL Test Succeeded");
+        else
+            System.out.println("EVAL Test Failed");
+
+    }
+
     /**
      *
      * @param args
@@ -954,6 +967,10 @@ public class DynoJedisDemo {
             }
             case 9: {
                     demo.runCompressionInPipelineTest();
+                    break;
+                }
+            case 10: {
+                    demo.runEvalTest();
                     break;
                 }
             }
