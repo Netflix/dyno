@@ -42,14 +42,17 @@ import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancingStrategy;
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
+import com.netflix.dyno.connectionpool.HashPartitioner;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.CountingConnectionPoolMonitor;
+import com.netflix.dyno.connectionpool.impl.hash.Murmur3HashPartitioner;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
+import static org.junit.Assert.assertEquals;
 
 public class HostSelectionWithFallbackTest {
 
@@ -67,7 +70,7 @@ public class HostSelectionWithFallbackTest {
 			return "11";
 		}
 	};
-
+        
 	private final ConnectionPoolConfigurationImpl cpConfig = new ConnectionPoolConfigurationImpl("test");
 	private final ConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
 
@@ -84,7 +87,7 @@ public class HostSelectionWithFallbackTest {
 	@Before
 	public void beforeTest() {
 		cpConfig.setLocalRack("localTestRack");
-        cpConfig.setLocalDataCenter("localTestRack");
+                cpConfig.setLocalDataCenter("localTestRack");
 		cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.RoundRobin);
 		cpConfig.withTokenSupplier(getTokenMapSupplier());
 	}
@@ -526,6 +529,28 @@ public class HostSelectionWithFallbackTest {
 
         Assert.assertEquals(3, rf);
 	}
+        
+    @Test
+    public void testChangingHashPartitioner() {
+        cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware);
+        cpConfig.withTokenSupplier(getTokenMapSupplier());
+        cpConfig.withHashPartitioner(getMockHashPartitioner(1000000000L));
+
+        HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
+        Map<Host, HostConnectionPool<Integer>> pools = new HashMap<Host, HostConnectionPool<Integer>>();
+
+        for (Host host : hosts) {
+            poolStatus.put(host, new AtomicBoolean(true));
+            pools.put(host, getMockHostConnectionPool(host, poolStatus.get(host)));
+        }
+
+        selection.initWithHosts(pools); 
+
+        Connection<Integer> connection = selection.getConnection(testOperation, 10, TimeUnit.MILLISECONDS);
+
+        // Verify that h1 has been selected instead of h2
+        assertEquals("h1", connection.getHost().getHostAddress());
+    }     
 
 	private Collection<String> runConnectionsToRingTest(HostSelectionWithFallback<Integer> selection) {
 
@@ -538,7 +563,7 @@ public class HostSelectionWithFallbackTest {
 			}
 		});
 
-	}
+	}         
 
 	private void verifyExactly(Collection<String> resultCollection, String ... hostnames) {
 
@@ -645,5 +670,29 @@ public class HostSelectionWithFallbackTest {
 
 		};
 	}
+        
+        private HashPartitioner getMockHashPartitioner(final Long hash) {
+            return new HashPartitioner() {
+                @Override
+                public Long hash(int key) {
+                    return hash;
+                }
+
+                @Override
+                public Long hash(long key) {
+                    return hash;
+                }
+
+                @Override
+                public Long hash(String key) {
+                    return hash;
+                }
+
+                @Override
+                public HostToken getToken(Long keyHash) {
+                    throw new RuntimeException("NotImplemented");
+                }
+            };
+        }
 }
 

@@ -27,6 +27,7 @@ import org.slf4j.Logger;
 
 
 import com.netflix.dyno.connectionpool.BaseOperation;
+import com.netflix.dyno.connectionpool.HashPartitioner;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.Operation;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
@@ -51,10 +52,15 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
     private final BinarySearchTokenMapper tokenMapper;
 
     private final ConcurrentHashMap<Long, HostConnectionPool<CL>> tokenPools = new ConcurrentHashMap<Long, HostConnectionPool<CL>>();
+  
+  	public TokenAwareSelection() {
+		
+		    this(new Murmur1HashPartitioner());
+	  }
+        
+    public TokenAwareSelection(HashPartitioner hashPartitioner) {
 
-    public TokenAwareSelection() {
-
-        this.tokenMapper = new BinarySearchTokenMapper(new Murmur1HashPartitioner());
+        this.tokenMapper = new BinarySearchTokenMapper(hashPartitioner);
     }
 
     @Override
@@ -69,7 +75,7 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 
         }));
 
-        this.tokenMapper.initSearchMecahnism(hPools.keySet());
+        this.tokenMapper.initSearchMechanism(hPools.keySet());
     }
 
     /**
@@ -129,44 +135,45 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
     @Override
     public boolean addHostPool(HostToken hostToken, HostConnectionPool<CL> hostPool) {
 
-        HostConnectionPool<CL> prevPool = tokenPools.put(hostToken.getToken(), hostPool);
-        if (prevPool == null) {
-            tokenMapper.addHostToken(hostToken);
-            return true;
-        } else {
-            return false;
-        }
+      HostConnectionPool<CL> prevPool = tokenPools.put(hostToken.getToken(), hostPool);
+      if (prevPool == null) {
+        tokenMapper.addHostToken(hostToken);
+        return true;
+      }  else {
+        return false;
+      }
     }
 
     @Override
     public boolean removeHostPool(HostToken hostToken) {
 
-        HostConnectionPool<CL> prev = tokenPools.get(hostToken.getToken());
-        if (prev != null) {
-            tokenPools.remove(hostToken.getToken());
-            return true;
-        } else {
-            return false;
-        }
+      HostConnectionPool<CL> prev = tokenPools.get(hostToken.getToken());
+      if (prev != null) {
+        tokenPools.remove(hostToken.getToken());
+        return true;
+      } else {
+        return false;
+      }
     }
 
     @Override
     public boolean isTokenAware() {
-        return true;
+      return true;
     }
 
     @Override
     public boolean isEmpty() {
-        return tokenPools.isEmpty();
+      return tokenPools.isEmpty();
     }
 
     public Long getKeyHash(String key) {
-        Long keyHash = tokenMapper.hash(key);
-        return keyHash;
+      Long keyHash = tokenMapper.hash(key);
+      return keyHash;
     }
 
+    @Override
     public String toString() {
-        return "TokenAwareSelection: " + tokenMapper.toString();
+      return "TokenAwareSelection: " + tokenMapper.toString();
     }
 
 }

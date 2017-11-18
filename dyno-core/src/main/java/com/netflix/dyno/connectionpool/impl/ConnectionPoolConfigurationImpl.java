@@ -20,6 +20,7 @@ import java.util.List;
 
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
 import com.netflix.dyno.connectionpool.ErrorRateMonitorConfig;
+import com.netflix.dyno.connectionpool.HashPartitioner;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.RetryPolicy;
 import com.netflix.dyno.connectionpool.RetryPolicy.RetryPolicyFactory;
@@ -52,8 +53,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     private HostSupplier hostSupplier;
 	private TokenMapSupplier tokenSupplier;
 	private HostConnectionPoolFactory hostConnectionPoolFactory;
+  private HashPartitioner hashPartitioner;
 	private String hashtag;
-
 	private final String name;
 	private int maxConnsPerHost = DEFAULT_MAX_CONNS_PER_HOST; 
 	private int maxTimeoutWhenExhausted = DEFAULT_MAX_TIMEOUT_WHEN_EXHAUSTED; 
@@ -120,6 +121,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         this.socketTimeout = config.getSocketTimeout();
         this.errorMonitorFactory = config.getErrorMonitorFactory();
         this.tokenSupplier = config.getTokenSupplier();
+        this.hashPartitioner = config.getHashPartitioner();        
         this.isDualWriteEnabled = config.isDualWriteEnabled();
         this.dualWriteClusterName = config.getDualWriteClusterName();
         this.dualWritePercentage = config.getDualWritePercentage();
@@ -255,6 +257,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 				", flushTimingsFrequencySeconds=" + flushTimingsFrequencySeconds +
 				", localZoneAffinity=" + localZoneAffinity +
 				", lbStrategy=" + lbStrategy +
+                                ", hashPartitioner=" + hashPartitioner + 
 				", localRack='" + localRack + '\'' +
 				", localDataCenter='" + localDataCenter + '\'' +
 				", failOnStartupIfNoHosts=" + failOnStartupIfNoHosts +
@@ -363,6 +366,15 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		tokenSupplier = tSupplier;
 		return this;
 	}
+        
+        public HashPartitioner getHashPartitioner() {
+                return hashPartitioner;
+        }
+        
+        public ConnectionPoolConfigurationImpl withHashPartitioner(HashPartitioner hPartitioner) {
+                hashPartitioner = hPartitioner;
+                return this;
+        }
 	
        public ConnectionPoolConfigurationImpl withHashtag(String htag) {
             hashtag = htag;
