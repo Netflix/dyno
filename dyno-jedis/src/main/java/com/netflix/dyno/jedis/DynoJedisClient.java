@@ -2396,23 +2396,74 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public Long zlexcount(String key, String min, String max) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return d_zlexcount(key, min, max).getResult();
+    }
+
+    public OperationResult<Long> d_zlexcount(final String key, final String min, final String max) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZLEXCOUNT) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.zlexcount(key, min, max);
+            }
+
+        });
     }
 
     @Override
     public Set<String> zrangeByLex(String key, String min, String max) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return d_zrangeByLex(key, min, max).getResult();
+    }
+
+    public OperationResult<Set<String>> d_zrangeByLex(final String key, final String min, final String max) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZRANGEBYLEX) {
+
+            @Override
+            public Set<String> execute(Jedis client, ConnectionContext state) {
+                return client.zrangeByLex(key, min, max);
+            }
+
+        });
     }
 
     @Override
     public Set<String> zrangeByLex(String key, String min, String max, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return d_zrangeByLex(key, min, max, offset, count).getResult();
     }
+
+    public OperationResult<Set<String>> d_zrangeByLex(final String key, final String min, final String max,
+                                                      final int offset, final int count) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZRANGEBYLEX) {
+
+            @Override
+            public Set<String> execute(Jedis client, ConnectionContext state) {
+                return client.zrangeByLex(key, min, max, offset, count);
+            }
+
+        });
+    }
+
 
     @Override
     public Long zremrangeByLex(String key, String min, String max) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return d_zremrangeByLex(key, min, max).getResult();
     }
+
+    public OperationResult<Long> d_zremrangeByLex(final String key, final String min, final String max) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZREMRANGEBYLEX) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.zremrangeByLex(key, min, max);
+            }
+
+        });
+    }
+
 
     public OperationResult<Long> d_zremrangeByScore(final String key, final String start, final String end) {
 
@@ -2718,12 +2769,37 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public Set<String> zrevrangeByLex(String key, String max, String min) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return d_zrevrangeByLex(key, max, min).getResult();
+    }
+
+    public OperationResult<Set<String>> d_zrevrangeByLex(final String key, final String max, final String min) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZREVRANGEBYLEX) {
+
+            @Override
+            public Set<String> execute(Jedis client, ConnectionContext state) {
+                return client.zrangeByLex(key, max, min);
+            }
+
+        });
     }
 
     @Override
     public Set<String> zrevrangeByLex(String key, String max, String min, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return d_zrevrangeByLex(key, max, min, offset, count).getResult();
+    }
+
+    public OperationResult<Set<String>> d_zrevrangeByLex(final String key, final String max, final String min,
+                                                         final int offset, final int count) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZREVRANGEBYLEX) {
+
+            @Override
+            public Set<String> execute(Jedis client, ConnectionContext state) {
+                return client.zrangeByLex(key, max, min, offset, count);
+            }
+
+        });
     }
 
     @Override
