@@ -84,7 +84,7 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
     @Override
     public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op, String hashtag) throws NoAvailableHostsException {
 
-        String key = op.getKey();
+        String key = op.getStringKey();
 
         HostToken hToken = null;
         if (hashtag == null || hashtag.isEmpty()) {            

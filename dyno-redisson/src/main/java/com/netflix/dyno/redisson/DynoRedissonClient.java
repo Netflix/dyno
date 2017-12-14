@@ -59,7 +59,7 @@ public class DynoRedissonClient {
             }
 
             @Override
-            public String getKey() {
+            public String getStringKey() {
                 return key;
             }
 
@@ -81,7 +81,7 @@ public class DynoRedissonClient {
             }
 
             @Override
-            public String getKey() {
+            public String getStringKey() {
                 return key;
             }
 
@@ -103,7 +103,7 @@ public class DynoRedissonClient {
             }
 
             @Override
-            public String getKey() {
+            public String getStringKey() {
                 return key;
             }
 
@@ -126,7 +126,7 @@ public class DynoRedissonClient {
             }
 
             @Override
-            public String getKey() {
+            public String getStringKey() {
                 return key;
             }
             

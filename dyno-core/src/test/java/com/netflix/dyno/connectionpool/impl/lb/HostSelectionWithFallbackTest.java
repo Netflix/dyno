@@ -66,7 +66,7 @@ public class HostSelectionWithFallbackTest {
 		}
 
 		@Override
-		public String getKey() {
+		public String getStringKey() {
 			return "11";
 		}
 	};

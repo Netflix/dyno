@@ -679,7 +679,7 @@ public class ConnectionPoolImplTest {
 			
 
 			@Override
-			public String getKey() {
+			public String getStringKey() {
 				return "TestOperation";
 			}
 		});
@@ -715,7 +715,7 @@ public class ConnectionPoolImplTest {
 									}
 
 									@Override
-									public String getKey() {
+									public String getStringKey() {
 										return "TestOperation";
 									}
 

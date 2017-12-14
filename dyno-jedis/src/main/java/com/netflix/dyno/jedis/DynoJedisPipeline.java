@@ -89,7 +89,7 @@ public class DynoJedisPipeline implements RedisPipeline, AutoCloseable {
                     }
 
                     @Override
-                    public String getKey() {
+                    public String getStringKey() {
                         return key;
                     }
 

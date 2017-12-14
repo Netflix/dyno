@@ -64,7 +64,7 @@ public class RoundRobinSelectionTest {
         }
 
         @Override
-        public String getKey() {
+        public String getStringKey() {
             return null;
         }
     };

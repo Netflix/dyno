@@ -106,7 +106,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         @Override
-        public String getKey() {
+        public String getStringKey() {
             return this.key;
         }
 
@@ -140,7 +140,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         @Override
-        public String getKey() {
+        public String getStringKey() {
             return this.keys.get(0);
         }
 
@@ -210,7 +210,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 }
             } catch (IOException e) {
                 Logger.warn(
-                        "UNABLE to compress [" + value + "] for key [" + getKey() + "]; sending value uncompressed");
+                        "UNABLE to compress [" + value + "] for key [" + getStringKey() + "]; sending value uncompressed");
             }
 
             return result;
@@ -272,7 +272,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 }
             } catch (IOException e) {
                 Logger.warn(
-                        "UNABLE to compress [" + value + "] for key [" + getKey() + "]; sending value uncompressed");
+                        "UNABLE to compress [" + value + "] for key [" + getStringKey() + "]; sending value uncompressed");
             }
 
             return result;

@@ -130,7 +130,7 @@ public class TokenAwareSelectionTest {
 			}
 
 			@Override
-			public String getKey() {
+			public String getStringKey() {
 				return "" + n;
 			}
 		};
@@ -146,7 +146,7 @@ public class TokenAwareSelectionTest {
 
 			String hostName = pool.getHost().getHostAddress();
 
-			verifyKeyHash(op.getKey(), hostName);
+			verifyKeyHash(op.getStringKey(), hostName);
 
 			Integer count = result.get(hostName);
 			if (count == null) {
@@ -166,7 +166,7 @@ public class TokenAwareSelectionTest {
 
 			int port = pool.getHost().getPort();
 
-			verifyKeyHashWithPort(op.getKey(), port);
+			verifyKeyHashWithPort(op.getStringKey(), port);
 
 			Integer count = result.get(port);
 			if (count == null) {

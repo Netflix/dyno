@@ -40,6 +40,6 @@ public interface BaseOperation<CL, R> {
      * 
      * @return String
      */
-    public String getKey();
+    public String getStringKey();
 
 }
