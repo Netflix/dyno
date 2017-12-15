@@ -22,9 +22,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.lang3.StringUtils;
-import org.slf4j.LoggerFactory;
-import org.slf4j.Logger;
-
 
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.HashPartitioner;
@@ -44,6 +41,7 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
  * owner for any key of an {@link Operation}
  * 
  * @author poberai
+ * @author ipapapa
  *
  * @param <CL>
  */
@@ -79,29 +77,45 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
     }
 
     /**
-     * If a hashtag is provided by Dynomite then we use that to create the key to hash.
+     * Identifying the proper pool for the operation. A couple of things that may affect the decision
+     * (a) hashtags: In this case we will construct the key by decomposing from the hashtag
+     * (b) type of key: string keys vs binary keys. 
+     * In binary keys hashtags do not really matter.
      */
     @Override
     public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op, String hashtag) throws NoAvailableHostsException {
 
         String key = op.getStringKey();
+        byte[] binaryKey = op.getBinaryKey();
 
         HostToken hToken = null;
-        if (hashtag == null || hashtag.isEmpty()) {            
-            hToken = this.getTokenForKey(key);
-        } else {  
-            String hashValue = StringUtils.substringBetween(key,Character.toString(hashtag.charAt(0)), Character.toString(hashtag.charAt(1)));
-            hToken = this.getTokenForKey(hashValue);
+        if (key != null) {
+        	  // If a hashtag is provided by Dynomite then we use that to create the key to hash.
+            if (hashtag == null || hashtag.isEmpty()) {            
+                hToken = this.getTokenForKey(key);
+            } else {  
+                String hashValue = StringUtils.substringBetween(key,Character.toString(hashtag.charAt(0)), Character.toString(hashtag.charAt(1)));
+                hToken = this.getTokenForKey(hashValue);
+            }
         }
+        else {
+        	// the key is binary 
+        	hToken = this.getTokenForKey(binaryKey);
+        }
+      
 
         HostConnectionPool<CL> hostPool = null;
         if (hToken != null) {
             hostPool = tokenPools.get(hToken.getToken());
         }
         
-        if (hostPool == null) {
+        if (hostPool == null && key !=null) {
              throw new NoAvailableHostsException(
                         "Could not find host connection pool for key: " + key + ", hash: " + tokenMapper.hash(key));
+        }
+        else if (hostPool == null) {
+            throw new NoAvailableHostsException(
+                    "Could not find host connection pool for key: " + binaryKey.toString() + ", hash: " + tokenMapper.hash(binaryKey));
         }
         return hostPool;
     }
@@ -128,6 +142,12 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
 
     @Override
     public HostToken getTokenForKey(String key) throws UnsupportedOperationException {
+        Long keyHash = tokenMapper.hash(key);
+        return tokenMapper.getToken(keyHash);
+    }
+    
+    @Override
+    public HostToken getTokenForKey(byte[] key) throws UnsupportedOperationException {
         Long keyHash = tokenMapper.hash(key);
         return tokenMapper.getToken(keyHash);
     }

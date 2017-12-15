@@ -40,6 +40,14 @@ public class Murmur1HashPartitioner implements HashPartitioner {
         byte[] b = bb.array();
         return UnsignedIntsUtils.toLong(Murmur1Hash.hash(b, b.length));
 	}
+    
+	@Override
+	public Long hash(byte[] key) {
+		if (key == null) {
+			return 0L;
+		}
+        return UnsignedIntsUtils.toLong(Murmur1Hash.hash(key, key.length));
+	}
 	
     @Override
 	public Long hash(long key) {
@@ -63,4 +71,6 @@ public class Murmur1HashPartitioner implements HashPartitioner {
 	public HostToken getToken(Long keyHash) {
 		throw new RuntimeException("NotImplemented");
 	}
+
+
 }

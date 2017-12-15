@@ -96,7 +96,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         private BaseKeyOperation(final byte[] k, final OpName o) {
             this.key = null;
-            this.binaryKey = null;
+            this.binaryKey = k;
             this.op = o;
         }
 

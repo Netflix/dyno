@@ -133,6 +133,11 @@ public class TokenAwareSelectionTest {
 			public String getStringKey() {
 				return "" + n;
 			}
+
+			@Override
+			public byte[] getBinaryKey() {
+				return null;
+			}
 		};
 	}
 

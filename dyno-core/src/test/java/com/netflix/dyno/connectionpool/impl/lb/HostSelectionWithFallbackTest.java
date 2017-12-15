@@ -49,7 +49,6 @@ import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.CountingConnectionPoolMonitor;
-import com.netflix.dyno.connectionpool.impl.hash.Murmur3HashPartitioner;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
 import static org.junit.Assert.assertEquals;
@@ -68,6 +67,11 @@ public class HostSelectionWithFallbackTest {
 		@Override
 		public String getStringKey() {
 			return "11";
+		}
+
+		@Override
+		public byte[] getBinaryKey() {
+			return null;
 		}
 	};
         
@@ -687,11 +691,18 @@ public class HostSelectionWithFallbackTest {
                 public Long hash(String key) {
                     return hash;
                 }
+                
+				@Override
+				public Long hash(byte[] key) {
+					return hash;
+				}
 
                 @Override
                 public HostToken getToken(Long keyHash) {
                     throw new RuntimeException("NotImplemented");
                 }
+
+
             };
         }
 }

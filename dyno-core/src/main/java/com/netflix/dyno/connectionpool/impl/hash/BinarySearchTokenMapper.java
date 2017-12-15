@@ -33,6 +33,7 @@ import com.netflix.dyno.connectionpool.impl.lb.HostToken;
  * The hash token to be generated from the key is generated using the HashPartitioner provided to this class. 
  *  
  * @author poberai
+ * @author ipapapa
  *
  */
 public class BinarySearchTokenMapper implements HashPartitioner {
@@ -58,6 +59,11 @@ public class BinarySearchTokenMapper implements HashPartitioner {
 
 	@Override
 	public Long hash(String key) {
+		return partitioner.hash(key);
+	}
+	
+	@Override 
+	public Long hash(byte[] key) {
 		return partitioner.hash(key);
 	}
 

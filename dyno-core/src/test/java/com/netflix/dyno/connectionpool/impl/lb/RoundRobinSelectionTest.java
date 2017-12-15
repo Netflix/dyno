@@ -67,6 +67,11 @@ public class RoundRobinSelectionTest {
         public String getStringKey() {
             return null;
         }
+
+		@Override
+		public byte[] getBinaryKey() {
+			return null;
+		}
     };
 
     @Test

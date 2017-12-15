@@ -162,6 +162,11 @@ public class TokenAwareSelectionHastagTest {
                 return n + "-{" + hashValue + "}";
             }
 
+			@Override
+			public byte[] getBinaryKey() {
+				return null;
+			}
+
         };
     }
 

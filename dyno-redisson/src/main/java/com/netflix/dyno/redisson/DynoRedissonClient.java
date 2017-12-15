@@ -68,6 +68,11 @@ public class DynoRedissonClient {
                     throws DynoException {
                 return new DecoratingListenableFuture<String>((client.get(key)));
             }
+
+			@Override
+			public byte[] getBinaryKey() {
+				return null;
+			}
         });
     }
 
@@ -90,6 +95,11 @@ public class DynoRedissonClient {
                     throws DynoException {
                 return new DecoratingListenableFuture<String>((client.get(key)));
             }
+
+			@Override
+			public byte[] getBinaryKey() {
+				return null;
+			}
         });
     }
 
@@ -112,6 +122,11 @@ public class DynoRedissonClient {
                     throws DynoException {
                 return new DecoratingListenableFuture<String>((client.set(key, value)));
             }
+
+			@Override
+			public byte[] getBinaryKey() {
+				return null;
+			}
         });
     }
     
@@ -135,6 +150,11 @@ public class DynoRedissonClient {
                     throws DynoException {
                 return new DecoratingListenableFuture<String>((client.set(key, value)));
             }
+
+			@Override
+			public byte[] getBinaryKey() {
+				return null;
+			}
         });
     }
 
