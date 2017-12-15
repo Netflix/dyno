@@ -803,10 +803,6 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
 	}
 
-	/**
-	 * This method is a BinaryRedisPipeline command which dyno does not yet properly
-	 * support, therefore the interface is not yet implemented.
-	 */
 	public Response<Map<byte[], byte[]>> hgetAll(final byte[] key) {
 		if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
 			return new PipelineOperation<Map<byte[], byte[]>>() {

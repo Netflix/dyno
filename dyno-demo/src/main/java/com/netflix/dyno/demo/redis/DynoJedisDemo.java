@@ -21,6 +21,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -170,13 +171,15 @@ public class DynoJedisDemo {
 		byte[] overallVal = new byte[firstWindow.length + secondWindow.length + thirdWindow.length
 				+ fourthWindow.length];
 
+        byte[] newKey = new byte[videoInt.length+locInt.length];
+		
 		// write
 		client.set(overallKey, overallVal);
-		System.out.println("Writing Key: " + overallKey.toString());
+		System.out.println("Writing Key: " +  new String(overallKey, Charset.forName("UTF-8")));
 		
 		// read
-		OperationResult<byte[]> result = client.d_get(overallKey);
-		System.out.println("Reading Key: " + overallKey.toString() + ", Value: " + result.getResult().toString() + " " + result.getNode());
+		OperationResult<byte[]> result = client.d_get(newKey);
+		System.out.println("Reading Key: " + new String(newKey, Charset.forName("UTF-8")) + ", Value: " + result.getResult().toString() + " " + result.getNode());
 		
 	}
 

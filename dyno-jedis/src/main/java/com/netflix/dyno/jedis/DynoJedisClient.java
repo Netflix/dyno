@@ -410,7 +410,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             public Long execute(Jedis client, ConnectionContext state) {
                 return client.expire(key, seconds);
             }
-
         });
     }
 
@@ -1421,7 +1420,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 }
             });
         }
-
     }
 
     @Override
@@ -2863,13 +2861,13 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     public OperationResult<byte[]> d_get(final byte[] key) {
-        return connPool.executeWithFailover(new BaseKeyOperation<byte[]>(key, OpName.GET) {
-            @Override
-            public byte[] execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.get(key);
-            }
-        });
 
+            return connPool.executeWithFailover(new BaseKeyOperation<byte[]>(key, OpName.GET) {
+                @Override
+                public byte[] execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.get(key);
+                }
+            });
     }
 
     @Override
@@ -2887,13 +2885,34 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public String set(byte[] key, byte[] value, byte[] nxxx, byte[] expx, long time) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public String set(final byte[] key, final byte[] value, final byte[] nxxx, final byte[] expx, final long time) {
+        return d_set(key, value, nxxx, expx, time).getResult();
     }
 
+    public OperationResult<String> d_set(final byte[] key, final byte[] value, final byte[] nxxx, final byte[] expx,
+            final long time) {
+            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.set(key, value, nxxx, expx, time);
+                }
+            });
+    }
+
+
     @Override
-    public Boolean exists(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Boolean exists(final byte[] key) {
+        return d_exists(key).getResult();
+    }
+
+    public OperationResult<Boolean> d_exists(final byte[] key) {
+        return connPool.executeWithFailover(new BaseKeyOperation<Boolean>(key, OpName.EXISTS) {
+
+            @Override
+            public Boolean execute(Jedis client, ConnectionContext state) {
+                return client.exists(key);
+            }
+        });
     }
 
     @Override
@@ -2907,9 +2926,21 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Long expire(byte[] key, int seconds) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long expire(final byte[] key, final int seconds) {
+        return d_expire(key, seconds).getResult();
     }
+
+    public OperationResult<Long> d_expire(final byte[] key, final int seconds) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.EXPIRE) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.expire(key, seconds);
+            }
+        });
+    }
+
 
     @Override
     public Long pexpire(byte[] key, final long milliseconds) {
@@ -2917,8 +2948,20 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Long expireAt(byte[] key, long unixTime) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long expireAt(final byte[] key, final long unixTime) {
+        return d_expireAt(key, unixTime).getResult();
+    }
+
+    public OperationResult<Long> d_expireAt(final byte[] key, final long unixTime) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.EXPIREAT) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.expireAt(key, unixTime);
+            }
+
+        });
     }
 
     @Override
@@ -2927,8 +2970,20 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Long ttl(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long ttl(final byte[] key) {
+        return d_ttl(key).getResult();
+    }
+
+    public OperationResult<Long> d_ttl(final byte[] key) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.TTL) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.ttl(key);
+            }
+
+        });
     }
 
     @Override
@@ -3002,13 +3057,31 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Long hset(byte[] key, byte[] field, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long hset(final byte[] key, final byte[] field, final byte[] value) {
+        return d_hset(key, field, value).getResult();
+    }
+
+    public OperationResult<Long> d_hset(final byte[] key, final byte[] field, final byte[] value) {
+            return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HSET) {
+                @Override
+                public Long execute(Jedis client, ConnectionContext state) {
+                    return client.hset(key, field, value);
+                }
+            });
     }
 
     @Override
-    public byte[] hget(byte[] key, byte[] field) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public byte[] hget(final byte[] key, final byte[] field) {
+        return d_hget(key, field).getResult();
+    }
+
+    public OperationResult<byte[]> d_hget(final byte[] key, final byte[] field) {
+            return connPool.executeWithFailover(new BaseKeyOperation<byte[]>(key, OpName.HGET) {
+                @Override
+                public byte[] execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.hget(key, field);
+                }
+            });       
     }
 
     @Override
@@ -3017,13 +3090,31 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public String hmset(byte[] key, Map<byte[], byte[]> hash) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public String hmset(final byte[] key, final Map<byte[], byte[]> hash) {
+        return d_hmset(key, hash).getResult();
+    }
+
+    public OperationResult<String> d_hmset(final byte[] key, final Map<byte[], byte[]> hash) {
+            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.HMSET) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) {
+                    return client.hmset(key, hash);
+                }
+            });
     }
 
     @Override
-    public List<byte[]> hmget(byte[] key, byte[]... fields) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public List<byte[]> hmget(final byte[] key, final byte[]... fields) {
+        return d_hmget(key, fields).getResult();
+    }
+
+    public OperationResult<List<byte[]>> d_hmget(final byte[] key, final byte[]... fields) {
+            return connPool.executeWithFailover(new BaseKeyOperation<List<byte[]>>(key, OpName.HMGET) {
+                @Override
+                public List<byte[]> execute(Jedis client, ConnectionContext state) {
+                    return client.hmget(key, fields);
+                }
+            });
     }
 
     @Override
@@ -3042,18 +3133,54 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Long hdel(byte[] key, byte[]... field) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long hdel(final byte[] key, final byte[]... fields) {
+        return d_hdel(key, fields).getResult();
+    }
+
+    public OperationResult<Long> d_hdel(final byte[] key, final byte[]... fields) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HDEL) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.hdel(key, fields);
+            }
+
+        });
     }
 
     @Override
-    public Long hlen(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long hlen(final byte[] key) {
+        return d_hlen(key).getResult();
+    }
+
+    public OperationResult<Long> d_hlen(final byte[] key) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HLEN) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.hlen(key);
+            }
+
+        });
     }
 
     @Override
-    public Set<byte[]> hkeys(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Set<byte[]> hkeys(final byte[] key) {
+        return d_hkeys(key).getResult();
+    }
+
+    public OperationResult<Set<byte[]>> d_hkeys(final byte[] key) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Set<byte[]>>(key, OpName.HKEYS) {
+
+            @Override
+            public Set<byte[]> execute(Jedis client, ConnectionContext state) {
+                return client.hkeys(key);
+            }
+
+        });
     }
 
     @Override
@@ -3062,8 +3189,17 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Map<byte[], byte[]> hgetAll(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Map<byte[], byte[]> hgetAll(final  byte[] key) {
+        return d_hgetAll(key).getResult();
+    }
+
+    public OperationResult<Map< byte[],  byte[]>> d_hgetAll(final  byte[] key) {
+            return connPool.executeWithFailover(new BaseKeyOperation<Map< byte[],  byte[]>>(key, OpName.HGETALL) {
+                @Override
+                public Map< byte[], byte[]> execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.hgetAll(key);
+                }
+            });
     }
 
     @Override
@@ -3117,23 +3253,69 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Long sadd(byte[] key, byte[]... member) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long sadd(final byte[] key, final byte[]... members) {
+        return d_sadd(key, members).getResult();
+    }
+
+    public OperationResult<Long> d_sadd(final byte[] key, final byte[]... members) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.SADD) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.sadd(key, members);
+            }
+
+        });
     }
 
     @Override
-    public Set<byte[]> smembers(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Set<byte[]> smembers(final byte[] key) {
+        return d_smembers(key).getResult();
+    }
+
+    public OperationResult<Set<byte[]>> d_smembers(final byte[] key) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Set<byte[]>>(key, OpName.SMEMBERS) {
+
+            @Override
+            public Set<byte[]> execute(Jedis client, ConnectionContext state) {
+                return client.smembers(key);
+            }
+        });
     }
 
     @Override
-    public Long srem(byte[] key, byte[]... member) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long srem(final byte[] key, final byte[]... members) {
+        return d_srem(key, members).getResult();
+    }
+
+    public OperationResult<Long> d_srem(final byte[] key, final byte[]... members) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.SREM) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.srem(key, members);
+            }
+
+        });
     }
 
     @Override
-    public byte[] spop(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public byte[] spop(final byte[] key) {
+        return d_spop(key).getResult();
+    }
+
+    public OperationResult< byte[]> d_spop(final byte[] key) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation< byte[]>(key, OpName.SPOP) {
+
+            @Override
+            public  byte[] execute(Jedis client, ConnectionContext state) {
+                return client.spop(key);
+            }
+        });
     }
 
     @Override
@@ -3142,10 +3324,21 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Long scard(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long scard(final byte[] key) {
+        return d_scard(key).getResult();
     }
 
+    public OperationResult<Long> d_scard(final byte[] key) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.SCARD) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.scard(key);
+            }
+
+        });
+    }
     @Override
     public Boolean sismember(byte[] key, byte[] member) {
         throw new UnsupportedOperationException("not yet implemented");
@@ -3162,8 +3355,20 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Long strlen(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long strlen(final byte[] key) {
+        return d_strlen(key).getResult();
+    }
+
+    public OperationResult<Long> d_strlen(final  byte[] key) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.STRLEN) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.strlen(key);
+            }
+
+        });
     }
 
     @Override
@@ -3217,15 +3422,39 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Long zcard(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long zcard(final byte[] key) {
+        return d_zcard(key).getResult();
+    }
+
+    public OperationResult<Long> d_zcard(final byte[] key) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZCARD) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.zcard(key);
+            }
+
+        });
     }
 
     @Override
-    public Double zscore(byte[] key, byte[] member) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Double zscore(final byte[] key, final byte[] member) {
+        return d_zscore(key, member).getResult();
     }
 
+    public OperationResult<Double> d_zscore(final byte[] key, final byte[] member) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Double>(key, OpName.ZSCORE) {
+
+            @Override
+            public Double execute(Jedis client, ConnectionContext state) {
+                return client.zscore(key, member);
+            }
+
+        });
+    }
+    
     @Override
     public List<byte[]> sort(byte[] key) {
         throw new UnsupportedOperationException("not yet implemented");
@@ -3397,8 +3626,20 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Long del(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long del(final byte[] key) {
+        return d_del(key).getResult();
+    }
+
+    public OperationResult<Long> d_del(final byte[] key) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.DEL) {
+
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.del(key);
+            }
+
+        });
     }
 
     @Override
@@ -3923,7 +4164,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public Long zadd(byte[] arg0, double arg1, byte[] arg2, ZAddParams arg3) {
         throw new UnsupportedOperationException("not yet implemented");
     }
-
+    
     @Override
     public Double zincrby(byte[] arg0, double arg1, byte[] arg2, ZIncrByParams arg3) {
         throw new UnsupportedOperationException("not yet implemented");
