@@ -20,6 +20,7 @@ package com.netflix.dyno.connectionpool;
  * connection pool
  * 
  * @author poberai
+ * @author ipapapa
  *
  * @param <CL>
  *            client
@@ -40,6 +41,13 @@ public interface BaseOperation<CL, R> {
      * 
      * @return String
      */
-    public String getKey();
+    public String getStringKey();
+    
+    /**
+     * The binary key for the operation
+     * 
+     * @return 
+     */
+    public byte[] getBinaryKey();
 
 }
