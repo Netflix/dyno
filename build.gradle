@@ -33,12 +33,15 @@ subprojects {
         testCompile "io.netty:netty-all:4.1.14.Final"
     }
 
-    project.tasks.withType(Javadoc) {
-        if (JavaVersion.current().isJava8Compatible()) {
-            //options.addStringOption('Xdoclint:none', '-quiet')
-            options.addBooleanOption('Xdoclint:none', true)
-        }
-    }
+    //project.tasks.withType(Javadoc) {
+    //    if (JavaVersion.current().isJava8Compatible()) {
+    //        //options.addStringOption('Xdoclint:none', '-quiet')
+    //        options.addBooleanOption('Xdoclint:none', true)
+    //        failOnError=false
+    //   }
+    //}
+    
+    tasks.withType(Javadoc).all { enabled = false }
 
 }
 project(':dyno-core') {
