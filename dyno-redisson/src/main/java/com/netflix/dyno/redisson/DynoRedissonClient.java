@@ -59,7 +59,7 @@ public class DynoRedissonClient {
             }
 
             @Override
-            public String getKey() {
+            public String getStringKey() {
                 return key;
             }
 
@@ -68,6 +68,11 @@ public class DynoRedissonClient {
                     throws DynoException {
                 return new DecoratingListenableFuture<String>((client.get(key)));
             }
+
+			@Override
+			public byte[] getBinaryKey() {
+				return null;
+			}
         });
     }
 
@@ -81,7 +86,7 @@ public class DynoRedissonClient {
             }
 
             @Override
-            public String getKey() {
+            public String getStringKey() {
                 return key;
             }
 
@@ -90,6 +95,11 @@ public class DynoRedissonClient {
                     throws DynoException {
                 return new DecoratingListenableFuture<String>((client.get(key)));
             }
+
+			@Override
+			public byte[] getBinaryKey() {
+				return null;
+			}
         });
     }
 
@@ -103,7 +113,7 @@ public class DynoRedissonClient {
             }
 
             @Override
-            public String getKey() {
+            public String getStringKey() {
                 return key;
             }
 
@@ -112,6 +122,11 @@ public class DynoRedissonClient {
                     throws DynoException {
                 return new DecoratingListenableFuture<String>((client.set(key, value)));
             }
+
+			@Override
+			public byte[] getBinaryKey() {
+				return null;
+			}
         });
     }
     
@@ -126,7 +141,7 @@ public class DynoRedissonClient {
             }
 
             @Override
-            public String getKey() {
+            public String getStringKey() {
                 return key;
             }
             
@@ -135,6 +150,11 @@ public class DynoRedissonClient {
                     throws DynoException {
                 return new DecoratingListenableFuture<String>((client.set(key, value)));
             }
+
+			@Override
+			public byte[] getBinaryKey() {
+				return null;
+			}
         });
     }
 

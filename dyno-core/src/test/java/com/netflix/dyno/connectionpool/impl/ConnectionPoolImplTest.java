@@ -679,8 +679,13 @@ public class ConnectionPoolImplTest {
 			
 
 			@Override
-			public String getKey() {
+			public String getStringKey() {
 				return "TestOperation";
+			}
+
+			@Override
+			public byte[] getBinaryKey() {
+				return null;
 			}
 		});
 	}
@@ -715,8 +720,13 @@ public class ConnectionPoolImplTest {
 									}
 
 									@Override
-									public String getKey() {
+									public String getStringKey() {
 										return "TestOperation";
+									}
+
+									@Override
+									public byte[] getBinaryKey() {
+										return null;
 									}
 
 								});

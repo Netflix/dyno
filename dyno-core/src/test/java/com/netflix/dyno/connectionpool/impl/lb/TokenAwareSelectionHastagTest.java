@@ -158,9 +158,14 @@ public class TokenAwareSelectionHastagTest {
             }
 
             @Override
-            public String getKey() {
+            public String getStringKey() {
                 return n + "-{" + hashValue + "}";
             }
+
+			@Override
+			public byte[] getBinaryKey() {
+				return null;
+			}
 
         };
     }
@@ -176,11 +181,11 @@ public class TokenAwareSelectionHastagTest {
             String hostName = pool.getHost().getHostAddress();
 
             if (testSelector == 0) {
-                verifyHashtagHash(op.getKey(), hostName, hashtag);
+                verifyHashtagHash(op.getStringKey(), hostName, hashtag);
             } else if (testSelector == 1) {
-                verifyEmptyHashtagHash(op.getKey(), hostName, hashtag);
+                verifyEmptyHashtagHash(op.getStringKey(), hostName, hashtag);
             } else {
-                verifyDifferentHashtagHash(op.getKey(), hostName, hashtag);
+                verifyDifferentHashtagHash(op.getStringKey(), hostName, hashtag);
             }
 
             Integer count = result.get(hostName);

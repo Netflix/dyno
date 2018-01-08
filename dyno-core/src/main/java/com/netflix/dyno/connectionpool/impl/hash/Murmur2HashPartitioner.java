@@ -62,6 +62,14 @@ public class Murmur2HashPartitioner implements HashPartitioner {
 		byte[] b = bb.array();
 		return  UnsignedIntsUtils.toLong(Murmur2Hash.hash32(b, b.length));
 	}
+	
+	@Override
+	public Long hash(byte[] key) {
+		if (key == null) {
+			return 0L;
+		}
+		return  UnsignedIntsUtils.toLong(Murmur2Hash.hash32(key, key.length));
+	}
 
 	@Override
 	public HostToken getToken(Long keyHash) {

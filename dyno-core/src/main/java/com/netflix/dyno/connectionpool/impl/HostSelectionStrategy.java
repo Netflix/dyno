@@ -81,6 +81,17 @@ public interface HostSelectionStrategy<CL> {
      */
     HostToken getTokenForKey(String key) throws UnsupportedOperationException;
 
+    
+    /**
+     * Finds the server Host that owns the specified binary key.
+     *
+     * @param key
+     * @return {@link HostToken}
+     * @throws UnsupportedOperationException for non-token aware load balancing strategies
+     */
+	HostToken getTokenForKey(byte[] key) throws UnsupportedOperationException;
+
+    
 	/**
 	 * Init the connection pool with the set of hosts provided
 	 * @param hostPools
@@ -114,6 +125,7 @@ public interface HostSelectionStrategy<CL> {
 		 */
 		public HostSelectionStrategy<CL> vendPoolSelectionStrategy();
 	}
+
 
 
 

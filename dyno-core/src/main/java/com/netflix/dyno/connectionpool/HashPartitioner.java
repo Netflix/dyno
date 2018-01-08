@@ -46,9 +46,16 @@ public interface HashPartitioner {
 	public Long hash(String key);
 	
 	/**
+	 * @param key
+	 * @return Long
+	 */
+	public Long hash(byte[] key);
+	
+	/**
 	 * 
 	 * @param keyHash
 	 * @return
 	 */
 	public HostToken getToken(Long keyHash);
+
 }
