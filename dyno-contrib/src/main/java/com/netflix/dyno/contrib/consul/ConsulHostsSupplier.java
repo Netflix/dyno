@@ -14,18 +14,11 @@
  * limitations under the License.
  */
 package com.netflix.dyno.contrib.consul;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
-import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.ecwid.consul.v1.ConsulClient;
 import com.ecwid.consul.v1.QueryParams;
 import com.ecwid.consul.v1.Response;
-import com.ecwid.consul.v1.agent.model.Check;
+import com.ecwid.consul.v1.health.model.Check;
 import com.ecwid.consul.v1.health.model.HealthService;
 import com.google.common.base.Function;
 import com.google.common.base.Supplier;
@@ -34,6 +27,12 @@ import com.google.common.collect.Lists;
 import com.netflix.discovery.DiscoveryManager;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostSupplier;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Simple class that implements {@link Supplier}<{@link List}<{@link Host}>>. It provides a List<{@link Host}>
@@ -107,7 +106,7 @@ public class ConsulHostsSupplier implements HostSupplier {
 
                         Host.Status status = Host.Status.Up;
                         for (com.ecwid.consul.v1.health.model.Check check : info.getChecks()) {
-                            if (check.getStatus().equals(Check.CheckStatus.CRITICAL)) {
+                            if (check.getStatus() == Check.CheckStatus.CRITICAL) {
                                 status = Host.Status.Down;
                                 break;
                             }
