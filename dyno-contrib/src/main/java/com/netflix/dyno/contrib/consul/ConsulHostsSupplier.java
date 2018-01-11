@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory;
 import com.ecwid.consul.v1.ConsulClient;
 import com.ecwid.consul.v1.QueryParams;
 import com.ecwid.consul.v1.Response;
-import com.ecwid.consul.v1.agent.model.Check;
+import com.ecwid.consul.v1.health.model.Check;
 import com.ecwid.consul.v1.health.model.HealthService;
 import com.google.common.base.Function;
 import com.google.common.base.Supplier;
@@ -107,7 +107,7 @@ public class ConsulHostsSupplier implements HostSupplier {
 
                         Host.Status status = Host.Status.Up;
                         for (com.ecwid.consul.v1.health.model.Check check : info.getChecks()) {
-                            if (check.getStatus().equals(Check.CheckStatus.CRITICAL)) {
+                            if (check.getStatus() == Check.CheckStatus.CRITICAL) {
                                 status = Host.Status.Down;
                                 break;
                             }
