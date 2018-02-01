@@ -46,8 +46,9 @@ public class RetryNTimes implements RetryPolicy {
 	@Override
 	public void success() {
 		boolean success = false;
-		RetryState rs = state.get();
+		RetryState rs;
 		while (!success) {
+			rs = state.get();
 			success = state.compareAndSet(rs, new RetryState(rs.count + 1, true));
 		}
 	}
@@ -55,8 +56,9 @@ public class RetryNTimes implements RetryPolicy {
 	@Override
 	public void failure(Exception e) {
 		boolean success = false;
-		RetryState rs = state.get();
+		RetryState rs;
 		while (!success) {
+			rs = state.get();
 			success = state.compareAndSet(rs, new RetryState(rs.count + 1, false));
 		}
 	}
