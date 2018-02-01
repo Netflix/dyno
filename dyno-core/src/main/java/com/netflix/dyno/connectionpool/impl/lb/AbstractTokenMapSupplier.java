@@ -109,28 +109,20 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
     private static final Logger Logger = LoggerFactory.getLogger(AbstractTokenMapSupplier.class);
     private final String localZone;
     private final String localDatacenter;
-    private int unsuppliedPort = -1;
+    private final int dynomitePort;
 
-    public AbstractTokenMapSupplier(String localRack) {
+    public AbstractTokenMapSupplier(String localRack, int dynomitePort) {
+        this(localRack, ConfigUtils.getDataCenter(), dynomitePort);
+    }
+
+    public AbstractTokenMapSupplier(int dynomitePort) {
+        this(ConfigUtils.getLocalZone(), ConfigUtils.getDataCenter(), dynomitePort);
+    }
+
+    public AbstractTokenMapSupplier(String localRack, String localDatacenter, int dynomitePort) {
         this.localZone = localRack;
-        localDatacenter = ConfigUtils.getDataCenter();
-    }
-
-    public AbstractTokenMapSupplier(String localRack, int port) {
-        this.localZone = localRack;
-        localDatacenter = ConfigUtils.getDataCenter();
-        unsuppliedPort = port;
-    }
-
-    public AbstractTokenMapSupplier() {
-        localZone = ConfigUtils.getLocalZone();
-        localDatacenter = ConfigUtils.getDataCenter();
-    }
-
-    public AbstractTokenMapSupplier(int port) {
-        localZone = ConfigUtils.getLocalZone();
-        localDatacenter = ConfigUtils.getDataCenter();
-        unsuppliedPort = port;
+        this.localDatacenter = localDatacenter;
+        this.dynomitePort = dynomitePort;
     }
 
     public abstract String getTopologyJsonPayload(Set<Host> activeHosts);
@@ -228,7 +220,7 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
                 String datacenter = (String) jItem.get("dc");
                 String portStr = (String) jItem.get("port");
                 String hashtag = (String) jItem.get("hashtag");
-                int port = Host.DEFAULT_PORT;
+                int port = dynomitePort;
                 if (portStr != null) {
                     port = Integer.valueOf(portStr);
                 }

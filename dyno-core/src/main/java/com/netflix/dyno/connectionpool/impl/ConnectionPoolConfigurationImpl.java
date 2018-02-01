@@ -31,7 +31,8 @@ import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
 
 public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfiguration {
 	
-	// DEFAULTS 
+	// DEFAULTS
+	public static final int DEFAULT_DYNOMITE_PORT = 8102;
 	private static final int DEFAULT_MAX_CONNS_PER_HOST = 3;
 	private static final int DEFAULT_MAX_TIMEOUT_WHEN_EXHAUSTED = 800;
 	private static final int DEFAULT_MAX_FAILOVER_COUNT = 3; 
@@ -56,6 +57,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
   private HashPartitioner hashPartitioner;
 	private String hashtag;
 	private final String name;
+	private int port = DEFAULT_DYNOMITE_PORT;
 	private int maxConnsPerHost = DEFAULT_MAX_CONNS_PER_HOST; 
 	private int maxTimeoutWhenExhausted = DEFAULT_MAX_TIMEOUT_WHEN_EXHAUSTED; 
 	private int maxFailoverCount = DEFAULT_MAX_FAILOVER_COUNT; 
@@ -113,6 +115,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         this.localDataCenter = config.getLocalDataCenter();
         this.localRack = config.getLocalRack();
         this.localZoneAffinity = config.localZoneAffinity;
+		this.port = config.getPort();
         this.maxConnsPerHost = config.getMaxConnsPerHost();
         this.maxFailoverCount = config.getMaxFailoverCount();
         this.maxTimeoutWhenExhausted = config.getMaxTimeoutWhenExhausted();
@@ -133,6 +136,10 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 		return name;
 	}
 
+	@Override
+	public int getPort() {
+		return port;
+	}
 
 	@Override
 	public int getMaxConnsPerHost() {
@@ -247,6 +254,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 				", tokenSupplier=" + tokenSupplier +
 				", hostConnectionPoolFactory=" + hostConnectionPoolFactory +
 				", name='" + name + '\'' +
+				", port=" + port +
 				", maxConnsPerHost=" + maxConnsPerHost +
 				", maxTimeoutWhenExhausted=" + maxTimeoutWhenExhausted +
 				", maxFailoverCount=" + maxFailoverCount +
@@ -274,6 +282,11 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	}
 
 	// ALL SETTERS
+	public ConnectionPoolConfigurationImpl setPort(int port) {
+		this.port = port;
+		return this;
+	}
+
 	public ConnectionPoolConfigurationImpl setMaxConnsPerHost(int maxConnsPerHost) {
 		this.maxConnsPerHost = maxConnsPerHost;
 		return this;

@@ -41,6 +41,12 @@ public interface ConnectionPoolConfiguration {
     String getName();
 
     /**
+     * @return Data port to be used when no port is specified to a list of seeds or when
+     * doing a ring describe since the ring describe does not include a host
+     */
+    int getPort();
+
+    /**
      * Returns the maximum number of connections to allocate to each Dynomite host. Note that at startup exactly this
      * number of connections will be established prior to serving requests.
      */

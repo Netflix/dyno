@@ -34,6 +34,7 @@ import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
 import com.netflix.dyno.connectionpool.*;
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
@@ -71,9 +72,9 @@ public class DynoJedisDemo {
 
 	public void initWithLocalHost() throws Exception {
 
-		final int port = 6379;
+		final int port = ConnectionPoolConfigurationImpl.DEFAULT_DYNOMITE_PORT;
 
-		final Host localHost = new Host("localhost", port, "localrack", Status.Up);
+		final Host localHost = new Host("localhost", port, "us-east-1e", Status.Up);
 
 		final HostSupplier localHostSupplier = new HostSupplier() {
 
@@ -123,8 +124,10 @@ public class DynoJedisDemo {
 
 	public void init(HostSupplier hostSupplier, int port, TokenMapSupplier tokenSupplier) throws Exception {
 
-		client = new DynoJedisClient.Builder().withApplicationName("demo").withDynomiteClusterName("dyno_dev")
+		client = new DynoJedisClient.Builder().withApplicationName("demo").withDynomiteClusterName(this.clusterName)
 				.withHostSupplier(hostSupplier)
+				.withPort(port)
+				.withTokenMapSupplier(tokenSupplier)
 				// .withCPConfig(
 				// new ConnectionPoolConfigurationImpl("demo")
 				// .setCompressionStrategy(ConnectionPoolConfiguration.CompressionStrategy.THRESHOLD)
@@ -774,7 +777,7 @@ public class DynoJedisDemo {
 			for (Map<String, String> map : handler.getList()) {
 				String rack = map.get("availability-zone");
 				Status status = map.get("status").equalsIgnoreCase("UP") ? Status.Up : Status.Down;
-				Host host = new Host(map.get("public-hostname"), map.get("local-ipv4"), rack, status);
+				Host host = new Host(map.get("public-hostname"), map.get("local-ipv4"), ConnectionPoolConfigurationImpl.DEFAULT_DYNOMITE_PORT, rack, status);
 				hosts.add(host);
 				System.out.println("Host: " + host);
 			}
@@ -951,6 +954,7 @@ public class DynoJedisDemo {
 		DynoJedisDemo demo = new DynoJedisDemo(clusterName, rack);
 
 		try {
+//		    demo.initWithLocalHost();
 			if (hostsFile != null) {
 				demo.initWithRemoteClusterFromFile(hostsFile, port);
 			} else {
