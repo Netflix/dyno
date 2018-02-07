@@ -3961,7 +3961,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             try {
                 Logger.info("Starting connection pool for app " + appName);
-                Logger.info("Starting connection pool for app " + appName);
 
                 pool.start().get();
 

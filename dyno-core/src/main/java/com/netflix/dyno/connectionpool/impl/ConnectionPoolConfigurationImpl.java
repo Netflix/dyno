@@ -115,7 +115,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         this.localDataCenter = config.getLocalDataCenter();
         this.localRack = config.getLocalRack();
         this.localZoneAffinity = config.localZoneAffinity;
-		this.port = config.getPort();
+        this.port = config.getPort();
         this.maxConnsPerHost = config.getMaxConnsPerHost();
         this.maxFailoverCount = config.getMaxFailoverCount();
         this.maxTimeoutWhenExhausted = config.getMaxTimeoutWhenExhausted();
