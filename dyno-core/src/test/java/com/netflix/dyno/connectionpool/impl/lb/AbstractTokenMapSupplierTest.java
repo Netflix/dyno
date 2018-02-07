@@ -26,16 +26,18 @@ import com.netflix.dyno.connectionpool.Host.Status;
 
 public class AbstractTokenMapSupplierTest {
 
-	final String json = "[{\"token\":\"3051939411\",\"hostname\":\"ec2-54-237-143-4.compute-1.amazonaws.com\",\"port\":\"11211\",\"dc\":\"us-east-1\",\"ip\":\"54.237.143.4\",\"zone\":\"us-east-1d\"}\"," +
-			"\"{\"token\":\"188627880\",\"hostname\":\"ec2-50-17-65-2.compute-1.amazonaws.com\",\"port\":\"11211\",\"dc\":\"us-east-1\",\"ip\":\"50.17.65.2\",\"zone\":\"us-east-1d\"},\"" +
-			"\"{\"token\":\"2019187467\",\"hostname\":\"ec2-54-83-87-174.compute-1.amazonaws.com\",\"port\":\"11211\",\"dc\":\"us-east-1\",\"ip\":\"54.83.87.174\",\"zone\":\"us-east-1c\" },\"" +
-			"\"{\"token\":\"3450843231\",\"hostname\":\"ec2-54-81-138-73.compute-1.amazonaws.com\",\"port\":\"11211\",\"dc\":\"us-east-1\",\"ip\":\"54.81.138.73\",\"zone\":\"us-east-1c\"},\""+
-			"\"{\"token\":\"587531700\",\"hostname\":\"ec2-54-82-176-215.compute-1.amazonaws.com\",\"port\":\"11211\",\"dc\":\"us-east-1\",\"ip\":\"54.82.176.215\",\"zone\":\"us-east-1c\"},\"" +
-			"\"{\"token\":\"3101134286\",\"hostname\":\"ec2-54-82-83-115.compute-1.amazonaws.com\",\"port\":\"11211\",\"dc\":\"us-east-1\",\"ip\":\"54.82.83.115\",\"zone\":\"us-east-1e\"},\"" +
-			"\"{\"token\":\"237822755\",\"hostname\":\"ec2-54-211-220-55.compute-1.amazonaws.com\",\"port\":\"11211\",\"dc\":\"us-east-1\",\"ip\":\"54.211.220.55\",\"zone\":\"us-east-1e\"},\"" +
-			"\"{\"token\":\"1669478519\",\"hostname\":\"ec2-54-80-65-203.compute-1.amazonaws.com\",\"port\":\"11211\",\"dc\":\"us-east-1\",\"ip\":\"54.80.65.203\",\"zone\":\"us-east-1e\"}]\"";
+	// For some negative test cases, let the json payload have some nodes with wrong port, and some with wrong rack. The assert statements
+	// below reflect the right results expected (assertTrue vs assertFalse)
+	final String json = "[{\"token\":\"3051939411\",\"hostname\":\"ec2-54-237-143-4.compute-1.amazonaws.com\",\"port\":\"22123\",\"dc\":\"us-east-1\",\"ip\":\"54.237.143.4\",\"zone\":\"us-east-1d\"}\"," +
+			"\"{\"token\":\"188627880\",\"hostname\":\"ec2-50-17-65-2.compute-1.amazonaws.com\",\"port\":\"22122\",\"dc\":\"us-east-1\",\"ip\":\"50.17.65.2\",\"zone\":\"us-east-1d\"},\"" +
+			"\"{\"token\":\"2019187467\",\"hostname\":\"ec2-54-83-87-174.compute-1.amazonaws.com\",\"port\":\"22122\",\"dc\":\"us-east-1\",\"ip\":\"54.83.87.174\",\"zone\":\"us-east-1c\" },\"" +
+			"\"{\"token\":\"3450843231\",\"hostname\":\"ec2-54-81-138-73.compute-1.amazonaws.com\",\"port\":\"22122\",\"dc\":\"us-east-1\",\"ip\":\"54.81.138.73\",\"zone\":\"us-east-1d\"},\""+
+			"\"{\"token\":\"587531700\",\"hostname\":\"ec2-54-82-176-215.compute-1.amazonaws.com\",\"port\":\"22122\",\"dc\":\"us-east-1\",\"ip\":\"54.82.176.215\",\"zone\":\"us-east-1c\"},\"" +
+			"\"{\"token\":\"3101134286\",\"hostname\":\"ec2-54-82-83-115.compute-1.amazonaws.com\",\"port\":\"22123\",\"dc\":\"us-east-1\",\"ip\":\"54.82.83.115\",\"zone\":\"us-east-1e\"},\"" +
+			"\"{\"token\":\"237822755\",\"hostname\":\"ec2-54-211-220-55.compute-1.amazonaws.com\",\"port\":\"22122\",\"dc\":\"us-east-1\",\"ip\":\"54.211.220.55\",\"zone\":\"us-east-1e\"},\"" +
+			"\"{\"token\":\"1669478519\",\"hostname\":\"ec2-54-80-65-203.compute-1.amazonaws.com\",\"port\":\"22122\",\"dc\":\"us-east-1\",\"ip\":\"54.80.65.203\",\"zone\":\"us-east-1e\"}]\"";
 
-	private TokenMapSupplier testTokenMapSupplier = new AbstractTokenMapSupplier() {
+	private TokenMapSupplier testTokenMapSupplier = new AbstractTokenMapSupplier(22122) {
 
         @Override
         public String getTopologyJsonPayload(Set<Host> activeHosts) {
@@ -51,18 +53,21 @@ public class AbstractTokenMapSupplierTest {
 	@Test
 	public void testParseJson() throws Exception {
 
-		List<Host> hostList = new ArrayList<>();
+		// Create a dummy host list that one would get from teh host supplier.
+		Map<String, Host> hosts = Collections.synchronizedMap(new HashMap());
 
-		hostList.add(new Host("ec2-54-237-143-4.compute-1.amazonaws.com", "rack",  Status.Up));
-		hostList.add(new Host("ec2-50-17-65-2.compute-1.amazonaws.com", "rack" , Status.Up));
-		hostList.add(new Host("ec2-54-83-87-174.compute-1.amazonaws.com", "rack", Status.Up));
-		hostList.add(new Host("ec2-54-81-138-73.compute-1.amazonaws.com", "rack", Status.Up));
-		hostList.add(new Host("ec2-54-82-176-215.compute-1.amazonaws.com", "rack", Status.Up));
-		hostList.add(new Host("ec2-54-82-83-115.compute-1.amazonaws.com", "rack", Status.Up));
-		hostList.add(new Host("ec2-54-211-220-55.compute-1.amazonaws.com", "rack", Status.Up));
-		hostList.add(new Host("ec2-54-80-65-203.compute-1.amazonaws.com", "rack", Status.Up));
+		hosts.put("ec2-54-237-143-4.compute-1.amazonaws.com", new Host("ec2-54-237-143-4.compute-1.amazonaws.com", 22122,"us-east-1d",  Status.Up));
+		hosts.put("ec2-50-17-65-2.compute-1.amazonaws.com", new Host("ec2-50-17-65-2.compute-1.amazonaws.com", 22122,"us-east-1d" , Status.Up));
+		hosts.put("ec2-54-83-87-174.compute-1.amazonaws.com", new Host("ec2-54-83-87-174.compute-1.amazonaws.com", 22122, "us-east-1c", Status.Up));
+		hosts.put("ec2-54-81-138-73.compute-1.amazonaws.com", new Host("ec2-54-81-138-73.compute-1.amazonaws.com", 22122,"us-east-1c", Status.Up));
+		hosts.put("ec2-54-82-176-215.compute-1.amazonaws.com", new Host("ec2-54-82-176-215.compute-1.amazonaws.com", 22122,"us-east-1c", Status.Up));
+		hosts.put("ec2-54-82-83-115.compute-1.amazonaws.com", new Host("ec2-54-82-83-115.compute-1.amazonaws.com", 22122, "us-east-1e", Status.Up));
+		hosts.put("ec2-54-211-220-55.compute-1.amazonaws.com", new Host("ec2-54-211-220-55.compute-1.amazonaws.com", 22122,"us-east-1e", Status.Up));
+		hosts.put("ec2-54-80-65-203.compute-1.amazonaws.com", new Host("ec2-54-80-65-203.compute-1.amazonaws.com", 22122,"us-east-1e", Status.Up));
 
-		List<HostToken> hTokens = testTokenMapSupplier.getTokens(new HashSet<>(hostList));
+		// Get the list of token to host map that one would get from the TokenMapSupplier.
+		List<HostToken> hTokens = testTokenMapSupplier.getTokens(new HashSet<>(hosts.values()));
+
 		Collections.sort(hTokens, new Comparator<HostToken>() {
 			@Override
 			public int compare(HostToken o1, HostToken o2) {
@@ -70,22 +75,21 @@ public class AbstractTokenMapSupplierTest {
 			}
 		});
 
-        Assert.assertTrue(validateHostToken(hTokens.get(0), 188627880L, "ec2-50-17-65-2.compute-1.amazonaws.com", "50.17.65.2", 11211, "us-east-1d", "us-east-1"));
-        Assert.assertTrue(validateHostToken(hTokens.get(1), 237822755L, "ec2-54-211-220-55.compute-1.amazonaws.com", "54.211.220.55", 11211, "us-east-1e", "us-east-1"));
-        Assert.assertTrue(validateHostToken(hTokens.get(2), 587531700L, "ec2-54-82-176-215.compute-1.amazonaws.com", "54.82.176.215", 11211, "us-east-1c", "us-east-1"));
-        Assert.assertTrue(validateHostToken(hTokens.get(3), 1669478519L, "ec2-54-80-65-203.compute-1.amazonaws.com", "54.80.65.203", 11211, "us-east-1e", "us-east-1"));
-        Assert.assertTrue(validateHostToken(hTokens.get(4), 2019187467L, "ec2-54-83-87-174.compute-1.amazonaws.com", "54.83.87.174", 11211, "us-east-1c", "us-east-1"));
-        Assert.assertTrue(validateHostToken(hTokens.get(5), 3051939411L, "ec2-54-237-143-4.compute-1.amazonaws.com", "54.237.143.4", 11211, "us-east-1d", "us-east-1"));
-        Assert.assertTrue(validateHostToken(hTokens.get(6), 3101134286L, "ec2-54-82-83-115.compute-1.amazonaws.com", "54.82.83.115", 11211, "us-east-1e", "us-east-1"));
-        Assert.assertTrue(validateHostToken(hTokens.get(7), 3450843231L, "ec2-54-81-138-73.compute-1.amazonaws.com", "54.81.138.73", 11211, "us-east-1c", "us-east-1"));
+
+		// Assert that the host object from host supplier and from the token map supplier match.
+        Assert.assertTrue(validateHostToken(hTokens.get(0), 188627880L, hosts.get(hTokens.get(0).getHost().getHostName())));
+        Assert.assertTrue(validateHostToken(hTokens.get(1), 237822755L, hosts.get(hTokens.get(1).getHost().getHostName())));
+        Assert.assertTrue(validateHostToken(hTokens.get(2), 587531700L, hosts.get(hTokens.get(2).getHost().getHostName())));
+        Assert.assertTrue(validateHostToken(hTokens.get(3), 1669478519L, hosts.get(hTokens.get(3).getHost().getHostName())));
+        Assert.assertTrue(validateHostToken(hTokens.get(4), 2019187467L, hosts.get(hTokens.get(4).getHost().getHostName())));
+		// Assert that the host object from host supplier and from the token map supplier DO NOT match.
+        Assert.assertFalse(validateHostToken(hTokens.get(5), 3051939411L, hosts.get(hTokens.get(5).getHost().getHostName())));
+        Assert.assertFalse(validateHostToken(hTokens.get(6), 3101134286L, hosts.get(hTokens.get(6).getHost().getHostName())));
+        Assert.assertFalse(validateHostToken(hTokens.get(7), 3450843231L, hosts.get(hTokens.get(7).getHost().getHostName())));
     }
 
-    private boolean validateHostToken(HostToken hostToken, Long token, String hostname, String ipAddress, int port, String rack, String datacenter) {
+    private boolean validateHostToken(HostToken hostToken, Long token, Host hostFromHostSupplier) {
         return Objects.equals(hostToken.getToken(), token) &&
-                hostToken.getHost().getHostName().equals(hostname) &&
-                hostToken.getHost().getHostAddress().equals(ipAddress) &&
-                hostToken.getHost().getPort() == port &&
-                hostToken.getHost().getRack().equals(rack) &&
-                hostToken.getHost().getDatacenter().equals(datacenter);
+                hostToken.getHost().equals(hostFromHostSupplier);
     }
 }
