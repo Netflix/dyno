@@ -26,11 +26,11 @@ import com.netflix.dyno.connectionpool.Host.Status;
 
 public class AbstractTokenMapSupplierTest {
 
-	// For some negative test cases, let the json payload have some nodes with wrong port
+	// For some negative test cases, let the json payload have some nodes with wrong port, and some with wrong rack. The assert statements
+	// below reflect the right results expected (assertTrue vs assertFalse)
 	final String json = "[{\"token\":\"3051939411\",\"hostname\":\"ec2-54-237-143-4.compute-1.amazonaws.com\",\"port\":\"22123\",\"dc\":\"us-east-1\",\"ip\":\"54.237.143.4\",\"zone\":\"us-east-1d\"}\"," +
 			"\"{\"token\":\"188627880\",\"hostname\":\"ec2-50-17-65-2.compute-1.amazonaws.com\",\"port\":\"22122\",\"dc\":\"us-east-1\",\"ip\":\"50.17.65.2\",\"zone\":\"us-east-1d\"},\"" +
 			"\"{\"token\":\"2019187467\",\"hostname\":\"ec2-54-83-87-174.compute-1.amazonaws.com\",\"port\":\"22122\",\"dc\":\"us-east-1\",\"ip\":\"54.83.87.174\",\"zone\":\"us-east-1c\" },\"" +
-			// TEST WRONG RACK here.
 			"\"{\"token\":\"3450843231\",\"hostname\":\"ec2-54-81-138-73.compute-1.amazonaws.com\",\"port\":\"22122\",\"dc\":\"us-east-1\",\"ip\":\"54.81.138.73\",\"zone\":\"us-east-1d\"},\""+
 			"\"{\"token\":\"587531700\",\"hostname\":\"ec2-54-82-176-215.compute-1.amazonaws.com\",\"port\":\"22122\",\"dc\":\"us-east-1\",\"ip\":\"54.82.176.215\",\"zone\":\"us-east-1c\"},\"" +
 			"\"{\"token\":\"3101134286\",\"hostname\":\"ec2-54-82-83-115.compute-1.amazonaws.com\",\"port\":\"22123\",\"dc\":\"us-east-1\",\"ip\":\"54.82.83.115\",\"zone\":\"us-east-1e\"},\"" +
