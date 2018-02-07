@@ -3673,12 +3673,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     /**
-     * NOT SUPPORTED ! Use {@link #dyno_scan(CursorBasedResult, String...)}
+     * NOT SUPPORTED ! Use {@link #dyno_scan(CursorBasedResult, int, String...)}
      * instead.
      *
      * @param cursor
      * @return nothing -- throws UnsupportedOperationException when invoked
-     * @see #dyno_scan(CursorBasedResult, String...)
+     * @see #dyno_scan(CursorBasedResult, int, String...)
      */
     @Override
     public ScanResult<String> scan(int cursor) {
@@ -3686,12 +3686,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     /**
-     * NOT SUPPORTED ! Use {@link #dyno_scan(CursorBasedResult, String...)}
+     * NOT SUPPORTED ! Use {@link #dyno_scan(CursorBasedResult, int, String...)}
      * instead.
      *
      * @param cursor
      * @return nothing -- throws UnsupportedOperationException when invoked
-     * @see #dyno_scan(CursorBasedResult, String...)
+     * @see #dyno_scan(CursorBasedResult, int, String...)
      */
     @Override
     public ScanResult<String> scan(String cursor) {
@@ -3758,8 +3758,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         private String appName;
         private String clusterName;
+
+        private int port = -1;
         private ConnectionPoolConfigurationImpl cpConfig;
         private HostSupplier hostSupplier;
+        private TokenMapSupplier tokenMapSupplier;
+
         private EurekaClient discoveryClient;
         private String dualWriteClusterName;
         private HostSupplier dualWriteHostSupplier;
@@ -3787,6 +3791,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         public Builder withHostSupplier(HostSupplier hSupplier) {
             hostSupplier = hSupplier;
+            return this;
+        }
+
+        public Builder withTokenMapSupplier(TokenMapSupplier tokenMapSupplier) {
+            this.tokenMapSupplier = tokenMapSupplier;
             return this;
         }
 
@@ -3826,10 +3835,15 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
+        public Builder withPort(int suppliedPort) {
+            Logger.info("Will use port" + suppliedPort);
+            this.port = suppliedPort;
+            return this;
+        }
+
         public DynoJedisClient build() {
             assert (appName != null);
             assert (clusterName != null);
-
             if (cpConfig == null) {
                 cpConfig = new ArchaiusConnectionPoolConfiguration(appName);
                 Logger.info("Dyno Client runtime properties: " + cpConfig.toString());
@@ -3850,14 +3864,18 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             // client application startup
             shadowConfig.setFailOnStartupIfNoHosts(false);
 
+            if (port != -1) {
+                shadowConfig.setPort(port);
+            }
+
             HostSupplier shadowSupplier = null;
             if (dualWriteHostSupplier == null) {
                 if (hostSupplier != null && hostSupplier instanceof EurekaHostsSupplier) {
                     EurekaHostsSupplier eurekaSupplier = (EurekaHostsSupplier) hostSupplier;
-                    shadowSupplier = EurekaHostsSupplier.newInstance(shadowConfig.getDualWriteClusterName(),
-                            eurekaSupplier);
+                    shadowSupplier = new EurekaHostsSupplier(shadowConfig.getDualWriteClusterName(),
+                            eurekaSupplier.getDiscoveryClient(), shadowConfig.getPort());
                 } else if (discoveryClient != null) {
-                    shadowSupplier = new EurekaHostsSupplier(shadowConfig.getDualWriteClusterName(), discoveryClient);
+                    shadowSupplier = new EurekaHostsSupplier(shadowConfig.getDualWriteClusterName(), discoveryClient, shadowConfig.getPort());
                 } else {
                     throw new DynoConnectException("HostSupplier for DualWrite cluster is REQUIRED if you are not "
                             + "using EurekaHostsSupplier implementation or using a EurekaClient");
@@ -3869,7 +3887,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             shadowConfig.withHostSupplier(shadowSupplier);
 
             setLoadBalancingStrategy(shadowConfig);
-            setHashtagConnectionPool(shadowSupplier, shadowConfig);
+            setHashtagConnectionPool(shadowConfig);
 
             String shadowAppName = shadowConfig.getName();
             DynoCPMonitor shadowCPMonitor = new DynoCPMonitor(shadowAppName);
@@ -3903,6 +3921,9 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         private DynoJedisClient buildDynoJedisClient() {
+            if (port != -1) {
+                cpConfig.setPort(port);
+            }
             DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
             ConnectionPoolMonitor cpMonitor = (this.cpMonitor == null) ? new DynoCPMonitor(appName) : this.cpMonitor;
 
@@ -3919,13 +3940,15 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                     throw new DynoConnectException("HostSupplier not provided. Cannot initialize EurekaHostsSupplier "
                             + "which requires a DiscoveryClient");
                 } else {
-                    hostSupplier = new EurekaHostsSupplier(clusterName, discoveryClient);
+                    hostSupplier = new EurekaHostsSupplier(clusterName, discoveryClient, cpConfig.getPort());
                 }
             }
 
             cpConfig.withHostSupplier(hostSupplier);
+            if (tokenMapSupplier != null)
+                cpConfig.withTokenSupplier(tokenMapSupplier);
             setLoadBalancingStrategy(cpConfig);
-            setHashtagConnectionPool(hostSupplier, cpConfig);
+            setHashtagConnectionPool(cpConfig);
             JedisConnectionFactory connFactory = new JedisConnectionFactory(opMonitor, sslSocketFactory);
 
             return startConnectionPool(appName, connFactory, cpConfig, cpMonitor);
@@ -3967,7 +3990,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 if (config.getTokenSupplier() == null) {
                     Logger.warn(
                             "TOKEN AWARE selected and no token supplier found, using default HttpEndpointBasedTokenMapSupplier()");
-                    config.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier());
+                    config.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier(cpConfig.getPort()));
                 }
 
                 if (config.getLocalRack() == null && config.localZoneAffinity()) {
@@ -3986,10 +4009,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         /**
          * Set the hash to the connection pool if is provided by Dynomite
-         * @param hostSupplier
+         * @param config
          */
-        private void setHashtagConnectionPool(HostSupplier hostSupplier, ConnectionPoolConfigurationImpl config) {
+        private void setHashtagConnectionPool(ConnectionPoolConfigurationImpl config) {
             // Find the hosts from host supplier
+            HostSupplier hostSupplier = config.getHostSupplier();
             Collection<Host> hosts = hostSupplier.getHosts();
             // Convert the returned collection to an arraylist
             ArrayList<Host> arrayHosts = new ArrayList<Host>(hosts);

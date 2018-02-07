@@ -39,6 +39,8 @@ public class JedisConnectionFactoryIntegrationTest {
 
     private final String rack = "rack1";
 
+    private final String datacenter = "rack";
+
     private final Host localHost = new Host("localhost", port, rack, Host.Status.Up);
 
     private final HostSupplier localHostSupplier = new HostSupplier() {
@@ -113,8 +115,8 @@ public class JedisConnectionFactoryIntegrationTest {
 
     private DynoJedisClient constructJedisClient(final boolean withSsl) throws Exception {
         final ConnectionPoolConfigurationImpl connectionPoolConfiguration = new ConnectionPoolConfigurationImpl(rack);
-        connectionPoolConfiguration.withTokenSupplier(supplier);
         connectionPoolConfiguration.setLocalRack(rack);
+        connectionPoolConfiguration.setLocalDataCenter(datacenter);
 
         final SSLContext sslContext = createAndInitSSLContext("client.jks");
 
@@ -122,6 +124,7 @@ public class JedisConnectionFactoryIntegrationTest {
                 .withApplicationName("appname")
                 .withDynomiteClusterName(rack)
                 .withHostSupplier(localHostSupplier)
+                .withTokenMapSupplier(supplier)
                 .withCPConfig(connectionPoolConfiguration);
 
         if (withSsl) {

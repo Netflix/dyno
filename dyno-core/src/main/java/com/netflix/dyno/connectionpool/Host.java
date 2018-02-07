@@ -33,7 +33,6 @@ import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
  */
 public class Host implements Comparable<Host> {
 
-    public static final int DEFAULT_PORT = 8102;
     public static final Host NO_HOST = new Host("UNKNOWN", "UNKNOWN", 0, "UNKNOWN");
 
     private final String hostname;
@@ -53,10 +52,6 @@ public class Host implements Comparable<Host> {
         this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down, null);
     }
 
-    public Host(String hostname, String rack, Status status) {
-        this(hostname, null, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
-    }
-
     public Host(String hostname, int port, String rack, Status status) {
         this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
     }
@@ -69,12 +64,12 @@ public class Host implements Comparable<Host> {
         this(hostname, ipAddress, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down, null);
     }
 
-    public Host(String hostname, String ipAddress, String rack, Status status) {
-        this(hostname, ipAddress, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
+    public Host(String hostname, String ipAddress, int port, String rack, Status status) {
+        this(hostname, ipAddress, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
     }
 
-    public Host(String hostname, String ipAddress, String rack, Status status, String hashtag) {
-        this(hostname, ipAddress, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
+    public Host(String hostname, String ipAddress, int port, String rack, Status status, String hashtag) {
+        this(hostname, ipAddress, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
     }
 
     public Host(String hostname, String ipAddress, int port, String rack, String datacenter, Status status) {
@@ -158,6 +153,7 @@ public class Host implements Comparable<Host> {
         int result = 1;
         result = prime * result + ((hostname == null) ? 0 : hostname.hashCode());
         result = prime * result + ((rack == null) ? 0 : rack.hashCode());
+        result = prime * result + port;
 
         return result;
     }
@@ -178,6 +174,7 @@ public class Host implements Comparable<Host> {
 
         equals &= (hostname != null) ? hostname.equals(other.hostname) : other.hostname == null;
         equals &= (rack != null) ? rack.equals(other.rack) : other.rack == null;
+        equals &= (port == other.port);
 
         return equals;
     }
@@ -188,7 +185,11 @@ public class Host implements Comparable<Host> {
         if (compared != 0) {
             return compared;
         }
-        return this.rack.compareTo(o.rack);
+        compared = this.rack.compareTo(o.rack);
+        if (compared != 0) {
+            return compared;
+        }
+        return Integer.compare(this.port, o.port);
     }
 
     @Override
