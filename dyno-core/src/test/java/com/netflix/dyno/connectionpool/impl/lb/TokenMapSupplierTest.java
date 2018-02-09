@@ -18,7 +18,6 @@ package com.netflix.dyno.connectionpool.impl.lb;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -50,7 +49,7 @@ public class TokenMapSupplierTest {
         hostList.add(new Host("ec2-54-211-220-55.compute-1.amazonaws.com", 11211, "us-east-1e", Status.Up));
         hostList.add(new Host("ec2-54-80-65-203.compute-1.amazonaws.com", 11211, "us-east-1e", Status.Up));
 
-        HttpEndpointBasedTokenMapSupplier tokenSupplier = new HttpEndpointBasedTokenMapSupplier("us-east-1d", 8080,11211);
+        HttpEndpointBasedTokenMapSupplier tokenSupplier = new HttpEndpointBasedTokenMapSupplier("us-east-1d", 11211);
 
         List<HostToken> hTokens = tokenSupplier.parseTokenListFromJson(json);
 
@@ -95,7 +94,7 @@ public class TokenMapSupplierTest {
         hostList.add(new Host("ec2-54-211-220-55.compute-1.amazonaws.com", 11217, "us-east-1e", Status.Up));
         hostList.add(new Host("ec2-54-80-65-203.compute-1.amazonaws.com", 11218, "us-east-1e", Status.Up));
 
-        HttpEndpointBasedTokenMapSupplier tokenSupplier = new HttpEndpointBasedTokenMapSupplier("us-east-1d", 8080, 11211);
+        HttpEndpointBasedTokenMapSupplier tokenSupplier = new HttpEndpointBasedTokenMapSupplier("us-east-1d", 11211);
 
         List<HostToken> hTokens = tokenSupplier.parseTokenListFromJson(json);
 
@@ -155,7 +154,7 @@ public class TokenMapSupplierTest {
         hostList.add(new Host("ec2-54-211-220-55.compute-1.amazonaws.com", 11211, "us-east-1e", Status.Up));
         hostList.add(new Host("ec2-54-80-65-203.compute-1.amazonaws.com", 11211, "us-east-1e", Status.Up));
 
-        HttpEndpointBasedTokenMapSupplier tokenSupplier = new HttpEndpointBasedTokenMapSupplier("us-east-1d", 8080,11211);
+        HttpEndpointBasedTokenMapSupplier tokenSupplier = new HttpEndpointBasedTokenMapSupplier("us-east-1d", 11211);
 
         List<HostToken> hTokens = tokenSupplier.parseTokenListFromJson(json);
 
