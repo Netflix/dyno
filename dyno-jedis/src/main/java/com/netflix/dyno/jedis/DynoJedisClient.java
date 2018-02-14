@@ -134,7 +134,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             this.op = o;
         }
 
-        @Override
+		@Override
         public String getName() {
             return op.name();
         }
@@ -238,6 +238,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
      * <ul>
      * <lh>String Operations</lh>
      * <li>{@link #mget(String...) MGET}</li>
+     * <li>{@link #mset(String...) MSET}</li>
+     * <li>{@link #msetnx(String...) MSETNX}</li>
      * </ul>
      *
      * @param <T>
@@ -2570,10 +2572,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         });
     }
 
-    @Override
-    public Long bitcount(String key, long start, long end) {
-        return d_bitcount(key, start, end).getResult();
-    }
 
     @Override
     public Long pfadd(String key, String... elements) {
@@ -2583,6 +2581,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     @Override
     public long pfcount(String key) {
         throw new UnsupportedOperationException("not yet implemented");
+    }
+    
+    @Override
+    public Long bitcount(String key, long start, long end) {
+        return d_bitcount(key, start, end).getResult();
     }
 
     public OperationResult<Long> d_bitcount(final String key, final Long start, final Long end) {
@@ -2705,15 +2708,53 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                     });
         }
     }
-
-    @Override
-    public String mset(String... keysvalues) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
+    
     @Override
     public Long msetnx(String... keysvalues) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return d_msetnx(keysvalues).getResult();
+    }
+
+    public OperationResult<Long> d_msetnx(final String... keysvalues) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+
+            return connPool.executeWithFailover(new MultiKeyOperation<Long>(Arrays.asList(keysvalues), OpName.MSETNX) {
+                @Override
+                public Long execute(Jedis client, ConnectionContext state) {
+                    return client.msetnx(keysvalues);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<Long>(Arrays.asList(keysvalues), OpName.MSETNX) {
+                   @Override
+                   public Long execute(final Jedis client, final ConnectionContext state) throws DynoException {
+							return client.msetnx(keysvalues);
+                   }
+            });           		
+        }
+    }
+    
+    @Override
+    public String mset(String... keysvalues) {
+        return d_mset(keysvalues).getResult();
+    }
+
+    public OperationResult<String> d_mset(final String... keysvalues) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+
+            return connPool.executeWithFailover(new MultiKeyOperation<String>(Arrays.asList(keysvalues), OpName.MSET) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) {
+                    return client.mset(keysvalues);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<String>(Arrays.asList(keysvalues), OpName.MSET) {
+                   @Override
+                   public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                            return client.mset(keysvalues);
+                   }
+            });
+        }
     }
 
     @Override
