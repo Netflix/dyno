@@ -15,43 +15,50 @@
  */
 package com.netflix.dyno.connectionpool.impl;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostSupplier;
+import com.netflix.dyno.connectionpool.TokenMapSupplier;
+import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
+import com.netflix.dyno.connectionpool.impl.lb.HostToken;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class HostsUpdater {
 
-	private final HostSupplier hostSupplier; 
+	private static final org.slf4j.Logger Logger = LoggerFactory.getLogger(ConnectionPoolImpl.class);
+
+	private final HostSupplier hostSupplier;
+	private final TokenMapSupplier tokenMapSupplier;
 
 	private final AtomicBoolean stop = new AtomicBoolean(false);
 	private final AtomicReference<HostStatusTracker> hostTracker = new AtomicReference<HostStatusTracker>(null);
 	
-	public HostsUpdater(HostSupplier hSupplier) {
+	public HostsUpdater(HostSupplier hSupplier, TokenMapSupplier tokenMapSupplier) {
 		this.hostSupplier = hSupplier;
+		this.tokenMapSupplier = tokenMapSupplier;
 		this.hostTracker.set(new HostStatusTracker());
 	}
 	
 		
 	public HostStatusTracker refreshHosts() {
-		
+
 		if (stop.get() || Thread.currentThread().isInterrupted()) {
 			return null;
 		}
 		
-		Collection<Host> allHosts = hostSupplier.getHosts();
+		List<Host> allHosts = hostSupplier.getHosts();
 		if (allHosts == null || allHosts.isEmpty()) {
 			throw new NoAvailableHostsException("No available hosts when starting HostsUpdater");
 		}
-		
-		List<Host> hostsUp = new ArrayList<Host>();
-		List<Host> hostsDown = new ArrayList<Host>();
-		
+
+		List<Host> hostsUp = new ArrayList<>();
+		List<Host> hostsDown = new ArrayList<>();
+
 		for (Host host : allHosts) {
 			if (host.isUp()) {
 				hostsUp.add(host);
@@ -59,10 +66,51 @@ public class HostsUpdater {
 				hostsDown.add(host);
 			}
 		}
-		
+
+		// if nothing has changed, just return the earlier hosttracker.
+		if (!hostTracker.get().checkIfChanged(new HashSet<>(hostsUp), new HashSet<>(hostsDown))) {
+			return hostTracker.get();
+		}
+
+		/**
+		 * HostTracker should return the hosts that we get from TMS.
+		 * Hence get the hosts from HostSupplier and map them to TMS
+		 * and return them.
+		 */
+		Collections.sort(allHosts);
+		Set<Host> hostSet = new HashSet<>(allHosts);
+		// Create a list of host/Tokens
+		List<HostToken> hostTokens;
+		if (tokenMapSupplier != null) {
+			Logger.info("Getting Hosts from TMS");
+			hostTokens = tokenMapSupplier.getTokens(hostSet);
+
+			if (hostTokens.isEmpty()) {
+				throw new DynoException("No hosts in the TokenMapSupplier");
+			}
+		} else {
+			throw new DynoException("TokenMapSupplier not provided");
+		}
+
+		Map<Host, Host> allHostSetFromTMS = new HashMap<>();
+		for (HostToken ht : hostTokens) {
+			allHostSetFromTMS.put(ht.getHost(), ht.getHost());
+		}
+
+		hostsUp.clear();
+		hostsDown.clear();
+
+		for (Host host : allHosts) {
+			if (host.isUp()) {
+				hostsUp.add(allHostSetFromTMS.get(host));
+			} else {
+				hostsDown.add(allHostSetFromTMS.get(host));
+			}
+		}
+
 		HostStatusTracker newTracker = hostTracker.get().computeNewHostStatus(hostsUp, hostsDown);
 		hostTracker.set(newTracker);
-		
+
 		return hostTracker.get();
 	}
 	

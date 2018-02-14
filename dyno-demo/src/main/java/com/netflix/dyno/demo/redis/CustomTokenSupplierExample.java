@@ -54,7 +54,7 @@ public class CustomTokenSupplierExample {
         final HostSupplier localHostSupplier = new HostSupplier() {
 
             @Override
-            public Collection<Host> getHosts() {
+            public List<Host> getHosts() {
                 return Collections.singletonList(localHost);
             }
         };

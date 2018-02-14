@@ -73,19 +73,20 @@ public class DynoJedisDemo {
 
 		final int port = 6379;
 
-		final Host localHost = new Host("localhost", port, "localrack", Status.Up);
 
 		final HostSupplier localHostSupplier = new HostSupplier() {
+			final Host hostSupplierHost = new Host("localhost", localRack, Status.Up);
 
 			@Override
-			public Collection<Host> getHosts() {
-				return Collections.singletonList(localHost);
+			public List<Host> getHosts() {
+				return Collections.singletonList(hostSupplierHost);
 			}
 		};
 
 		final TokenMapSupplier tokenSupplier = new TokenMapSupplier() {
 
-			final HostToken localHostToken = new HostToken(100000L, localHost);
+			final Host tokenHost = new Host("localhost", port, localRack, Status.Up);
+			final HostToken localHostToken = new HostToken(100000L, tokenHost);
 
 			@Override
 			public List<HostToken> getTokens(Set<Host> activeHosts) {
@@ -105,7 +106,7 @@ public class DynoJedisDemo {
 		final HostSupplier clusterHostSupplier = new HostSupplier() {
 
 			@Override
-			public Collection<Host> getHosts() {
+			public List<Host> getHosts() {
 				return hosts;
 			}
 		};
@@ -125,6 +126,7 @@ public class DynoJedisDemo {
 
 		client = new DynoJedisClient.Builder().withApplicationName("demo").withDynomiteClusterName("dyno_dev")
 				.withHostSupplier(hostSupplier)
+				.withTokenMapSupplier(tokenSupplier)
 				// .withCPConfig(
 				// new ConnectionPoolConfigurationImpl("demo")
 				// .setCompressionStrategy(ConnectionPoolConfiguration.CompressionStrategy.THRESHOLD)
@@ -956,6 +958,7 @@ public class DynoJedisDemo {
 			} else {
 				demo.initWithRemoteClusterFromEurekaUrl(clusterName, port);
 			}
+//			demo.initWithLocalHost();
 
 			System.out.println("Connected");
 
