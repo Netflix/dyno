@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
 
 public class HostsUpdater {
 
-	private static final org.slf4j.Logger Logger = LoggerFactory.getLogger(ConnectionPoolImpl.class);
+	private static final Logger Logger = LoggerFactory.getLogger(ConnectionPoolImpl.class);
 
 	private final HostSupplier hostSupplier;
 	private final TokenMapSupplier tokenMapSupplier;
@@ -73,8 +73,8 @@ public class HostsUpdater {
 		}
 
 		/**
-		 * HostTracker should return the hosts that we get from TMS.
-		 * Hence get the hosts from HostSupplier and map them to TMS
+		 * HostTracker should return the hosts that we get from TokenMapSupplier.
+		 * Hence get the hosts from HostSupplier and map them to TokenMapSupplier
 		 * and return them.
 		 */
 		Collections.sort(allHosts);
@@ -82,7 +82,7 @@ public class HostsUpdater {
 		// Create a list of host/Tokens
 		List<HostToken> hostTokens;
 		if (tokenMapSupplier != null) {
-			Logger.info("Getting Hosts from TMS");
+			Logger.info("Getting Hosts from TokenMapSupplier");
 			hostTokens = tokenMapSupplier.getTokens(hostSet);
 
 			if (hostTokens.isEmpty()) {
@@ -92,9 +92,12 @@ public class HostsUpdater {
 			throw new DynoException("TokenMapSupplier not provided");
 		}
 
-		Map<Host, Host> allHostSetFromTMS = new HashMap<>();
+		// The key here really needs to be a object that is overlapping between
+		// the host from HostSupplier and TokenMapSupplier. Since that is a
+		// subset of the Host object itself, Host is the key as well as value here.
+		Map<Host, Host> allHostSetFromTokenMapSupplier = new HashMap<>();
 		for (HostToken ht : hostTokens) {
-			allHostSetFromTMS.put(ht.getHost(), ht.getHost());
+			allHostSetFromTokenMapSupplier.put(ht.getHost(), ht.getHost());
 		}
 
 		hostsUp.clear();
@@ -102,9 +105,9 @@ public class HostsUpdater {
 
 		for (Host host : allHosts) {
 			if (host.isUp()) {
-				hostsUp.add(allHostSetFromTMS.get(host));
+				hostsUp.add(allHostSetFromTokenMapSupplier.get(host));
 			} else {
-				hostsDown.add(allHostSetFromTMS.get(host));
+				hostsDown.add(allHostSetFromTokenMapSupplier.get(host));
 			}
 		}
 

@@ -27,8 +27,8 @@ import java.util.List;
 public interface HostSupplier {
 	
 	/**
-	 * Return a collection of dynomite hosts for the connection pool
-	 * @return Collection<Host>
+	 * Return a list of dynomite hosts for the connection pool
+	 * @return List<Host>
 	 */
 	public List<Host> getHosts();
 }
