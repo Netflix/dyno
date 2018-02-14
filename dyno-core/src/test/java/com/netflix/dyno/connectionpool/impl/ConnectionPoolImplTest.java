@@ -163,7 +163,7 @@ public class ConnectionPoolImplTest {
 		cpConfig.withHostSupplier(new HostSupplier() {
 			
 			@Override
-			public Collection<Host> getHosts() {
+			public List<Host> getHosts() {
 				return hostSupplierHosts;
 			}
 		});

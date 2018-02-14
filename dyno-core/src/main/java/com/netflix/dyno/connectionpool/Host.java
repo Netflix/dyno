@@ -150,7 +150,7 @@ public class Host implements Comparable<Host> {
     /**
      * Equality checks will fail in collections between Host objects created
      * from the HostSupplier, which may not know the Dynomite port, and the Host
-     * objects created by the load balancer.
+     * objects created by the token map supplier.
      */
     @Override
     public int hashCode() {
