@@ -103,11 +103,19 @@ public class HostsUpdater {
 		hostsUp.clear();
 		hostsDown.clear();
 
-		for (Host host : allHosts) {
-			if (host.isUp()) {
-				hostsUp.add(allHostSetFromTokenMapSupplier.get(host));
+		for (Host hostFromHostSupplier : allHosts) {
+			if (hostFromHostSupplier.isUp()) {
+				Host hostFromTokenMapSupplier = allHostSetFromTokenMapSupplier.get(hostFromHostSupplier);
+
+				hostsUp.add(new Host(hostFromHostSupplier.getHostName(), hostFromHostSupplier.getIpAddress(),
+									 hostFromTokenMapSupplier.getPort(), hostFromTokenMapSupplier.getRack(),
+									 hostFromTokenMapSupplier.getDatacenter(), Host.Status.Up, hostFromTokenMapSupplier.getHashtag()));
 			} else {
-				hostsDown.add(allHostSetFromTokenMapSupplier.get(host));
+				Host hostFromTokenMapSupplier = allHostSetFromTokenMapSupplier.get(hostFromHostSupplier);
+
+				hostsDown.add(new Host(hostFromHostSupplier.getHostName(), hostFromHostSupplier.getIpAddress(),
+						hostFromTokenMapSupplier.getPort(), hostFromTokenMapSupplier.getRack(),
+						hostFromTokenMapSupplier.getDatacenter(), Host.Status.Down, hostFromTokenMapSupplier.getHashtag()));
 			}
 		}
 
