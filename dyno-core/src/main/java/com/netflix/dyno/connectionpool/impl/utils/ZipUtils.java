@@ -30,9 +30,9 @@ public final class ZipUtils {
 
     public static byte[] compressString(String value) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream(value.length());
-        GZIPOutputStream gos = new GZIPOutputStream(baos);
-        gos.write(Base64.encode(value.getBytes(StandardCharsets.UTF_8)));
-        gos.close();
+        try (GZIPOutputStream gos = new GZIPOutputStream(baos)) {
+            gos.write(Base64.encode(value.getBytes(StandardCharsets.UTF_8)));
+        }
         byte[] compressed = baos.toByteArray();
         baos.close();
         return compressed;
@@ -58,9 +58,9 @@ public final class ZipUtils {
      */
     public static byte[] compressBytesNonBase64(byte[] value) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream(value.length);
-        GZIPOutputStream gos = new GZIPOutputStream(baos);
-        gos.write(value);
-        gos.close();
+        try (GZIPOutputStream gos = new GZIPOutputStream(baos)) {
+            gos.write(value);
+        }
         byte[] compressed = baos.toByteArray();
         baos.close();
         return compressed;
@@ -75,8 +75,9 @@ public final class ZipUtils {
      */
     public static byte[] decompressBytesNonBase64(byte[] compressed) throws IOException {
         ByteArrayInputStream is = new ByteArrayInputStream(compressed);
-        InputStream gis = new GZIPInputStream(is);
-        return IOUtils.toByteArray(gis);
+        try (InputStream gis = new GZIPInputStream(is)) {
+            return IOUtils.toByteArray(gis);
+        }
     }
 
     /**
@@ -88,8 +89,9 @@ public final class ZipUtils {
      */
     public static String decompressStringNonBase64(byte[] compressed) throws IOException {
         ByteArrayInputStream is = new ByteArrayInputStream(compressed);
-        InputStream gis = new GZIPInputStream(is);
-        return new String(IOUtils.toByteArray(gis), StandardCharsets.UTF_8);
+        try (InputStream gis = new GZIPInputStream(is)) {
+            return new String(IOUtils.toByteArray(gis), StandardCharsets.UTF_8);
+        }
     }
 
     /**
@@ -113,8 +115,9 @@ public final class ZipUtils {
      */
     public static String decompressString(byte[] compressed) throws IOException {
         ByteArrayInputStream is = new ByteArrayInputStream(compressed);
-        InputStream gis = new GZIPInputStream(is);
-        return new String(Base64.decode(IOUtils.toByteArray(gis)), StandardCharsets.UTF_8);
+        try (InputStream gis = new GZIPInputStream(is)) {
+            return new String(Base64.decode(IOUtils.toByteArray(gis)), StandardCharsets.UTF_8);
+        }
     }
 
     /**
