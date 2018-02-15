@@ -55,7 +55,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     private final String clusterName;
     private final ConnectionPool<Jedis> connPool;
     private final AtomicReference<DynoJedisPipelineMonitor> pipelineMonitor = new AtomicReference<DynoJedisPipelineMonitor>();
-    private final EnumSet<OpName> compressionOperations = EnumSet.of(OpName.APPEND);
 
     protected final DynoOPMonitor opMonitor;
 
@@ -134,7 +133,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             this.op = o;
         }
 
-		@Override
+        @Override
         public String getName() {
             return op.name();
         }
@@ -246,42 +245,48 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
      *            the parameterized type
      */
     private abstract class CompressionValueMultiKeyOperation<T> extends MultiKeyOperation<T>
-            implements CompressionOperation<Jedis, T> {
+            implements MultiKeyCompressionOperation<Jedis, T> {
 
         private CompressionValueMultiKeyOperation(List<String> keys, OpName o) {
             super(keys, o);
         }
 
         /**
-         * Compresses the value based on the threshold defined by
+         * Accepts a set of keys and values and compresses the value based on the threshold defined by
          * {@link ConnectionPoolConfiguration#getValueCompressionThreshold()}
          *
-         * @param value
+         * @param ctx and keyValues
          * @return
          */
         @Override
-        public String compressValue(String value, ConnectionContext ctx) {
-            String result = value;
-            int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
+        public String[] compressMultiKeyValue(ConnectionContext ctx, String... keyValues) {
+        	 List<String> items = Arrays.asList(keyValues);
+           	 List<String> newItems = new ArrayList<String>();
+           	 
+              for (int i = 0 ; i < items.size() ; i++) {
+             	 if( i%2 == 0 ) {
+             		 String value = items.get(i);
 
-            try {
-                // prefer speed over accuracy here so rather than using
-                // getBytes() to get the actual size
-                // just estimate using 2 bytes per character
-                if ((2 * value.length()) > thresholdBytes) {
-                    result = ZipUtils.compressStringToBase64String(value);
-                    ctx.setMetadata("compression", true);
-                }
-            } catch (IOException e) {
-                Logger.warn(
-                        "UNABLE to compress [" + value + "] for key [" + getStringKey() + "]; sending value uncompressed");
-            }
-
-            return result;
+                      try {
+                          if ((2 * value.length()) > connPool.getConfiguration().getValueCompressionThreshold()) {
+                              newItems.add(i, ZipUtils.compressStringToBase64String(value));
+                              ctx.setMetadata("compression", true);
+                          }
+                          
+                      } catch (IOException e) {
+                          Logger.warn(
+                                  "UNABLE to compress [" + value + "] for key [" + getStringKey() + "]; sending value uncompressed");
+                      }
+                	 }
+             	 else {
+             		 newItems.add(items.get(i));
+             	 }
+              }
+            return (String[]) newItems.toArray();
         }
 
         @Override
-        public String decompressValue(String value, ConnectionContext ctx) {
+        public String decompressValue(ConnectionContext ctx, String value) {
             try {
                 if (ZipUtils.isCompressed(value)) {
                     ctx.setMetadata("decompression", true);
@@ -2701,7 +2706,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                                     new CollectionUtils.Transform<String, String>() {
                                         @Override
                                         public String get(String s) {
-                                            return decompressValue(s, state);
+                                            return decompressValue(state, s);
                                         }
                                     }));
                         }
@@ -2719,17 +2724,17 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             return connPool.executeWithFailover(new MultiKeyOperation<Long>(Arrays.asList(keysvalues), OpName.MSETNX) {
                 @Override
-                public Long execute(Jedis client, ConnectionContext state) {
+                public Long execute(Jedis client, ConnectionContext state) {                	 
                     return client.msetnx(keysvalues);
                 }
             });
-        } else {
+        } else {       	
             return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<Long>(Arrays.asList(keysvalues), OpName.MSETNX) {
-                   @Override
-                   public Long execute(final Jedis client, final ConnectionContext state) throws DynoException {
-							return client.msetnx(keysvalues);
-                   }
-            });           		
+        		@Override
+                public Long execute(final Jedis client, final ConnectionContext state) {
+                    return client.msetnx(compressMultiKeyValue(state,keysvalues));
+                }
+            });
         }
     }
     
@@ -2744,15 +2749,16 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return connPool.executeWithFailover(new MultiKeyOperation<String>(Arrays.asList(keysvalues), OpName.MSET) {
                 @Override
                 public String execute(Jedis client, ConnectionContext state) {
+                	
                     return client.mset(keysvalues);
                 }
             });
         } else {
             return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<String>(Arrays.asList(keysvalues), OpName.MSET) {
-                   @Override
-                   public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                            return client.mset(keysvalues);
-                   }
+        		@Override
+                public String execute(final Jedis client, final ConnectionContext state) {
+                    return client.mset(compressMultiKeyValue(state,keysvalues));
+                }
             });
         }
     }
