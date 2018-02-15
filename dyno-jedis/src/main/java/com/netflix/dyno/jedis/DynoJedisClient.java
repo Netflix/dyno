@@ -145,7 +145,10 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         public byte[] getBinaryKey() {
-            return this.binaryKeys.get(0);
+            if (binaryKeys != null)
+                return binaryKeys.get(0);
+            else
+                return null;
         }
 
     }
