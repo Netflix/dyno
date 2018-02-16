@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.netflix.dyno.contrib;
+package com.netflix.dyno.contrib.consul;
 
 import com.ecwid.consul.v1.ConsulClient;
 import com.ecwid.consul.v1.agent.model.NewCheck;
