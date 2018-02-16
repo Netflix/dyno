@@ -31,13 +31,11 @@ import com.google.common.base.Function;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.Lists;
-import com.netflix.discovery.DiscoveryManager;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostSupplier;
 
 /**
  * Simple class that implements {@link Supplier}<{@link List}<{@link Host}>>. It provides a List<{@link Host}>
- * using the {@link DiscoveryManager} which is the consul client. 
  * 
  * Note that the class needs the consul application name to discover all instances for that application.
  * 
