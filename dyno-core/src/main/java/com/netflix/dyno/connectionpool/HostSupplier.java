@@ -15,7 +15,7 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool;
 
-import java.util.Collection;
+import java.util.List;
 
 /**
  * Interface for a supplier of host objects that map to the dynomite cluster. The {@link ConnectionPool} object can use this to 
@@ -27,8 +27,8 @@ import java.util.Collection;
 public interface HostSupplier {
 	
 	/**
-	 * Return a collection of dynomite hosts for the connection pool
-	 * @return Collection<Host>
+	 * Return a list of dynomite hosts for the connection pool
+	 * @return List<Host>
 	 */
-	public Collection<Host> getHosts();
+	public List<Host> getHosts();
 }

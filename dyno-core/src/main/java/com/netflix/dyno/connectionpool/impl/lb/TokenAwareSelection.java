@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.netflix.dyno.connectionpool.exception.BadRequestException;
 import org.apache.commons.lang3.StringUtils;
 
 import com.netflix.dyno.connectionpool.BaseOperation;
@@ -86,9 +87,9 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
     public HostConnectionPool<CL> getPoolForOperation(BaseOperation<CL, ?> op, String hashtag) throws NoAvailableHostsException {
 
         String key = op.getStringKey();
-        byte[] binaryKey = op.getBinaryKey();
+        HostConnectionPool<CL> hostPool;
+        HostToken hToken;
 
-        HostToken hToken = null;
         if (key != null) {
         	  // If a hashtag is provided by Dynomite then we use that to create the key to hash.
             if (hashtag == null || hashtag.isEmpty()) {            
@@ -97,27 +98,33 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
                 String hashValue = StringUtils.substringBetween(key,Character.toString(hashtag.charAt(0)), Character.toString(hashtag.charAt(1)));
                 hToken = this.getTokenForKey(hashValue);
             }
-        }
-        else {
-        	// the key is binary 
-        	hToken = this.getTokenForKey(binaryKey);
-        }
-      
 
-        HostConnectionPool<CL> hostPool = null;
-        if (hToken != null) {
+            if (hToken == null) {
+                throw new NoAvailableHostsException("Token not found for key " + key);
+            }
+
+            hostPool = tokenPools.get(hToken.getToken());;
+            if (hostPool == null) {
+                throw new NoAvailableHostsException(
+                        "Could not find host connection pool for key: " + key + ", hash: " + tokenMapper.hash(key) + " Token:" + hToken.getToken());
+            }
+        } else {
+        	// the key is binary
+            byte[] binaryKey = op.getBinaryKey();
+            hToken = this.getTokenForKey(binaryKey);
+            if (hToken == null) {
+                throw new NoAvailableHostsException("Token not found for key " + binaryKey.toString());
+            }
+
             hostPool = tokenPools.get(hToken.getToken());
-        }
-        
-        if (hostPool == null && key !=null) {
-             throw new NoAvailableHostsException(
-                        "Could not find host connection pool for key: " + key + ", hash: " + tokenMapper.hash(key));
-        }
-        else if (hostPool == null) {
-            throw new NoAvailableHostsException(
-                    "Could not find host connection pool for key: " + binaryKey.toString() + ", hash: " + tokenMapper.hash(binaryKey));
+            if (hostPool == null) {
+                throw new NoAvailableHostsException(
+                        "Could not find host connection pool for key: " + binaryKey.toString() + ", hash: " + tokenMapper.hash(binaryKey) + " Token:" + getTokenForKey(binaryKey));
+            }
+
         }
         return hostPool;
+
     }
 
     @Override
