@@ -264,7 +264,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
            	 List<String> newItems = new ArrayList<String>();
            	 
               for (int i = 0 ; i < items.size() ; i++) {
-             	 if( i%2 == 0 ) {
+            	 /*
+            	  * String... keyValues is a List of keys and values.
+            	  * The value always comes second and this is the one
+            	  * we want to compress. 
+            	  */
+             	 if(i % 2 == 0 ) {
              		 String value = items.get(i);
 
                       try {
@@ -277,7 +282,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                           Logger.warn(
                                   "UNABLE to compress [" + value + "] for key [" + getStringKey() + "]; sending value uncompressed");
                       }
-                	 }
+                 }
              	 else {
              		 newItems.add(items.get(i));
              	 }
