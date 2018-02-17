@@ -55,7 +55,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     private final String clusterName;
     private final ConnectionPool<Jedis> connPool;
     private final AtomicReference<DynoJedisPipelineMonitor> pipelineMonitor = new AtomicReference<DynoJedisPipelineMonitor>();
-    private final EnumSet<OpName> compressionOperations = EnumSet.of(OpName.APPEND);
 
     protected final DynoOPMonitor opMonitor;
 
@@ -241,48 +240,61 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
      * <ul>
      * <lh>String Operations</lh>
      * <li>{@link #mget(String...) MGET}</li>
+     * <li>{@link #mset(String...) MSET}</li>
+     * <li>{@link #msetnx(String...) MSETNX}</li>
      * </ul>
      *
      * @param <T>
      *            the parameterized type
      */
     private abstract class CompressionValueMultiKeyOperation<T> extends MultiKeyOperation<T>
-            implements CompressionOperation<Jedis, T> {
+            implements MultiKeyCompressionOperation<Jedis, T> {
 
         private CompressionValueMultiKeyOperation(List<String> keys, OpName o) {
             super(keys, o);
         }
 
         /**
-         * Compresses the value based on the threshold defined by
+         * Accepts a set of keys and values and compresses the value based on the threshold defined by
          * {@link ConnectionPoolConfiguration#getValueCompressionThreshold()}
          *
-         * @param value
+         * @param ctx and keyValues
          * @return
          */
         @Override
-        public String compressValue(String value, ConnectionContext ctx) {
-            String result = value;
-            int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
+        public String[] compressMultiKeyValue(ConnectionContext ctx, String... keyValues) {
+        	 List<String> items = Arrays.asList(keyValues);
+           	 List<String> newItems = new ArrayList<String>();
+           	 
+              for (int i = 0 ; i < items.size() ; i++) {
+            	 /*
+            	  * String... keyValues is a List of keys and values.
+            	  * The value always comes second and this is the one
+            	  * we want to compress. 
+            	  */
+             	 if(i % 2 == 0 ) {
+             		 String value = items.get(i);
 
-            try {
-                // prefer speed over accuracy here so rather than using
-                // getBytes() to get the actual size
-                // just estimate using 2 bytes per character
-                if ((2 * value.length()) > thresholdBytes) {
-                    result = ZipUtils.compressStringToBase64String(value);
-                    ctx.setMetadata("compression", true);
-                }
-            } catch (IOException e) {
-                Logger.warn(
-                        "UNABLE to compress [" + value + "] for key [" + getStringKey() + "]; sending value uncompressed");
-            }
-
-            return result;
+                      try {
+                          if ((2 * value.length()) > connPool.getConfiguration().getValueCompressionThreshold()) {
+                              newItems.add(i, ZipUtils.compressStringToBase64String(value));
+                              ctx.setMetadata("compression", true);
+                          }
+                          
+                      } catch (IOException e) {
+                          Logger.warn(
+                                  "UNABLE to compress [" + value + "] for key [" + getStringKey() + "]; sending value uncompressed");
+                      }
+                 }
+             	 else {
+             		 newItems.add(items.get(i));
+             	 }
+              }
+            return (String[]) newItems.toArray();
         }
 
         @Override
-        public String decompressValue(String value, ConnectionContext ctx) {
+        public String decompressValue(ConnectionContext ctx, String value) {
             try {
                 if (ZipUtils.isCompressed(value)) {
                     ctx.setMetadata("decompression", true);
@@ -2573,10 +2585,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         });
     }
 
-    @Override
-    public Long bitcount(String key, long start, long end) {
-        return d_bitcount(key, start, end).getResult();
-    }
 
     @Override
     public Long pfadd(String key, String... elements) {
@@ -2586,6 +2594,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     @Override
     public long pfcount(String key) {
         throw new UnsupportedOperationException("not yet implemented");
+    }
+    
+    @Override
+    public Long bitcount(String key, long start, long end) {
+        return d_bitcount(key, start, end).getResult();
     }
 
     public OperationResult<Long> d_bitcount(final String key, final Long start, final Long end) {
@@ -2701,22 +2714,61 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                                     new CollectionUtils.Transform<String, String>() {
                                         @Override
                                         public String get(String s) {
-                                            return decompressValue(s, state);
+                                            return decompressValue(state, s);
                                         }
                                     }));
                         }
                     });
         }
     }
-
-    @Override
-    public String mset(String... keysvalues) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
+    
     @Override
     public Long msetnx(String... keysvalues) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return d_msetnx(keysvalues).getResult();
+    }
+
+    public OperationResult<Long> d_msetnx(final String... keysvalues) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+
+            return connPool.executeWithFailover(new MultiKeyOperation<Long>(Arrays.asList(keysvalues), OpName.MSETNX) {
+                @Override
+                public Long execute(Jedis client, ConnectionContext state) {                	 
+                    return client.msetnx(keysvalues);
+                }
+            });
+        } else {       	
+            return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<Long>(Arrays.asList(keysvalues), OpName.MSETNX) {
+        		@Override
+                public Long execute(final Jedis client, final ConnectionContext state) {
+                    return client.msetnx(compressMultiKeyValue(state,keysvalues));
+                }
+            });
+        }
+    }
+    
+    @Override
+    public String mset(String... keysvalues) {
+        return d_mset(keysvalues).getResult();
+    }
+
+    public OperationResult<String> d_mset(final String... keysvalues) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+
+            return connPool.executeWithFailover(new MultiKeyOperation<String>(Arrays.asList(keysvalues), OpName.MSET) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) {
+                	
+                    return client.mset(keysvalues);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<String>(Arrays.asList(keysvalues), OpName.MSET) {
+        		@Override
+                public String execute(final Jedis client, final ConnectionContext state) {
+                    return client.mset(compressMultiKeyValue(state,keysvalues));
+                }
+            });
+        }
     }
 
     @Override
