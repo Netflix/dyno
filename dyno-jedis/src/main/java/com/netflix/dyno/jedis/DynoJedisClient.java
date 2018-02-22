@@ -2615,10 +2615,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     /** MULTI-KEY COMMANDS */
 
-    @Override
-    public Long del(String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
 
     @Override
     public List<String> blpop(int timeout, String... keys) {
@@ -2721,6 +2717,38 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                     });
         }
     }
+    
+    
+    @Override
+    public Long exists(String... arg0) {
+        return d_exists(arg0).getResult();
+    }
+    
+    public OperationResult<Long> d_exists(final String... arg0) {
+        return connPool.executeWithFailover(new MultiKeyOperation<Long>(Arrays.asList(arg0), OpName.EXISTS) {
+              @Override
+              public Long execute(Jedis client, ConnectionContext state) {
+                    return client.exists(arg0);
+              }
+        });
+    }
+    
+    @Override
+    public Long del(String... keys) {
+        return d_del(keys).getResult();
+    }
+
+    public OperationResult<Long> d_del(final String... keys) {
+
+        return connPool.executeWithFailover(new MultiKeyOperation<Long>(Arrays.asList(keys), OpName.DEL) {
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.del(keys);
+            }
+        });
+    }
+    
+    
     
     @Override
     public Long msetnx(String... keysvalues) {
@@ -4063,7 +4091,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
          */
         private void setHashtagConnectionPool(HostSupplier hostSupplier, ConnectionPoolConfigurationImpl config) {
             // Find the hosts from host supplier
-            List<Host> hosts = hostSupplier.getHosts();
+            List<Host> hosts = (List<Host>) hostSupplier.getHosts();
             Collections.sort(hosts);
             // Convert the arraylist to set
 
@@ -4137,11 +4165,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return new DynoJedisClient(appName, "TestCluster", cp, null, null);
         }
 
-    }
-
-    @Override
-    public Long exists(String... arg0) {
-        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
