@@ -39,6 +39,7 @@ public class Host implements Comparable<Host> {
     private final String hostname;
     private final String ipAddress;
     private final int port;
+    private final int securePort;
     private final InetSocketAddress socketAddress;
     private final String rack;
     private final String datacenter;
@@ -50,42 +51,47 @@ public class Host implements Comparable<Host> {
     }
 
     public Host(String hostname, int port, String rack) {
-        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down, null);
+        this(hostname, null, port, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down, null);
     }
 
     public Host(String hostname, String rack, Status status) {
-        this(hostname, null, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
+        this(hostname, null, DEFAULT_PORT, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
     }
 
     public Host(String hostname, int port, String rack, Status status) {
-        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
+        this(hostname, null, port, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
     }
 
     public Host(String hostname, int port, String rack, Status status, String hashtag) {
-        this(hostname, null, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
+        this(hostname, null, port, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
     }
 
     public Host(String hostname, String ipAddress, int port, String rack) {
-        this(hostname, ipAddress, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down, null);
+        this(hostname, ipAddress, port, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down, null);
     }
 
     public Host(String hostname, String ipAddress, String rack, Status status) {
-        this(hostname, ipAddress, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
+        this(hostname, ipAddress, DEFAULT_PORT, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
     }
 
     public Host(String hostname, String ipAddress, String rack, Status status, String hashtag) {
-        this(hostname, ipAddress, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
+        this(hostname, ipAddress, DEFAULT_PORT, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
     }
 
     public Host(String hostname, String ipAddress, int port, String rack, String datacenter, Status status) {
-        this(hostname, ipAddress, port, rack, datacenter, status, null);
+        this(hostname, ipAddress, port, port, rack, datacenter, status, null);
     }
 
     public Host(String name, String ipAddress, int port, String rack, String datacenter, Status status,
             String hashtag) {
+        this(name, ipAddress, port, port, rack, datacenter, status, hashtag);
+    }
+
+    public Host(String name, String ipAddress, int port, int securePort, String rack, String datacenter, Status status, String hashtag) {
         this.hostname = name;
         this.ipAddress = ipAddress;
         this.port = port;
+        this.securePort = securePort;
         this.rack = rack;
         this.status = status;
         this.datacenter = datacenter;
@@ -116,6 +122,10 @@ public class Host implements Comparable<Host> {
 
     public int getPort() {
         return port;
+    }
+
+    public int getSecurePort() {
+        return securePort;
     }
 
     public String getDatacenter() {
