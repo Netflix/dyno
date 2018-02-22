@@ -81,7 +81,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 						hostPool.getSocketTimeout());
 			}
 			else {
-				jedisClient = new Jedis(host.getHostAddress(), host.getPort(), hostPool.getConnectionTimeout(),
+				jedisClient = new Jedis(host.getHostAddress(), host.getSecurePort(), hostPool.getConnectionTimeout(),
 						hostPool.getSocketTimeout(), true, sslSocketFactory,  new SSLParameters(), null);
 			}
 		}

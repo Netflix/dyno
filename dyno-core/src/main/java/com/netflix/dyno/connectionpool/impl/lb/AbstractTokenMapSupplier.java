@@ -227,13 +227,19 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
                 String zone = (String) jItem.get("zone");
                 String datacenter = (String) jItem.get("dc");
                 String portStr = (String) jItem.get("port");
+                String securePortStr = (String) jItem.get("secure_port");
                 String hashtag = (String) jItem.get("hashtag");
                 int port = Host.DEFAULT_PORT;
                 if (portStr != null) {
                     port = Integer.valueOf(portStr);
                 }
 
-                Host host = new Host(hostname, ipAddress, port, zone, datacenter, Status.Up, hashtag);
+                int securePort = port;
+                if (securePortStr != null) {
+                    securePort = Integer.valueOf(securePortStr);
+                }
+
+                Host host = new Host(hostname, ipAddress, port, securePort, zone, datacenter, Status.Up, hashtag);
 
                 if (isLocalDatacenterHost(host)) {
                     HostToken hostToken = new HostToken(token, host);
