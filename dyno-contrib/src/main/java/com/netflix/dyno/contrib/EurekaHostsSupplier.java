@@ -51,19 +51,20 @@ public class EurekaHostsSupplier implements HostSupplier {
 	// The Dynomite cluster name for discovering nodes
 	private final String applicationName;
 	private final EurekaClient discoveryClient;
-	private final int dynomitePort;
 	
 	@Deprecated
-    public EurekaHostsSupplier(String applicationName, DiscoveryClient dClient, int dynomitePort) {
+    public EurekaHostsSupplier(String applicationName, DiscoveryClient dClient) {
         this.applicationName = applicationName.toUpperCase();
         this.discoveryClient = dClient;
-        this.dynomitePort = dynomitePort;
-	}
+    }
     
-    public EurekaHostsSupplier(String applicationName, EurekaClient dClient, int dynomitePort) {
+    public EurekaHostsSupplier(String applicationName, EurekaClient dClient) {
         this.applicationName = applicationName.toUpperCase();
-		this.discoveryClient = dClient;
-		this.dynomitePort = dynomitePort;
+        this.discoveryClient = dClient;
+    }
+
+	public static EurekaHostsSupplier newInstance(String applicationName, EurekaHostsSupplier hostsSupplier) {
+        return new EurekaHostsSupplier(applicationName, hostsSupplier.getDiscoveryClient());
     }
 
 	@Override
@@ -114,7 +115,7 @@ public class EurekaHostsSupplier implements HostSupplier {
 						if(rack == null) {
 						    Logger.error("Rack wasn't found for host:" + info.getHostName() + " there may be issues matching it up to the token map");
 						}
-						Host host = new Host(info.getHostName(), info.getIPAddr(), dynomitePort, rack, status);
+						Host host = new Host(info.getHostName(), info.getIPAddr(), rack, status);
 						return host;
 					}
 				}));

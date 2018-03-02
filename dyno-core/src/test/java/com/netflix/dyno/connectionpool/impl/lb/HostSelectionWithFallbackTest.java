@@ -79,12 +79,12 @@ public class HostSelectionWithFallbackTest {
 	private final ConnectionPoolConfigurationImpl cpConfig = new ConnectionPoolConfigurationImpl("test");
 	private final ConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
 
-	Host h1 = new Host("h1", 8102,"localTestRack", Status.Up);
-	Host h2 = new Host("h2", 8102, "localTestRack", Status.Up);
-	Host h3 = new Host("h3", 8102,"remoteRack1", Status.Up);
-	Host h4 = new Host("h4", 8102,"remoteRack1", Status.Up);
-	Host h5 = new Host("h5", 8102, "remoteRack2", Status.Up);
-	Host h6 = new Host("h6", 8102, "remoteRack2", Status.Up);
+	Host h1 = new Host("h1", "localTestRack", Status.Up);
+	Host h2 = new Host("h2", "localTestRack", Status.Up);
+	Host h3 = new Host("h3", "remoteRack1", Status.Up);
+	Host h4 = new Host("h4", "remoteRack1", Status.Up);
+	Host h5 = new Host("h5", "remoteRack2", Status.Up);
+	Host h6 = new Host("h6", "remoteRack2", Status.Up);
 
 	Host[] arr = {h1, h2, h3, h4, h5, h6};
 	List<Host> hosts = Arrays.asList(arr);

@@ -109,20 +109,28 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
     private static final Logger Logger = LoggerFactory.getLogger(AbstractTokenMapSupplier.class);
     private final String localZone;
     private final String localDatacenter;
-    private final int dynomitePort;
+    private int unsuppliedPort = -1;
 
-    public AbstractTokenMapSupplier(String localRack, int dynomitePort) {
-        this(localRack, ConfigUtils.getDataCenter(), dynomitePort);
-    }
-
-    public AbstractTokenMapSupplier(int dynomitePort) {
-        this(ConfigUtils.getLocalZone(), ConfigUtils.getDataCenter(), dynomitePort);
-    }
-
-    public AbstractTokenMapSupplier(String localRack, String localDatacenter, int dynomitePort) {
+    public AbstractTokenMapSupplier(String localRack) {
         this.localZone = localRack;
-        this.localDatacenter = localDatacenter;
-        this.dynomitePort = dynomitePort;
+        localDatacenter = ConfigUtils.getDataCenter();
+    }
+
+    public AbstractTokenMapSupplier(String localRack, int port) {
+        this.localZone = localRack;
+        localDatacenter = ConfigUtils.getDataCenter();
+        unsuppliedPort = port;
+    }
+
+    public AbstractTokenMapSupplier() {
+        localZone = ConfigUtils.getLocalZone();
+        localDatacenter = ConfigUtils.getDataCenter();
+    }
+
+    public AbstractTokenMapSupplier(int port) {
+        localZone = ConfigUtils.getLocalZone();
+        localDatacenter = ConfigUtils.getDataCenter();
+        unsuppliedPort = port;
     }
 
     public abstract String getTopologyJsonPayload(Set<Host> activeHosts);
@@ -219,13 +227,19 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
                 String zone = (String) jItem.get("zone");
                 String datacenter = (String) jItem.get("dc");
                 String portStr = (String) jItem.get("port");
+                String securePortStr = (String) jItem.get("secure_port");
                 String hashtag = (String) jItem.get("hashtag");
-                int port = dynomitePort;
+                int port = Host.DEFAULT_PORT;
                 if (portStr != null) {
                     port = Integer.valueOf(portStr);
                 }
 
-                Host host = new Host(hostname, ipAddress, port, zone, datacenter, Status.Up, hashtag);
+                int securePort = port;
+                if (securePortStr != null) {
+                    securePort = Integer.valueOf(securePortStr);
+                }
+
+                Host host = new Host(hostname, ipAddress, port, securePort, zone, datacenter, Status.Up, hashtag);
 
                 if (isLocalDatacenterHost(host)) {
                     HostToken hostToken = new HostToken(token, host);

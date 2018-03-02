@@ -36,7 +36,7 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	
 	private static final String DynoPrefix = "dyno.";
 	
-	private final DynamicIntProperty port;
+	//private final DynamicIntProperty port;
 	private final DynamicIntProperty maxConnsPerHost;
 	private final DynamicIntProperty maxTimeoutWhenExhausted;
 	private final DynamicIntProperty maxFailoverCount;
@@ -60,10 +60,8 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	public ArchaiusConnectionPoolConfiguration(String name) {
 		super(name);
 		
-		String propertyPrefix = DynoPrefix + name;
-
-		port = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.port", super.getPort());
-
+		String propertyPrefix = DynoPrefix + name; 
+		
 		maxConnsPerHost = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.maxConnsPerHost", super.getMaxConnsPerHost());
 		maxTimeoutWhenExhausted = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.maxTimeoutWhenExhausted", super.getMaxTimeoutWhenExhausted());
 		maxFailoverCount = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.maxFailoverCount", super.getMaxFailoverCount());
@@ -91,10 +89,6 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 		return super.getName();
 	}
 
-	@Override
-	public int getPort() {
-		return super.getPort();
-	}
 
 	@Override
 	public int getMaxConnsPerHost() {

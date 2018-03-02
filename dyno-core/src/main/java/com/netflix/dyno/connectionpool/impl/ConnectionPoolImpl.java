@@ -125,7 +125,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 	}
 	;
 
-	this.hostsUpdater = new HostsUpdater(cpConfiguration.getHostSupplier());
+	this.hostsUpdater = new HostsUpdater(cpConfiguration.getHostSupplier(), cpConfiguration.getTokenSupplier());
 
     }
 

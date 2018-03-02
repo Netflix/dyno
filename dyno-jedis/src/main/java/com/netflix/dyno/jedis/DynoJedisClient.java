@@ -55,7 +55,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     private final String clusterName;
     private final ConnectionPool<Jedis> connPool;
     private final AtomicReference<DynoJedisPipelineMonitor> pipelineMonitor = new AtomicReference<DynoJedisPipelineMonitor>();
-    private final EnumSet<OpName> compressionOperations = EnumSet.of(OpName.APPEND);
 
     protected final DynoOPMonitor opMonitor;
 
@@ -145,7 +144,10 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         public byte[] getBinaryKey() {
-            return this.binaryKeys.get(0);
+            if (binaryKeys != null)
+                return binaryKeys.get(0);
+            else
+                return null;
         }
 
     }
@@ -238,48 +240,61 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
      * <ul>
      * <lh>String Operations</lh>
      * <li>{@link #mget(String...) MGET}</li>
+     * <li>{@link #mset(String...) MSET}</li>
+     * <li>{@link #msetnx(String...) MSETNX}</li>
      * </ul>
      *
      * @param <T>
      *            the parameterized type
      */
     private abstract class CompressionValueMultiKeyOperation<T> extends MultiKeyOperation<T>
-            implements CompressionOperation<Jedis, T> {
+            implements MultiKeyCompressionOperation<Jedis, T> {
 
         private CompressionValueMultiKeyOperation(List<String> keys, OpName o) {
             super(keys, o);
         }
 
         /**
-         * Compresses the value based on the threshold defined by
+         * Accepts a set of keys and values and compresses the value based on the threshold defined by
          * {@link ConnectionPoolConfiguration#getValueCompressionThreshold()}
          *
-         * @param value
+         * @param ctx and keyValues
          * @return
          */
         @Override
-        public String compressValue(String value, ConnectionContext ctx) {
-            String result = value;
-            int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
+        public String[] compressMultiKeyValue(ConnectionContext ctx, String... keyValues) {
+        	 List<String> items = Arrays.asList(keyValues);
+           	 List<String> newItems = new ArrayList<String>();
+           	 
+              for (int i = 0 ; i < items.size() ; i++) {
+            	 /*
+            	  * String... keyValues is a List of keys and values.
+            	  * The value always comes second and this is the one
+            	  * we want to compress. 
+            	  */
+             	 if(i % 2 == 0 ) {
+             		 String value = items.get(i);
 
-            try {
-                // prefer speed over accuracy here so rather than using
-                // getBytes() to get the actual size
-                // just estimate using 2 bytes per character
-                if ((2 * value.length()) > thresholdBytes) {
-                    result = ZipUtils.compressStringToBase64String(value);
-                    ctx.setMetadata("compression", true);
-                }
-            } catch (IOException e) {
-                Logger.warn(
-                        "UNABLE to compress [" + value + "] for key [" + getStringKey() + "]; sending value uncompressed");
-            }
-
-            return result;
+                      try {
+                          if ((2 * value.length()) > connPool.getConfiguration().getValueCompressionThreshold()) {
+                              newItems.add(i, ZipUtils.compressStringToBase64String(value));
+                              ctx.setMetadata("compression", true);
+                          }
+                          
+                      } catch (IOException e) {
+                          Logger.warn(
+                                  "UNABLE to compress [" + value + "] for key [" + getStringKey() + "]; sending value uncompressed");
+                      }
+                 }
+             	 else {
+             		 newItems.add(items.get(i));
+             	 }
+              }
+            return (String[]) newItems.toArray();
         }
 
         @Override
-        public String decompressValue(String value, ConnectionContext ctx) {
+        public String decompressValue(ConnectionContext ctx, String value) {
             try {
                 if (ZipUtils.isCompressed(value)) {
                     ctx.setMetadata("decompression", true);
@@ -2570,10 +2585,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         });
     }
 
-    @Override
-    public Long bitcount(String key, long start, long end) {
-        return d_bitcount(key, start, end).getResult();
-    }
 
     @Override
     public Long pfadd(String key, String... elements) {
@@ -2583,6 +2594,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     @Override
     public long pfcount(String key) {
         throw new UnsupportedOperationException("not yet implemented");
+    }
+    
+    @Override
+    public Long bitcount(String key, long start, long end) {
+        return d_bitcount(key, start, end).getResult();
     }
 
     public OperationResult<Long> d_bitcount(final String key, final Long start, final Long end) {
@@ -2599,10 +2615,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     /** MULTI-KEY COMMANDS */
 
-    @Override
-    public Long del(String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
 
     @Override
     public List<String> blpop(int timeout, String... keys) {
@@ -2698,22 +2710,93 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                                     new CollectionUtils.Transform<String, String>() {
                                         @Override
                                         public String get(String s) {
-                                            return decompressValue(s, state);
+                                            return decompressValue(state, s);
                                         }
                                     }));
                         }
                     });
         }
     }
-
+    
+    
     @Override
-    public String mset(String... keysvalues) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long exists(String... arg0) {
+        return d_exists(arg0).getResult();
+    }
+    
+    public OperationResult<Long> d_exists(final String... arg0) {
+        return connPool.executeWithFailover(new MultiKeyOperation<Long>(Arrays.asList(arg0), OpName.EXISTS) {
+              @Override
+              public Long execute(Jedis client, ConnectionContext state) {
+                    return client.exists(arg0);
+              }
+        });
+    }
+    
+    @Override
+    public Long del(String... keys) {
+        return d_del(keys).getResult();
     }
 
+    public OperationResult<Long> d_del(final String... keys) {
+
+        return connPool.executeWithFailover(new MultiKeyOperation<Long>(Arrays.asList(keys), OpName.DEL) {
+            @Override
+            public Long execute(Jedis client, ConnectionContext state) {
+                return client.del(keys);
+            }
+        });
+    }
+    
+    
+    
     @Override
     public Long msetnx(String... keysvalues) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return d_msetnx(keysvalues).getResult();
+    }
+
+    public OperationResult<Long> d_msetnx(final String... keysvalues) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+
+            return connPool.executeWithFailover(new MultiKeyOperation<Long>(Arrays.asList(keysvalues), OpName.MSETNX) {
+                @Override
+                public Long execute(Jedis client, ConnectionContext state) {                	 
+                    return client.msetnx(keysvalues);
+                }
+            });
+        } else {       	
+            return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<Long>(Arrays.asList(keysvalues), OpName.MSETNX) {
+        		@Override
+                public Long execute(final Jedis client, final ConnectionContext state) {
+                    return client.msetnx(compressMultiKeyValue(state,keysvalues));
+                }
+            });
+        }
+    }
+    
+    @Override
+    public String mset(String... keysvalues) {
+        return d_mset(keysvalues).getResult();
+    }
+
+    public OperationResult<String> d_mset(final String... keysvalues) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+
+            return connPool.executeWithFailover(new MultiKeyOperation<String>(Arrays.asList(keysvalues), OpName.MSET) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) {
+                	
+                    return client.mset(keysvalues);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<String>(Arrays.asList(keysvalues), OpName.MSET) {
+        		@Override
+                public String execute(final Jedis client, final ConnectionContext state) {
+                    return client.mset(compressMultiKeyValue(state,keysvalues));
+                }
+            });
+        }
     }
 
     @Override
@@ -3758,18 +3841,16 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         private String appName;
         private String clusterName;
-
-        private int port = -1;
         private ConnectionPoolConfigurationImpl cpConfig;
         private HostSupplier hostSupplier;
-        private TokenMapSupplier tokenMapSupplier;
-
         private EurekaClient discoveryClient;
         private String dualWriteClusterName;
         private HostSupplier dualWriteHostSupplier;
         private DynoDualWriterClient.Dial dualWriteDial;
         private ConnectionPoolMonitor cpMonitor;
         private SSLSocketFactory sslSocketFactory;
+        private TokenMapSupplier tokenMapSupplier;
+        private TokenMapSupplier dualWriteTokenMapSupplier;
 
         public Builder() {
         }
@@ -3820,6 +3901,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
+        public Builder withDualWriteTokenMapSupplier(TokenMapSupplier dualWriteTokenMapSupplier) {
+            this.dualWriteTokenMapSupplier = dualWriteTokenMapSupplier;
+            return this;
+        }
+
         public Builder withDualWriteDial(DynoDualWriterClient.Dial dial) {
             this.dualWriteDial = dial;
             return this;
@@ -3835,15 +3921,10 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
-        public Builder withPort(int suppliedPort) {
-            Logger.info("Will use port" + suppliedPort);
-            this.port = suppliedPort;
-            return this;
-        }
-
         public DynoJedisClient build() {
             assert (appName != null);
             assert (clusterName != null);
+
             if (cpConfig == null) {
                 cpConfig = new ArchaiusConnectionPoolConfiguration(appName);
                 Logger.info("Dyno Client runtime properties: " + cpConfig.toString());
@@ -3864,18 +3945,15 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             // client application startup
             shadowConfig.setFailOnStartupIfNoHosts(false);
 
-            if (port != -1) {
-                shadowConfig.setPort(port);
-            }
-
-            HostSupplier shadowSupplier = null;
+            //Initialize the Host Supplier
+            HostSupplier shadowSupplier;
             if (dualWriteHostSupplier == null) {
                 if (hostSupplier != null && hostSupplier instanceof EurekaHostsSupplier) {
                     EurekaHostsSupplier eurekaSupplier = (EurekaHostsSupplier) hostSupplier;
-                    shadowSupplier = new EurekaHostsSupplier(shadowConfig.getDualWriteClusterName(),
-                            eurekaSupplier.getDiscoveryClient(), shadowConfig.getPort());
+                    shadowSupplier = EurekaHostsSupplier.newInstance(shadowConfig.getDualWriteClusterName(),
+                            eurekaSupplier);
                 } else if (discoveryClient != null) {
-                    shadowSupplier = new EurekaHostsSupplier(shadowConfig.getDualWriteClusterName(), discoveryClient, shadowConfig.getPort());
+                    shadowSupplier = new EurekaHostsSupplier(shadowConfig.getDualWriteClusterName(), discoveryClient);
                 } else {
                     throw new DynoConnectException("HostSupplier for DualWrite cluster is REQUIRED if you are not "
                             + "using EurekaHostsSupplier implementation or using a EurekaClient");
@@ -3886,8 +3964,10 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             shadowConfig.withHostSupplier(shadowSupplier);
 
+            if (dualWriteTokenMapSupplier != null)
+                shadowConfig.withTokenSupplier(dualWriteTokenMapSupplier);
             setLoadBalancingStrategy(shadowConfig);
-            setHashtagConnectionPool(shadowConfig);
+            setHashtagConnectionPool(shadowSupplier, shadowConfig);
 
             String shadowAppName = shadowConfig.getName();
             DynoCPMonitor shadowCPMonitor = new DynoCPMonitor(shadowAppName);
@@ -3921,9 +4001,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         private DynoJedisClient buildDynoJedisClient() {
-            if (port != -1) {
-                cpConfig.setPort(port);
-            }
             DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
             ConnectionPoolMonitor cpMonitor = (this.cpMonitor == null) ? new DynoCPMonitor(appName) : this.cpMonitor;
 
@@ -3940,7 +4017,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                     throw new DynoConnectException("HostSupplier not provided. Cannot initialize EurekaHostsSupplier "
                             + "which requires a DiscoveryClient");
                 } else {
-                    hostSupplier = new EurekaHostsSupplier(clusterName, discoveryClient, cpConfig.getPort());
+                    hostSupplier = new EurekaHostsSupplier(clusterName, discoveryClient);
                 }
             }
 
@@ -3948,7 +4025,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             if (tokenMapSupplier != null)
                 cpConfig.withTokenSupplier(tokenMapSupplier);
             setLoadBalancingStrategy(cpConfig);
-            setHashtagConnectionPool(cpConfig);
+            setHashtagConnectionPool(hostSupplier, cpConfig);
             JedisConnectionFactory connFactory = new JedisConnectionFactory(opMonitor, sslSocketFactory);
 
             return startConnectionPool(appName, connFactory, cpConfig, cpMonitor);
@@ -3990,7 +4067,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 if (config.getTokenSupplier() == null) {
                     Logger.warn(
                             "TOKEN AWARE selected and no token supplier found, using default HttpEndpointBasedTokenMapSupplier()");
-                    config.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier(cpConfig.getPort()));
+                    config.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier());
                 }
 
                 if (config.getLocalRack() == null && config.localZoneAffinity()) {
@@ -4009,17 +4086,14 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         /**
          * Set the hash to the connection pool if is provided by Dynomite
+         * @param hostSupplier
          * @param config
          */
-        private void setHashtagConnectionPool(ConnectionPoolConfigurationImpl config) {
+        private void setHashtagConnectionPool(HostSupplier hostSupplier, ConnectionPoolConfigurationImpl config) {
             // Find the hosts from host supplier
-            HostSupplier hostSupplier = config.getHostSupplier();
-            Collection<Host> hosts = hostSupplier.getHosts();
-            // Convert the returned collection to an arraylist
-            ArrayList<Host> arrayHosts = new ArrayList<Host>(hosts);
-            Collections.sort(arrayHosts);
+            List<Host> hosts = (List<Host>) hostSupplier.getHosts();
+            Collections.sort(hosts);
             // Convert the arraylist to set
-            Set<Host> hostSet = new HashSet<Host>(arrayHosts);
 
             // Take the token map supplier (aka the token topology from
             // Dynomite)
@@ -4028,6 +4102,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             // Create a list of host/Tokens
             List<HostToken> hostTokens;
             if (tokenMapSupplier != null) {
+                Set<Host> hostSet = new HashSet<Host>(hosts);
                 hostTokens = tokenMapSupplier.getTokens(hostSet);
                 /* Dyno cannot reach the TokenMapSupplier endpoint, 
                  * therefore no nodes can be retrieved.
@@ -4090,11 +4165,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return new DynoJedisClient(appName, "TestCluster", cp, null, null);
         }
 
-    }
-
-    @Override
-    public Long exists(String... arg0) {
-        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override

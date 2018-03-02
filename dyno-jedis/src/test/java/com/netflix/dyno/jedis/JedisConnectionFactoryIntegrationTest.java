@@ -46,7 +46,7 @@ public class JedisConnectionFactoryIntegrationTest {
     private final HostSupplier localHostSupplier = new HostSupplier() {
 
         @Override
-        public Collection<Host> getHosts() {
+        public List<Host> getHosts() {
             return Collections.singletonList(localHost);
         }
     };
@@ -115,6 +115,7 @@ public class JedisConnectionFactoryIntegrationTest {
 
     private DynoJedisClient constructJedisClient(final boolean withSsl) throws Exception {
         final ConnectionPoolConfigurationImpl connectionPoolConfiguration = new ConnectionPoolConfigurationImpl(rack);
+        connectionPoolConfiguration.withTokenSupplier(supplier);
         connectionPoolConfiguration.setLocalRack(rack);
         connectionPoolConfiguration.setLocalDataCenter(datacenter);
 
@@ -124,7 +125,6 @@ public class JedisConnectionFactoryIntegrationTest {
                 .withApplicationName("appname")
                 .withDynomiteClusterName(rack)
                 .withHostSupplier(localHostSupplier)
-                .withTokenMapSupplier(supplier)
                 .withCPConfig(connectionPoolConfiguration);
 
         if (withSsl) {

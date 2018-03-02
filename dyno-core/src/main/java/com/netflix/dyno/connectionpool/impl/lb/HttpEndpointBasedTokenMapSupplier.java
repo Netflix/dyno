@@ -44,26 +44,26 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
     private static final String DefaultServerUrl = "http://{hostname}:{port}/REST/v1/admin/cluster_describe";
     private static final Integer NUM_RETRIES_PER_NODE = 2;
     private static final Integer NUM_RETRIER_ACROSS_NODES = 2;
-    private static final Integer defaultHttpPort = 8080;
+    private static final Integer defaultPort = 8080;
 
     private final String serverUrl;
 
-    public HttpEndpointBasedTokenMapSupplier(int dynomitePort) {
-        this(DefaultServerUrl, defaultHttpPort, dynomitePort);
+    public HttpEndpointBasedTokenMapSupplier() {
+        this(DefaultServerUrl, defaultPort);
     }
     
-    public HttpEndpointBasedTokenMapSupplier(int httpPort, int dynomitePort) {
-	this(DefaultServerUrl, httpPort, dynomitePort);
+    public HttpEndpointBasedTokenMapSupplier(int port) {
+	this(DefaultServerUrl, port);
     }
 
-    public HttpEndpointBasedTokenMapSupplier(String url, int httpPort, int dynomitePort) {
-	super(dynomitePort);
+    public HttpEndpointBasedTokenMapSupplier(String url, int port) {
+	super(port);
 
 	/**
 	 * If no port is passed means -1 then we will substitute to defaultPort
 	 * else the passed one.
 	 */
-	url = url.replace("{port}", (httpPort > -1) ? Integer.toString(httpPort) : Integer.toString(defaultHttpPort));
+	url = url.replace("{port}", (port > -1) ? Integer.toString(port) : Integer.toString(defaultPort));
 	serverUrl = url;
     }
 
