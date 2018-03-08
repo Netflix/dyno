@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
+import com.google.common.collect.Lists;
 import com.netflix.dyno.connectionpool.*;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
@@ -894,13 +895,14 @@ public class DynoJedisDemo {
 		public List<Map<String, String>> getList() {
 			return list;
 		}
-	};
+	}
 
 	public void runEvalTest() throws Exception {
 
 		client.set("EvalTest", "true");
-		List<String> keys = Arrays.asList("EvalTest");
-		List<String> args = Arrays.asList("true");
+
+		List<String> keys = Lists.newArrayList("EvalTest");
+		List<String> args = Lists.newArrayList("true");
 		Object obj = client.eval(
 				"if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
 				keys, args);
