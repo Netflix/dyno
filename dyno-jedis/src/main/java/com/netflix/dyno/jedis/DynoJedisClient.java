@@ -462,7 +462,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public Object eval(String script, List<String> keys, List<String> args) {
-        String[] params = (String[])ArrayUtils.addAll(keys.toArray(), args.toArray());
+        String[] params = ArrayUtils.addAll(keys.toArray(new String[0]), args.toArray(new String[0]));
         return eval(script, keys.size(), params);
     }
 
