@@ -108,13 +108,13 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 			} catch (JedisConnectionException ex) {
                 Logger.warn("Caught JedisConnectionException: " + ex.getMessage());
 				opMonitor.recordFailure(opName, ex.getMessage());
-				lastDynoException = (DynoConnectException) new FatalConnectionException(ex).setAttempt(1);
+				lastDynoException = (DynoConnectException) new FatalConnectionException(ex).setAttempt(1).setHost(this.getHost());
 				throw lastDynoException;
 
 			} catch (RuntimeException ex) {
                 Logger.warn("Caught RuntimeException: " + ex.getMessage());
 				opMonitor.recordFailure(opName, ex.getMessage());
-				lastDynoException = (DynoConnectException) new FatalConnectionException(ex).setAttempt(1);
+				lastDynoException = (DynoConnectException) new FatalConnectionException(ex).setAttempt(1).setHost(this.getHost());
 				throw lastDynoException;
 
 			} finally {
