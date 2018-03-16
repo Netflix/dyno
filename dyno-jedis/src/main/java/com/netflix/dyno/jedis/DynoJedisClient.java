@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.netflix.dyno.jedis;
 
+import com.google.common.collect.Sets;
 import com.netflix.discovery.DiscoveryClient;
 import com.netflix.discovery.EurekaClient;
 import com.netflix.dyno.connectionpool.*;
@@ -27,12 +28,13 @@ import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.connectionpool.impl.lb.HttpEndpointBasedTokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
-import com.netflix.dyno.contrib.*;
-
+import com.netflix.dyno.contrib.ArchaiusConnectionPoolConfiguration;
+import com.netflix.dyno.contrib.DynoCPMonitor;
+import com.netflix.dyno.contrib.DynoOPMonitor;
+import com.netflix.dyno.contrib.EurekaHostsSupplier;
 import org.slf4j.Logger;
-
-import redis.clients.jedis.BinaryClient.LIST_POSITION;
 import redis.clients.jedis.*;
+import redis.clients.jedis.BinaryClient.LIST_POSITION;
 import redis.clients.jedis.params.geo.GeoRadiusParam;
 import redis.clients.jedis.params.sortedset.ZAddParams;
 import redis.clients.jedis.params.sortedset.ZIncrByParams;
@@ -2801,7 +2803,13 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public Set<String> sinter(String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+        Set<String> allResults = d_smembers(keys[0]).getResult();
+        //loop through keys and intersect to a set, use d_smembers
+        for(int i = 1; i < keys.length; i++) {
+            allResults = Sets.intersection(allResults, d_smembers(keys[i]).getResult());
+        }
+
+        return allResults;
     }
 
     public Long sinterstore(final String dstkey, final String... keys) {
@@ -2820,7 +2828,14 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public Set<String> sunion(String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+        Set<String> allResults = new HashSet<String>();
+        //loop through keys and append to a set, use d_smembers
+        for(String key : keys) {
+            OperationResult<Set<String>> results = d_smembers(key);
+            allResults.addAll(results.getResult());
+        }
+
+        return allResults;
     }
 
     @Override
