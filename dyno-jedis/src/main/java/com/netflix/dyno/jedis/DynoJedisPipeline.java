@@ -2142,11 +2142,20 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
 	}
 
-	@Override
-	public Response<Long> zadd(String arg0, double arg1, String arg2, ZAddParams arg3) {
-		throw new UnsupportedOperationException("not yet implemented");
+	public Response<Long> zadd(final String key, final double score, final String member, final ZAddParams params) {
+
+		return new PipelineOperation<Long>() {
+
+			@Override
+			Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
+				return jedisPipeline.zadd(key, score, member, params);
+			}
+
+		}.execute(key, OpName.ZADD);
+
 
 	}
+
 
 	@Override
 	public Response<Double> zincrby(String arg0, double arg1, String arg2, ZIncrByParams arg3) {
