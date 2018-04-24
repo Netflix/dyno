@@ -2169,7 +2169,8 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 			opMonitor.recordPipelineSync();
 		} catch (JedisConnectionException jce) {
 			String msg = "Failed sync() to host: " + getHostInfo();
-			pipelineEx.set(new FatalConnectionException(msg, jce));
+			pipelineEx.set(new FatalConnectionException(msg, jce).
+					setHost(connection == null ? Host.NO_HOST : connection.getHost()));
 			cpMonitor.incOperationFailure(connection == null ? null : connection.getHost(), jce);
 			throw jce;
 		} finally {
@@ -2188,7 +2189,8 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 			return result;
 		} catch (JedisConnectionException jce) {
 			String msg = "Failed syncAndReturnAll() to host: " + getHostInfo();
-			pipelineEx.set(new FatalConnectionException(msg, jce));
+			pipelineEx.set(new FatalConnectionException(msg, jce).
+					setHost(connection == null ? Host.NO_HOST : connection.getHost()));
 			cpMonitor.incOperationFailure(connection == null ? null : connection.getHost(), jce);
 			throw jce;
 		} finally {

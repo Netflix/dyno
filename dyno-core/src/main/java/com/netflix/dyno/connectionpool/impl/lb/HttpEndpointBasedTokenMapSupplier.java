@@ -81,31 +81,31 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
      */
     @Override
     public String getTopologyJsonPayload(Set<Host> activeHosts) {
-	int count = NUM_RETRIER_ACROSS_NODES;
-	String response;
-	Exception lastEx = null;
+		int count = NUM_RETRIER_ACROSS_NODES;
+		String response;
+		Exception lastEx = null;
 
-	do {
-	    try {
-		response = getTopologyWithNodeRetry(activeHosts);
-		if (response != null) {
-		    return response;
+		do {
+			try {
+				response = getTopologyFromRandomNodeWithRetry(activeHosts);
+				if (response != null) {
+					return response;
+				}
+			} catch (Exception e) {
+				lastEx = e;
+			} finally {
+				count--;
+			}
+		} while ((count > 0));
+
+		if (lastEx != null) {
+			if (lastEx instanceof ConnectTimeoutException) {
+				throw new TimeoutException("Unable to obtain topology", lastEx);
+			}
+			throw new DynoException(lastEx);
+		} else {
+			throw new DynoException("Could not contact dynomite for token map");
 		}
-	    } catch (Exception e) {
-		lastEx = e;
-	    } finally {
-		count--;
-	    }
-	} while ((count > 0));
-
-	if (lastEx != null) {
-	    if (lastEx instanceof ConnectTimeoutException) {
-		throw new TimeoutException("Unable to obtain topology", lastEx);
-	    }
-	    throw new DynoException(lastEx);
-	} else {
-	    throw new DynoException("Could not contact dynomite for token map");
-	}
 
     }
 
@@ -175,37 +175,36 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
      * @param activeHosts
      * @return the topology from cluster_describe
      */
-    private String getTopologyWithNodeRetry(Set<Host> activeHosts) {
-	int count = NUM_RETRIES_PER_NODE;
-	String nodeResponse;
-	Exception lastEx;
-	final Host randomHost = getRandomHost(activeHosts);
-	do {
-	    try {
-		lastEx = null;
-		nodeResponse = getResponseViaHttp(randomHost.getHostName());
-		if (nodeResponse != null) {
+    private String getTopologyFromRandomNodeWithRetry(Set<Host> activeHosts) {
+		int count = NUM_RETRIES_PER_NODE;
+		String nodeResponse;
+		Exception lastEx;
+		final Host randomHost = getRandomHost(activeHosts);
+		do {
+			try {
+				lastEx = null;
+				nodeResponse = getResponseViaHttp(randomHost.getHostName());
+				if (nodeResponse != null) {
+					Logger.info("Received topology from " + randomHost);
+					return nodeResponse;
+				}
+			} catch (Exception e) {
+				Logger.info("cannot get topology from : " + randomHost);
+				lastEx = e;
+			} finally {
+				count--;
+			}
 
-		    Logger.info("Received topology from " + randomHost);
-		    return nodeResponse;
+		} while ((count > 0));
+
+		if (lastEx != null) {
+			if (lastEx instanceof ConnectTimeoutException) {
+				throw new TimeoutException("Unable to obtain topology", lastEx).setHost(randomHost);
+			}
+			throw new DynoException(String.format("Unable to obtain topology from %s", randomHost), lastEx);
+		} else {
+			throw new DynoException(String.format("Could not contact dynomite manager for token map on %s", randomHost));
 		}
-	    } catch (Exception e) {
-		Logger.info("cannot get topology from : " + randomHost);
-		lastEx = e;
-	    } finally {
-		count--;
-	    }
-
-	} while ((count > 0));
-
-	if (lastEx != null) {
-	    if (lastEx instanceof ConnectTimeoutException) {
-		throw new TimeoutException("Unable to obtain topology", lastEx);
-	    }
-	    throw new DynoException(lastEx);
-	} else {
-	    throw new DynoException("Could not contact dynomite for token map");
-	}
 
     }
 
