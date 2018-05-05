@@ -158,7 +158,14 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 
 		@Override
 		public void execPing() {
-			String result = jedisClient.ping();
+			final String result;
+
+			try {
+				result = jedisClient.ping();
+			} catch (JedisConnectionException e) {
+				throw new DynoConnectException("Unsuccessful ping", e);
+			}
+
 			if (result == null || result.isEmpty()) {
 				throw new DynoConnectException("Unsuccessful ping, got empty result");
 			}
