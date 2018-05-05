@@ -123,7 +123,7 @@ public class HostSelectionWithFallback<CL> {
 	}
 
 	private Connection<CL> getConnection(BaseOperation<CL, ?> op, Long token, int duration, TimeUnit unit, RetryPolicy retry)
-            throws NoAvailableHostsException, PoolExhaustedException, PoolTimeoutException {
+            throws NoAvailableHostsException, PoolExhaustedException, PoolTimeoutException, PoolOfflineException {
         DynoConnectException lastEx = null;
         HostConnectionPool<CL> hostPool = null;
 
@@ -160,7 +160,7 @@ public class HostSelectionWithFallback<CL> {
         }
 
         if (lastEx == null) {
-            throw new PoolOfflineException(null, "host pool is offline and no Racks available for fallback");
+            throw new PoolOfflineException(hostPool == null ? null : hostPool.getHost(), "host pool is offline and no Racks available for fallback");
         } else {
             throw lastEx;
         }
