@@ -228,56 +228,60 @@ public class ConnectionPoolImplTest {
 	
 	private TokenMapSupplier getTokenMapSupplier() {
 		
-		/**
-		cqlsh:dyno_bootstrap> select "availabilityZone","hostname","token" from tokens where "appId" = 'dynomite_redis_puneet';
+            /**
+            cqlsh:dyno_bootstrap> select "availabilityZone","hostname","token" from tokens where "appId" = 'dynomite_redis_puneet';
 
-			availabilityZone | hostname                                   | token
-			------------------+--------------------------------------------+------------
-   			us-east-1c |  ec2-54-83-179-213.compute-1.amazonaws.com | 1383429731
-   			us-east-1c |  ec2-54-224-184-99.compute-1.amazonaws.com |  309687905
-   			us-east-1c |  ec2-54-91-190-159.compute-1.amazonaws.com | 3530913377
-   			us-east-1c |   ec2-54-81-31-218.compute-1.amazonaws.com | 2457171554
-   			us-east-1e | ec2-54-198-222-153.compute-1.amazonaws.com |  309687905
-   			us-east-1e | ec2-54-198-239-231.compute-1.amazonaws.com | 2457171554
-   			us-east-1e |  ec2-54-226-212-40.compute-1.amazonaws.com | 1383429731
-   			us-east-1e | ec2-54-197-178-229.compute-1.amazonaws.com | 3530913377
+                    availabilityZone | hostname                                   | token
+                    ------------------+--------------------------------------------+------------
+                    us-east-1c |  ec2-54-83-179-213.compute-1.amazonaws.com | 1383429731
+                    us-east-1c |  ec2-54-224-184-99.compute-1.amazonaws.com |  309687905
+                    us-east-1c |  ec2-54-91-190-159.compute-1.amazonaws.com | 3530913377
+                    us-east-1c |   ec2-54-81-31-218.compute-1.amazonaws.com | 2457171554
+                    us-east-1e | ec2-54-198-222-153.compute-1.amazonaws.com |  309687905
+                    us-east-1e | ec2-54-198-239-231.compute-1.amazonaws.com | 2457171554
+                    us-east-1e |  ec2-54-226-212-40.compute-1.amazonaws.com | 1383429731
+                    us-east-1e | ec2-54-197-178-229.compute-1.amazonaws.com | 3530913377
 
-		cqlsh:dyno_bootstrap> 
-		 */
-		final Map<Host, HostToken> tokenMap = new HashMap<Host, HostToken>();
+            cqlsh:dyno_bootstrap> 
+             */
+            final Map<Host, HostToken> tokenMap = new HashMap<Host, HostToken>();
 
-        tokenMap.put(host1, new HostToken(309687905L, host1));
-        tokenMap.put(host2, new HostToken(1383429731L, host2));
-        tokenMap.put(host3, new HostToken(2457171554L, host3));
-        tokenMap.put(host4, new HostToken(309687905L, host4));
-        tokenMap.put(host5, new HostToken(1383429731L, host5));
-        tokenMap.put(host6, new HostToken(2457171554L, host6));
+            tokenMap.put(host1, new HostToken(309687905L, host1));
+            tokenMap.put(host2, new HostToken(1383429731L, host2));
+            tokenMap.put(host3, new HostToken(2457171554L, host3));
+            tokenMap.put(host4, new HostToken(309687905L, host4));
+            tokenMap.put(host5, new HostToken(1383429731L, host5));
+            tokenMap.put(host6, new HostToken(2457171554L, host6));
 
-		return new TokenMapSupplier() {
-
-            @Override
-            public List<HostToken> getTokens(Set<Host> activeHosts) {
-                if (activeHosts.size() < tokenMap.size()) {
-                    List<HostToken> hostTokens = new ArrayList<HostToken>(activeHosts.size());
-                    Iterator<Host> iterator = activeHosts.iterator();
-                    while (iterator.hasNext()) {
-                        Host activeHost = (Host) iterator.next();
-                        hostTokens.add(tokenMap.get(activeHost));
-                    }
-                    return hostTokens;
-                } else {
-                    return new ArrayList<HostToken>(tokenMap.values());
-                }
-            }
-
-			@Override
-			public HostToken getTokenForHost(Host host, Set<Host> activeHosts) {
-				return tokenMap.get(host);
-			}
-
-		};
+            return getTokenMapSupplier(tokenMap);
 	}
-	
+        
+        private TokenMapSupplier getTokenMapSupplier(final Map<Host, HostToken> tokenMap) {
+            return new TokenMapSupplier() {
+
+                @Override
+                public List<HostToken> getTokens(Set<Host> activeHosts) {
+                    if (activeHosts.size() < tokenMap.size()) {
+                        List<HostToken> hostTokens = new ArrayList<HostToken>(activeHosts.size());
+                        Iterator<Host> iterator = activeHosts.iterator();
+                        while (iterator.hasNext()) {
+                            Host activeHost = (Host) iterator.next();
+                            hostTokens.add(tokenMap.get(activeHost));
+                        }
+                        return hostTokens;
+                    } else {
+                        return new ArrayList<HostToken>(tokenMap.values());
+                    }
+                }
+
+                @Override
+                public HostToken getTokenForHost(Host host, Set<Host> activeHosts) {
+                        return tokenMap.get(host);
+                }
+
+            };            
+        }
+        
 	@Test
 	public void testAddingNewHosts() throws Exception {
 		
@@ -639,22 +643,60 @@ public class ConnectionPoolImplTest {
 
     @Test(expected = NoAvailableHostsException.class)
     public void testHostsDownDuringStartup() {
-
+        
         final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
 
         hostSupplierHosts.add(new Host("host1_down", 8080, "localRack", Status.Down));
         hostSupplierHosts.add(new Host("host2_down", 8080, "localRack",Status.Down));
         hostSupplierHosts.add(new Host("host3_down", 8080, "localRack", Status.Down));
-
+        
         pool.start();
+    }
+    
+    @Test
+    public void testNoReplicationFailureWhenHostDownDuringStartup() {
+        // Topology with symmetric replication - One node is inactive
+        final Host h1 = new Host("h1", "192.168.2.1", 8080, "dc-r0", "dc", Status.Up);
+        final Host h2 = new Host("h2", "192.168.2.2", 8080, "dc-r0", "dc", Status.Up);
+        final Host h3 = new Host("h3", "192.168.2.3", 8080, "dc-r0", "dc", Status.Up);
+        
+        final Host h4 = new Host("h4", "192.168.2.4", 8080, "dc-r1", "dc", Status.Down);
+        final Host h5 = new Host("h5", "192.168.2.5", 8080, "dc-r1", "dc", Status.Up);
+        final Host h6 = new Host("h6", "192.168.2.6", 8080, "dc-r1", "dc", Status.Up);
+                
+        hostSupplierHosts.add(h1);
+        hostSupplierHosts.add(h2);
+        hostSupplierHosts.add(h3);
+        
+        hostSupplierHosts.add(h4);
+        hostSupplierHosts.add(h5);
+        hostSupplierHosts.add(h6);
+        
+        final Map<Host, HostToken> tokenMap = new HashMap<Host, HostToken>();
 
+        tokenMap.put(h1, new HostToken(309687905L, h1));
+        tokenMap.put(h2, new HostToken(1383429731L, h2));
+        tokenMap.put(h3, new HostToken(2457171554L, h3));
+        tokenMap.put(h4, new HostToken(309687905L, h4));
+        tokenMap.put(h5, new HostToken(1383429731L, h5));
+        tokenMap.put(h6, new HostToken(2457171554L, h6)); 
+        
+        // Token Aware load balancing
+        cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware);
+        cpConfig.setLocalDataCenter("dc");        
+        cpConfig.setLocalRack("dc-r0");
+        cpConfig.withTokenSupplier(getTokenMapSupplier(tokenMap));
+        
+        // 
+        final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
+        pool.start();        
     }
 
-	private void executeTestClientOperation(final ConnectionPoolImpl<TestClient> pool) {
-		executeTestClientOperation(pool, null);
-	}		
-	
-	private void executeTestClientOperation(final ConnectionPoolImpl<TestClient> pool, final Callable<Void> customLogic) {
+    private void executeTestClientOperation(final ConnectionPoolImpl<TestClient> pool) {
+            executeTestClientOperation(pool, null);
+    }		
+
+    private void executeTestClientOperation(final ConnectionPoolImpl<TestClient> pool, final Callable<Void> customLogic) {
 		pool.executeWithFailover(new Operation<TestClient, Integer>() {
 
 			@Override

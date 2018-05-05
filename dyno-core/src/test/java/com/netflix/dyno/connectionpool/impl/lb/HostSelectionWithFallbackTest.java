@@ -46,6 +46,7 @@ import com.netflix.dyno.connectionpool.HashPartitioner;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
+import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.CountingConnectionPoolMonitor;
@@ -530,13 +531,13 @@ public class HostSelectionWithFallbackTest {
         );
 
         int rf = selection.calculateReplicationFactor(hostTokens);
-
         Assert.assertEquals(3, rf);
-	}
+    }
         
     @Test
     public void testChangingHashPartitioner() {
         cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware);
+        cpConfig.withHostSupplier(getHostSupplier());
         cpConfig.withTokenSupplier(getTokenMapSupplier());
         cpConfig.withHashPartitioner(getMockHashPartitioner(1000000000L));
 
@@ -674,6 +675,15 @@ public class HostSelectionWithFallbackTest {
 
 		};
 	}
+        
+        private HostSupplier getHostSupplier() {
+            return new HostSupplier () {
+                @Override
+                public List<Host> getHosts() {
+                    return Arrays.asList(h1, h2, h3, h4);
+                }
+            };
+        }           
         
         private HashPartitioner getMockHashPartitioner(final Long hash) {
             return new HashPartitioner() {

@@ -23,6 +23,7 @@ import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.HashPartitioner;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
+import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.RetryPolicy;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.TokenPoolTopology;
@@ -327,6 +328,19 @@ public class HostSelectionWithFallback<CL> {
 	 */
 	public void initWithHosts(Map<Host, HostConnectionPool<CL>> hPools) {
 
+                // Check replication factor for complete topology (active and inactive hosts)
+                if (localSelector.isTokenAware() && localRack != null) {
+                    HostSupplier hostSupplier = cpConfig.getHostSupplier();
+                    if (hostSupplier == null) {
+                        throw new DynoException("Host supplier not configured!");
+                    }         
+                    
+                    Collection<Host> hosts = hostSupplier.getHosts();
+                    List<HostToken> hostsTokens = tokenSupplier.getTokens(new HashSet<Host>(hosts));
+                    
+                    replicationFactor.set(calculateReplicationFactor(hostsTokens));
+                }
+                
 		// Get the list of tokens for these hosts
 		//tokenSupplier.initWithHosts(hPools.keySet());
 		List<HostToken> allHostTokens = tokenSupplier.getTokens(hPools.keySet());
@@ -349,10 +363,6 @@ public class HostSelectionWithFallback<CL> {
 		Map<HostToken, HostConnectionPool<CL>> localPools = getHostPoolsForDC(tokenPoolMap, localRack);
 		localSelector.initWithHosts(localPools);
 
-                if (localSelector.isTokenAware() && localRack != null) {
-                   replicationFactor.set(calculateReplicationFactor(allHostTokens));
-                }
-
 		for (String rack : remoteRacks) {
 			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForDC(tokenPoolMap, rack);
 			HostSelectionStrategy<CL> remoteSelector = selectorFactory.vendPoolSelectionStrategy();
@@ -362,7 +372,7 @@ public class HostSelectionWithFallback<CL> {
 
 		remoteDCNames.swapWithList(remoteRackSelectors.keySet());
 
-        topology.set(getTokenPoolTopology());
+                topology.set(getTokenPoolTopology());
 	}
 
     /*package private*/ int calculateReplicationFactor(List<HostToken> allHostTokens) {
