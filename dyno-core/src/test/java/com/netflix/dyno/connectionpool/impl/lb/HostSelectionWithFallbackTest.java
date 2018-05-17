@@ -558,7 +558,7 @@ public class HostSelectionWithFallbackTest {
 
 	private Collection<String> runConnectionsToRingTest(HostSelectionWithFallback<Integer> selection) {
 
-		Collection<Connection<Integer>> connections = selection.getConnectionsToRing(10, TimeUnit.MILLISECONDS);
+		Collection<Connection<Integer>> connections = selection.getConnectionsToRing( null, 10, TimeUnit.MILLISECONDS);
 
 		return CollectionUtils.transform(connections, new Transform<Connection<Integer>, String>() {
 			@Override

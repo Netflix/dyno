@@ -19,6 +19,7 @@ import com.netflix.dyno.connectionpool.CursorBasedResult;
 import redis.clients.jedis.ScanResult;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -39,9 +40,17 @@ import java.util.Map;
 public class CursorBasedResultImpl<T> implements CursorBasedResult<T> {
 
     private final Map<String, ScanResult<T>> result;
+    private Map<Long, String> tokenRackMap;
+    private final boolean noFailover = true;
 
     public CursorBasedResultImpl(Map<String, ScanResult<T>> result) {
         this.result = result;
+        this.tokenRackMap = new LinkedHashMap<>();
+    }
+
+    public CursorBasedResultImpl(Map<String, ScanResult<T>> result, Map<Long, String> tokenRackMap) {
+        this.result = result;
+        this.tokenRackMap = tokenRackMap;
     }
 
     @Override
@@ -83,4 +92,17 @@ public class CursorBasedResultImpl<T> implements CursorBasedResult<T> {
         return true;
     }
 
+    @Override
+    public String getRackForToken(Long token) {
+        return tokenRackMap.get(token);
+    }
+
+    public void setRackForToken(Long token, String rack) {
+        tokenRackMap.put(token, rack);
+    }
+
+    @Override
+    public Map<Long, String> getTokenRackMap() {
+        return this.tokenRackMap;
+    }
 }

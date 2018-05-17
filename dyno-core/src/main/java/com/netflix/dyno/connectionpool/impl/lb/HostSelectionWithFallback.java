@@ -15,17 +15,8 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl.lb;
 
-import com.netflix.dyno.connectionpool.BaseOperation;
-import com.netflix.dyno.connectionpool.Connection;
-import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
+import com.netflix.dyno.connectionpool.*;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancingStrategy;
-import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
-import com.netflix.dyno.connectionpool.HashPartitioner;
-import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.HostConnectionPool;
-import com.netflix.dyno.connectionpool.RetryPolicy;
-import com.netflix.dyno.connectionpool.TokenMapSupplier;
-import com.netflix.dyno.connectionpool.TokenPoolTopology;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
@@ -81,7 +72,7 @@ public class HostSelectionWithFallback<CL> {
 	private final String localRack;
 	// The selector for the local zone
 	private final HostSelectionStrategy<CL> localSelector;
-	// Track selectors for each remote DC
+	// Track selectors for each remote zone
 	private final ConcurrentHashMap<String, HostSelectionStrategy<CL>> remoteRackSelectors = new ConcurrentHashMap<String, HostSelectionStrategy<CL>>();
 
 	private final ConcurrentHashMap<Host, HostToken> hostTokens = new ConcurrentHashMap<Host, HostToken>();
@@ -123,18 +114,58 @@ public class HostSelectionWithFallback<CL> {
 	}
 
 	private Connection<CL> getConnection(BaseOperation<CL, ?> op, Long token, int duration, TimeUnit unit, RetryPolicy retry)
+			throws NoAvailableHostsException, PoolExhaustedException, PoolTimeoutException, PoolOfflineException {
+		DynoConnectException lastEx = null;
+		HostConnectionPool<CL> hostPool = null;
+
+		if (retry.getAttemptCount() == 0 || (retry.getAttemptCount() > 0 && !retry.allowCrossZoneFallback())) {
+			// By default zone affinity is enabled; if the local rack is not known at startup it is disabled
+			if (cpConfig.localZoneAffinity()) {
+				hostPool = getHostPoolForOperationOrTokenInLocalZone(op, token);
+			} else {
+				hostPool = getFallbackHostPool(op, token);
+			}
+		}
+
+		if (hostPool != null) {
+			try {
+				// Note that if a PoolExhaustedException is thrown it is caught by the calling
+				// ConnectionPoolImpl#executeXXX() method
+				return hostPool.borrowConnection(duration, unit);
+			} catch (PoolTimeoutException pte) {
+				lastEx = pte;
+				cpMonitor.incOperationFailure(null, pte);
+			}
+		}
+
+		if (attemptFallback()) {
+			if (topology.get().getTokensForRack(localRack) != null) {
+				cpMonitor.incFailover(null, lastEx);
+			}
+
+			hostPool = getFallbackHostPool(op, token);
+
+			if (hostPool != null) {
+				return hostPool.borrowConnection(duration, unit);
+			}
+		}
+
+		if (lastEx == null) {
+			throw new PoolOfflineException(hostPool == null ? null : hostPool.getHost(), "host pool is offline and no Racks available for fallback");
+		} else {
+			throw lastEx;
+		}
+	}
+
+	// Should be called when a connection is required on that particular zone with no fall backs what so ever
+	private Connection<CL> getConnectionOnRackNoFallback(BaseOperation<CL, ?> op, Long token, String rack, int duration, TimeUnit unit, RetryPolicy retry)
             throws NoAvailableHostsException, PoolExhaustedException, PoolTimeoutException, PoolOfflineException {
         DynoConnectException lastEx = null;
-        HostConnectionPool<CL> hostPool = null;
 
-        if (retry.getAttemptCount() == 0 || (retry.getAttemptCount() > 0 && !retry.allowCrossZoneFallback())) {
-            // By default zone affinity is enabled; if the local rack is not known at startup it is disabled
-            if (cpConfig.localZoneAffinity()) {
-                hostPool = getHostPoolForOperationOrTokenInLocalZone(op, token);
-            } else {
-                hostPool = getFallbackHostPool(op, token);
-            }
-        }
+        // find the selector for that rack,
+		HostSelectionStrategy<CL> selector = findSelectorForRack(rack);
+		// get the host using that selector
+		HostConnectionPool<CL>  hostPool = selector.getPoolForToken(token);
 
         if (hostPool != null) {
             try {
@@ -147,20 +178,8 @@ public class HostSelectionWithFallback<CL> {
             }
         }
 
-        if (attemptFallback()) {
-            if (topology.get().getTokensForRack(localRack) != null) {
-                cpMonitor.incFailover(null, lastEx);
-            }
-
-            hostPool = getFallbackHostPool(op, token);
-
-            if (hostPool != null) {
-                return hostPool.borrowConnection(duration, unit);
-            }
-        }
-
         if (lastEx == null) {
-            throw new PoolOfflineException(hostPool == null ? null : hostPool.getHost(), "host pool is offline and no Racks available for fallback");
+            throw new PoolOfflineException(hostPool == null ? null : hostPool.getHost(), "host pool is offline and we are forcing no fallback");
         } else {
             throw lastEx;
         }
@@ -227,33 +246,55 @@ public class HostSelectionWithFallback<CL> {
 		}
 	}
 
-	public Collection<Connection<CL>> getConnectionsToRing(int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
+	public Collection<Connection<CL>> getConnectionsToRing(CursorBasedResult<String> cursor, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
 		
-		final Collection<HostToken> localZoneTokens = CollectionUtils.filter(hostTokens.values(), new Predicate<HostToken>() {
-			@Override
-			public boolean apply(HostToken x) {
-				if (localRack == null) {
-					logger.warn("local rack is NULL for {}", this);
-				}
-				return localRack == null || localRack.equalsIgnoreCase(x.getHost().getRack());
-			}
-		});
-		
+//		final Collection<HostToken> localZoneTokens = CollectionUtils.filter(hostTokens.values(), new Predicate<HostToken>() {
+//			@Override
+//			public boolean apply(HostToken x) {
+//				if (localRack == null) {
+//					logger.warn("local rack is NULL for {}", this);
+//				}
+//				return localRack == null || localRack.equalsIgnoreCase(x.getHost().getRack());
+//			}
+//		});
+//
+//		final Set<Long> tokens = Collections.unmodifiableSet(
+//				new HashSet<>(CollectionUtils.transform(localZoneTokens, new Transform<HostToken, Long>() {
+//					@Override
+//					public Long get(HostToken x) {
+//				return x.getToken();
+//			}
+//				})));
+
+		if (localRack == null) {
+			// get tokens for random rack
+			//TODO: FIXME
+		}
+		final Collection<TokenPoolTopology.TokenHost> localTokenHosts = topology.get().getTokenHostsForRack(localRack);
 		final Set<Long> tokens = Collections.unmodifiableSet(
-				new HashSet<>(CollectionUtils.transform(localZoneTokens, new Transform<HostToken, Long>() {
+				new HashSet<>(CollectionUtils.transform(localTokenHosts, new Transform<TokenPoolTopology.TokenHost, Long>() {
 					@Override
-					public Long get(HostToken x) {
-				return x.getToken();
-			}
-				})));
-		
+					public Long get(TokenPoolTopology.TokenHost x) {
+						return x.getToken();
+					}
+				}))
+		);
 		DynoConnectException lastEx = null;
 		
 		final List<Connection<CL>> connections = new ArrayList<>();
 				
 		for (Long token : tokens) {
-			try { 
-				connections.add(getConnection(null, token, duration, unit, new RunOnce()));
+			try {
+				String rack = null;
+				if (cursor != null)
+					rack = cursor.getRackForToken(token);
+				if (rack != null) {
+					connections.add(getConnectionOnRackNoFallback(null, token, rack, duration, unit, new RunOnce()));
+				} else {
+					Connection<CL> c = getConnection(null, token, duration, unit, new RunOnce());
+					cursor.setRackForToken(token, c.getHost().getRack());
+					connections.add(c);
+				}
 			} catch (DynoConnectException e) {
 				logger.warn("Failed to get connection when getting all connections from ring", e.getMessage());
 				lastEx = e;
@@ -278,8 +319,7 @@ public class HostSelectionWithFallback<CL> {
 	}
 
 
-	private HostSelectionStrategy<CL> findSelector(Host host) {
-		String rack = host.getRack();
+	private HostSelectionStrategy<CL> findSelectorForRack(String rack) {
 		if (localRack == null) {
 			return localSelector;
 		}
@@ -305,7 +345,7 @@ public class HostSelectionWithFallback<CL> {
 		}
 	}
 
-	private Map<HostToken, HostConnectionPool<CL>> getHostPoolsForDC(final Map<HostToken, HostConnectionPool<CL>> map, final String rack) {
+	private Map<HostToken, HostConnectionPool<CL>> getHostPoolsForRack(final Map<HostToken, HostConnectionPool<CL>> map, final String rack) {
 
 		Map<HostToken, HostConnectionPool<CL>> dcPools = 
 				CollectionUtils.filterKeys(map, new Predicate<HostToken>() {
@@ -332,29 +372,30 @@ public class HostSelectionWithFallback<CL> {
 		List<HostToken> allHostTokens = tokenSupplier.getTokens(hPools.keySet());
 		Map<HostToken, HostConnectionPool<CL>> tokenPoolMap = new HashMap<HostToken, HostConnectionPool<CL>>();
 	        
-	        // Update inner state with the host tokens.
+		// Update inner state with the host tokens.
 		for (HostToken hToken : allHostTokens) {
 			hostTokens.put(hToken.getHost(), hToken);
 			tokenPoolMap.put(hToken, hPools.get(hToken.getHost()));
 		}
-		
-		Set<String> remoteRacks = new HashSet<String>();		
+
+		// Initialize Local selector
+		Map<HostToken, HostConnectionPool<CL>> localPools = getHostPoolsForRack(tokenPoolMap, localRack);
+		localSelector.initWithHosts(localPools);
+		if (localSelector.isTokenAware() && localRack != null) {
+		   replicationFactor.set(calculateReplicationFactor(allHostTokens));
+		}
+
+		// Initialize Remote selectors
+		Set<String> remoteRacks = new HashSet<String>();
 		for (Host host : hPools.keySet()) {
 			String rack = host.getRack();
 			if (localRack != null && !localRack.isEmpty() && rack != null && !rack.isEmpty() && !localRack.equals(rack)) {
 				remoteRacks.add(rack);
-			}			
+			}
 		}
-		
-		Map<HostToken, HostConnectionPool<CL>> localPools = getHostPoolsForDC(tokenPoolMap, localRack);
-		localSelector.initWithHosts(localPools);
-
-                if (localSelector.isTokenAware() && localRack != null) {
-                   replicationFactor.set(calculateReplicationFactor(allHostTokens));
-                }
 
 		for (String rack : remoteRacks) {
-			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForDC(tokenPoolMap, rack);
+			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForRack(tokenPoolMap, rack);
 			HostSelectionStrategy<CL> remoteSelector = selectorFactory.vendPoolSelectionStrategy();
 			remoteSelector.initWithHosts(dcPools);
 			remoteRackSelectors.put(rack, remoteSelector);
@@ -362,7 +403,7 @@ public class HostSelectionWithFallback<CL> {
 
 		remoteDCNames.swapWithList(remoteRackSelectors.keySet());
 
-        topology.set(getTokenPoolTopology());
+        topology.set(createTokenPoolTopology(allHostTokens));
 	}
 
     /*package private*/ int calculateReplicationFactor(List<HostToken> allHostTokens) {
@@ -411,20 +452,22 @@ public class HostSelectionWithFallback<CL> {
 		
 		hostTokens.put(hostToken.getHost(), hostToken);
 		
-		HostSelectionStrategy<CL> selector = findSelector(host);
+		HostSelectionStrategy<CL> selector = findSelectorForRack(host.getRack());
 		if (selector != null) {
 			selector.addHostPool(hostToken, hostPool);
 		}
+		topology.get().addHostToken(hostToken.getHost().getRack(), hostToken.getToken(), hostToken.getHost());
 	}
 
-	public void removeHost(Host host, HostConnectionPool<CL> hostPool) {
+	public void removeHost(Host host) {
 
 		HostToken hostToken = hostTokens.remove(host);
 		if (hostToken != null) {
-			HostSelectionStrategy<CL> selector = findSelector(host);
+			HostSelectionStrategy<CL> selector = findSelectorForRack(host.getRack());
 			if (selector != null) {
 				selector.removeHostPool(hostToken);
 			}
+			topology.get().removeHost(hostToken.getHost().getRack(), hostToken.getToken(), hostToken.getHost());
 		}
 	}
 
@@ -435,7 +478,7 @@ public class HostSelectionWithFallback<CL> {
                 
 		private DefaultSelectionFactory(ConnectionPoolConfiguration config) {
 			lbStrategy = config.getLoadBalancingStrategy();
-                        hashPartitioner = config.getHashPartitioner();
+			hashPartitioner = config.getHashPartitioner();
 		}
                 
 		@Override
@@ -454,9 +497,13 @@ public class HostSelectionWithFallback<CL> {
 		}
 	}
 
-	public TokenPoolTopology getTokenPoolTopology() {
+	public TokenPoolTopology createTokenPoolTopology(List<HostToken> allHostTokens) {
+		TokenPoolTopology topology = new TokenPoolTopology(replicationFactor.get());
+		for (HostToken hostToken : allHostTokens) {
+			String rack = hostToken.getHost().getRack();
+			topology.addHostToken(rack, hostToken.getToken(), hostToken.getHost());
+		}
 
-        TokenPoolTopology topology = new TokenPoolTopology(replicationFactor.get());
 
         if (localRack != null) {
             addTokens(topology, localRack, localSelector);
@@ -468,6 +515,21 @@ public class HostSelectionWithFallback<CL> {
         return topology;
 
     }
+
+	public TokenPoolTopology getTokenPoolTopology() {
+
+		TokenPoolTopology topology = new TokenPoolTopology(replicationFactor.get());
+
+		if (localRack != null) {
+			addTokens(topology, localRack, localSelector);
+			for (String remoteRack : remoteRackSelectors.keySet()) {
+				addTokens(topology, remoteRack, remoteRackSelectors.get(remoteRack));
+			}
+		}
+
+		return topology;
+
+	}
 	
 	private void addTokens(TokenPoolTopology topology, String rack, HostSelectionStrategy<CL> selectionStrategy) {
 		

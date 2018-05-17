@@ -16,6 +16,7 @@
 package com.netflix.dyno.connectionpool;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * The result of performing a SCAN operation
@@ -26,7 +27,13 @@ public interface CursorBasedResult<T> {
 
     List<String> getStringResult();
 
+    Map<Long, String> getTokenRackMap();
+
     String getCursorForHost(String host);
+
+    String getRackForToken(Long Token);
+
+    void setRackForToken(Long token, String rack);
 
     boolean isComplete();
 

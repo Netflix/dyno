@@ -161,7 +161,7 @@ public class UnitTestConnectionPool implements ConnectionPool<Jedis> {
     }
 
     @Override
-    public <R> Collection<OperationResult<R>> executeWithRing(Operation<Jedis, R> op) throws DynoException {
+    public <R> Collection<OperationResult<R>> executeWithRing(CursorBasedResult<String> cursor, Operation<Jedis, R> op) throws DynoException {
         return null;
     }
 

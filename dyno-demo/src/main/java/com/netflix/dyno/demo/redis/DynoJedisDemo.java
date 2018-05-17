@@ -108,7 +108,8 @@ public class DynoJedisDemo {
 
 			@Override
 			public List<Host> getHosts() {
-				return hosts;
+				return getHostsFromDiscovery(clusterName);
+//				return hosts;
 			}
 		};
 
@@ -280,28 +281,38 @@ public class DynoJedisDemo {
 	public void runScanTest(boolean populateKeys) throws Exception {
 		logger.info("SCAN TEST -- begin");
 
-		final String keyPattern = System.getProperty("dyno.demo.scan.key.pattern", "DynoClientTest_key-*");
+		final String keyPattern = System.getProperty("dyno.demo.scan.key.pattern", "*");
 		final String keyPrefix = System.getProperty("dyno.demo.scan.key.prefix", "DynoClientTest_key-");
 
-		if (populateKeys) {
-			logger.info("Writing 500 keys to {} with prefix {}", this.clusterName, keyPrefix);
-			for (int i = 0; i < 500; i++) {
-				client.set(keyPrefix + i, "value-" + i);
-			}
-		}
+//		if (populateKeys) {
+//			logger.info("Writing 500000 keys to {} with prefix {}", this.clusterName, keyPrefix);
+//			for (int i = 0; i < 500000; i++) {
+//				client.set(keyPrefix + i, "value-" + i);
+//			}
+//		}
 
 		logger.info("Reading keys from {} with pattern {}", this.clusterName, keyPattern);
 		CursorBasedResult<String> cbi = null;
+		long start = System.currentTimeMillis();
+		int count = 0;
 		do {
-			cbi = client.dyno_scan(cbi, 10000, keyPattern);
+			cbi = client.dyno_scan(cbi, 5, keyPattern);
+
 
 			List<String> results = cbi.getStringResult();
+			count += results.size();
+			logger.info(">>>>>>>>>>>>>>>>>");
+			int i = 0;
 			for (String res : results) {
-				logger.info(res);
+				logger.info("{}) {}", i, res);
+				i++;
 			}
+			Thread.sleep(1000);
 		} while (!cbi.isComplete());
+		long end = System.currentTimeMillis();
 
-		logger.info("SCAN TEST -- done");
+
+		logger.info("SCAN TEST -- done {} results in {}ms", count, end - start);
 	}
 
 	public void runSScanTest(boolean populateKeys) throws Exception {
@@ -983,7 +994,7 @@ public class DynoJedisDemo {
 			}
 			case 5: {
 				final boolean writeKeys = Boolean.valueOf(props.getProperty("dyno.demo.scan.populateKeys"));
-				demo.runScanTest(writeKeys);
+				demo.runScanTest(true);
 				break;
 			}
 			case 6: {
