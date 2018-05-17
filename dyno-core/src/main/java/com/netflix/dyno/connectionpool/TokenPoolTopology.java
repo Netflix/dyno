@@ -18,7 +18,6 @@ package com.netflix.dyno.connectionpool;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import org.slf4j.LoggerFactory;
-import sun.rmi.runtime.Log;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;

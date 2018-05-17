@@ -267,7 +267,9 @@ public class HostSelectionWithFallback<CL> {
 					connections.add(getConnectionForTokenOnRackNoFallback(null, token, rack, duration, unit, new RunOnce()));
 				} else {
 					Connection<CL> c = getConnection(null, token, duration, unit, new RunOnce());
-					cursor.setRackForToken(token, c.getHost().getRack());
+					if (cursor != null) {
+						cursor.setRackForToken(token, c.getHost().getRack());
+					}
 					connections.add(c);
 				}
 			} catch (DynoConnectException e) {
