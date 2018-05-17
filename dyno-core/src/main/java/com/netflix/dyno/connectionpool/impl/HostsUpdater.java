@@ -121,6 +121,8 @@ public class HostsUpdater {
 			}
 		}
 
+		// if a node is down, it might be absent in hostSupplier but has its presence in TokenMapSupplier.
+		// Add that host to the down list here.
 		for (Host h : allHostSetFromTokenMapSupplier.keySet()) {
 			hostsDownFromHostSupplier.add(new Host(h.getHostName(), h.getIpAddress(),
 					h.getPort(), h.getSecurePort(), h.getRack(),

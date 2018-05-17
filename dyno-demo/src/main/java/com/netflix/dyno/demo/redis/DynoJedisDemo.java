@@ -35,6 +35,7 @@ import javax.xml.parsers.SAXParserFactory;
 
 import com.google.common.collect.Lists;
 import com.netflix.dyno.connectionpool.*;
+import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
@@ -296,7 +297,14 @@ public class DynoJedisDemo {
 		long start = System.currentTimeMillis();
 		int count = 0;
 		do {
-			cbi = client.dyno_scan(cbi, 5, keyPattern);
+			try {
+
+				cbi = client.dyno_scan(cbi, 5, keyPattern);
+			} catch (PoolOfflineException ex) {
+				logger.info("Caught exception.... retrying scan");
+				cbi = null;
+				continue;
+			}
 
 
 			List<String> results = cbi.getStringResult();
@@ -308,7 +316,7 @@ public class DynoJedisDemo {
 				i++;
 			}
 			Thread.sleep(1000);
-		} while (!cbi.isComplete());
+		} while ((cbi == null) || !cbi.isComplete());
 		long end = System.currentTimeMillis();
 
 

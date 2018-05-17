@@ -41,7 +41,6 @@ public class CursorBasedResultImpl<T> implements CursorBasedResult<T> {
 
     private final Map<String, ScanResult<T>> result;
     private Map<Long, String> tokenRackMap;
-    private final boolean noFailover = true;
 
     public CursorBasedResultImpl(Map<String, ScanResult<T>> result) {
         this.result = result;

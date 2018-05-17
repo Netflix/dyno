@@ -16,12 +16,11 @@
 package com.netflix.dyno.connectionpool;
 
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import org.slf4j.LoggerFactory;
 import sun.rmi.runtime.Log;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
@@ -29,7 +28,7 @@ public class TokenPoolTopology {
 	private static final org.slf4j.Logger Logger = LoggerFactory.getLogger(TokenPoolTopology.class);
 
 	private final ConcurrentHashMap<String, List<TokenStatus>> map = new ConcurrentHashMap<String, List<TokenStatus>>();
-	private final ConcurrentHashMap<String, List<TokenHost>> rackTokenHostMap = new ConcurrentHashMap<String, List<TokenHost>>();
+	private final ConcurrentHashMap<String, Map<Long, Host>> rackTokenHostMap = new ConcurrentHashMap<String, Map<Long, Host>>();
 	private final int replicationFactor;
 	
 	public TokenPoolTopology (int replicationFactor) {
@@ -48,38 +47,23 @@ public class TokenPoolTopology {
 	}
 
 	public void addHostToken(String rack, Long token, Host host) {
-		Logger.info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Adding Host to Topology" + host);
-		List<TokenHost> list = rackTokenHostMap.get(rack);
-		if (list == null) {
-			list = new ArrayList<TokenHost>();
-			rackTokenHostMap.put(rack, list);
+		Logger.info("Adding Host to Topology" + host);
+		Map<Long, Host> tokenHostMap = rackTokenHostMap.get(rack);
+		if (tokenHostMap == null) {
+			tokenHostMap = new HashMap<>();
+			rackTokenHostMap.put(rack, tokenHostMap);
 		}
-		TokenHost insert = new TokenHost(token, host);
-		for (TokenHost th : list) {
-			if (th.compareTo(insert) == 0) {
-				th.setHost(host);
-				return;
-			}
-		}
-		list.add(insert);
+		tokenHostMap.put(token, host);
 	}
 
 	public void removeHost(String rack, Long token, Host host) {
-		Logger.info(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Removing Host from Topology" + host);
+		Logger.info("Removing Host from Topology" + host);
 
-		List<TokenHost> list = rackTokenHostMap.get(rack);
-		if (list == null) {
+		Map<Long, Host> tokenHostMap = rackTokenHostMap.get(rack);
+		if (tokenHostMap == null) {
 			return;
 		}
-
-		TokenHost remove = new TokenHost(token, host);
-		for (TokenHost th : list) {
-			if (th.compareTo(remove) == 0) {
-				th.setHost(null);
-				return;
-			}
-		}
-		// TODO: FIXME: log that we didnt find the token.
+		tokenHostMap.put(token, null);
 	}
 	
 	public ConcurrentHashMap<String, List<TokenStatus>> getAllTokens() {
@@ -90,6 +74,12 @@ public class TokenPoolTopology {
 		return replicationFactor;
 	}
 
+	public String getRandomRack() {
+		List<String> racks = new ArrayList<String>(rackTokenHostMap.keySet());
+		Collections.shuffle(racks);
+		return racks.get(0);
+	}
+
 	public List<TokenStatus> getTokensForRack(String rack) {
 		if (rack != null && map.containsKey(rack)) {
 			return map.get(rack);
@@ -98,7 +88,7 @@ public class TokenPoolTopology {
 		return null;
 	}
 
-	public List<TokenHost> getTokenHostsForRack(String rack) {
+	public Map<Long, Host> getTokenHostsForRack(String rack) {
 		if (rack != null && rackTokenHostMap.containsKey(rack)) {
 			return rackTokenHostMap.get(rack);
 		}
@@ -151,37 +141,6 @@ public class TokenPoolTopology {
 		
 		public String toString() {
 			return token + " ==> " + hostPool.toString();
-		}
-	}
-
-	public static class TokenHost implements Comparable<TokenHost> {
-
-		private Long token;
-		private Host host;
-
-		private TokenHost(Long t, Host host) {
-			this.token = t;
-			this.host = host;
-		}
-
-		public Long getToken() {
-			return token;
-		}
-
-		public Host getHost() {
-			return host;
-		}
-		public void setHost(Host host) {
-			this.host = host;
-		}
-
-		@Override
-		public int compareTo(TokenHost o) {
-			return this.token.compareTo(o.token);
-		}
-
-		public String toString() {
-			return token + " ==> " + ((host == null) ? "null" : host.toString());
 		}
 	}
 	

@@ -33,6 +33,7 @@ public interface CursorBasedResult<T> {
 
     String getRackForToken(Long Token);
 
+    //TODO:FixME: this should not be in the public interface
     void setRackForToken(Long token, String rack);
 
     boolean isComplete();

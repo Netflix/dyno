@@ -28,13 +28,11 @@ import com.netflix.dyno.connectionpool.impl.HostSelectionStrategy.HostSelectionS
 import com.netflix.dyno.connectionpool.impl.RunOnce;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
-import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -158,7 +156,7 @@ public class HostSelectionWithFallback<CL> {
 	}
 
 	// Should be called when a connection is required on that particular zone with no fall backs what so ever
-	private Connection<CL> getConnectionOnRackNoFallback(BaseOperation<CL, ?> op, Long token, String rack, int duration, TimeUnit unit, RetryPolicy retry)
+	private Connection<CL> getConnectionForTokenOnRackNoFallback(BaseOperation<CL, ?> op, Long token, String rack, int duration, TimeUnit unit, RetryPolicy retry)
             throws NoAvailableHostsException, PoolExhaustedException, PoolTimeoutException, PoolOfflineException {
         DynoConnectException lastEx = null;
 
@@ -247,49 +245,26 @@ public class HostSelectionWithFallback<CL> {
 	}
 
 	public Collection<Connection<CL>> getConnectionsToRing(CursorBasedResult<String> cursor, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
-		
-//		final Collection<HostToken> localZoneTokens = CollectionUtils.filter(hostTokens.values(), new Predicate<HostToken>() {
-//			@Override
-//			public boolean apply(HostToken x) {
-//				if (localRack == null) {
-//					logger.warn("local rack is NULL for {}", this);
-//				}
-//				return localRack == null || localRack.equalsIgnoreCase(x.getHost().getRack());
-//			}
-//		});
-//
-//		final Set<Long> tokens = Collections.unmodifiableSet(
-//				new HashSet<>(CollectionUtils.transform(localZoneTokens, new Transform<HostToken, Long>() {
-//					@Override
-//					public Long get(HostToken x) {
-//				return x.getToken();
-//			}
-//				})));
-
-		if (localRack == null) {
+		String targetRack = localRack;
+		if (targetRack == null) {
 			// get tokens for random rack
-			//TODO: FIXME
+			targetRack = topology.get().getRandomRack();
 		}
-		final Collection<TokenPoolTopology.TokenHost> localTokenHosts = topology.get().getTokenHostsForRack(localRack);
-		final Set<Long> tokens = Collections.unmodifiableSet(
-				new HashSet<>(CollectionUtils.transform(localTokenHosts, new Transform<TokenPoolTopology.TokenHost, Long>() {
-					@Override
-					public Long get(TokenPoolTopology.TokenHost x) {
-						return x.getToken();
-					}
-				}))
-		);
+		final Set<Long> tokens = topology.get().getTokenHostsForRack(targetRack).keySet();
 		DynoConnectException lastEx = null;
 		
 		final List<Connection<CL>> connections = new ArrayList<>();
 				
 		for (Long token : tokens) {
 			try {
+				// Cursor has a map of token to rack which indicates an affinity to a zone for that token.
+				// This is valid in case of an iterator based query like scan.
+				// Try to use that same rack if it is specified.
 				String rack = null;
 				if (cursor != null)
 					rack = cursor.getRackForToken(token);
 				if (rack != null) {
-					connections.add(getConnectionOnRackNoFallback(null, token, rack, duration, unit, new RunOnce()));
+					connections.add(getConnectionForTokenOnRackNoFallback(null, token, rack, duration, unit, new RunOnce()));
 				} else {
 					Connection<CL> c = getConnection(null, token, duration, unit, new RunOnce());
 					cursor.setRackForToken(token, c.getHost().getRack());

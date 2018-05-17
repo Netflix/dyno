@@ -207,6 +207,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
     public boolean removeHost(Host host) {
 		Logger.info(String.format("Removing host %s from selectionStrategy, cpHealthTracker, cpMonitor",
 				host.getHostAddress()));
+		// Since there are multiple data structures of host, token, connection pool etc, call removehost even
+		// if it is not found in the cpMap
 		selectionStrategy.removeHost(host);
 		cpHealthTracker.removeHost(host);
 		cpMonitor.hostRemoved(host);
@@ -540,7 +542,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 				}
 			}
 
-				}, 15 * 1000, 10 * 1000, TimeUnit.MILLISECONDS);
+				}, 15 * 1000, 30 * 1000, TimeUnit.MILLISECONDS);
 
 			MonitorConsole.getInstance().registerConnectionPool(this);
 			registerMonitorConsoleMBean(MonitorConsole.getInstance());
@@ -696,12 +698,12 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
     }
 
     public TokenPoolTopology getTopology() {
-	return selectionStrategy.getTokenPoolTopology();
+		return selectionStrategy.getTokenPoolTopology();
     }
 
     @Override
     public Map<String, List<TokenPoolTopology.TokenStatus>> getTopologySnapshot() {
-	return Collections.unmodifiableMap(selectionStrategy.getTokenPoolTopology().getAllTokens());
+		return Collections.unmodifiableMap(selectionStrategy.getTokenPoolTopology().getAllTokens());
     }
 
     @Override
