@@ -16,6 +16,7 @@
 package com.netflix.dyno.jedis;
 
 import com.netflix.dyno.connectionpool.CursorBasedResult;
+import com.netflix.dyno.connectionpool.TokenRackMapper;
 import redis.clients.jedis.ScanResult;
 
 import java.util.ArrayList;
@@ -37,17 +38,17 @@ import java.util.Map;
  *    } while (!cbi.isComplete());
  * </pre>
  */
-public class CursorBasedResultImpl<T> implements CursorBasedResult<T> {
+public class CursorBasedResultImpl<T> implements CursorBasedResult<T>, TokenRackMapper {
 
     private final Map<String, ScanResult<T>> result;
     private Map<Long, String> tokenRackMap;
 
-    public CursorBasedResultImpl(Map<String, ScanResult<T>> result) {
+    /* package private */ CursorBasedResultImpl(Map<String, ScanResult<T>> result) {
         this.result = result;
         this.tokenRackMap = new LinkedHashMap<>();
     }
 
-    public CursorBasedResultImpl(Map<String, ScanResult<T>> result, Map<Long, String> tokenRackMap) {
+    /* package private */ CursorBasedResultImpl(Map<String, ScanResult<T>> result, Map<Long, String> tokenRackMap) {
         this.result = result;
         this.tokenRackMap = tokenRackMap;
     }

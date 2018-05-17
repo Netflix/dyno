@@ -244,7 +244,7 @@ public class HostSelectionWithFallback<CL> {
 		}
 	}
 
-	public Collection<Connection<CL>> getConnectionsToRing(CursorBasedResult<String> cursor, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
+	public Collection<Connection<CL>> getConnectionsToRing(TokenRackMapper tokenRackMapper, int duration, TimeUnit unit) throws NoAvailableHostsException, PoolExhaustedException {
 		String targetRack = localRack;
 		if (targetRack == null) {
 			// get tokens for random rack
@@ -261,14 +261,14 @@ public class HostSelectionWithFallback<CL> {
 				// This is valid in case of an iterator based query like scan.
 				// Try to use that same rack if it is specified.
 				String rack = null;
-				if (cursor != null)
-					rack = cursor.getRackForToken(token);
+				if (tokenRackMapper != null)
+					rack = tokenRackMapper.getRackForToken(token);
 				if (rack != null) {
 					connections.add(getConnectionForTokenOnRackNoFallback(null, token, rack, duration, unit, new RunOnce()));
 				} else {
 					Connection<CL> c = getConnection(null, token, duration, unit, new RunOnce());
-					if (cursor != null) {
-						cursor.setRackForToken(token, c.getHost().getRack());
+					if (tokenRackMapper != null) {
+						tokenRackMapper.setRackForToken(token, c.getHost().getRack());
 					}
 					connections.add(c);
 				}

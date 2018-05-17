@@ -282,15 +282,15 @@ public class DynoJedisDemo {
 	public void runScanTest(boolean populateKeys) throws Exception {
 		logger.info("SCAN TEST -- begin");
 
-		final String keyPattern = System.getProperty("dyno.demo.scan.key.pattern", "*");
+		final String keyPattern = System.getProperty("dyno.demo.scan.key.pattern", "DynoClientTest_key-*");
 		final String keyPrefix = System.getProperty("dyno.demo.scan.key.prefix", "DynoClientTest_key-");
 
-//		if (populateKeys) {
-//			logger.info("Writing 500000 keys to {} with prefix {}", this.clusterName, keyPrefix);
-//			for (int i = 0; i < 500000; i++) {
-//				client.set(keyPrefix + i, "value-" + i);
-//			}
-//		}
+		if (populateKeys) {
+			logger.info("Writing 500 keys to {} with prefix {}", this.clusterName, keyPrefix);
+			for (int i = 0; i < 500; i++) {
+				client.set(keyPrefix + i, "value-" + i);
+			}
+		}
 
 		logger.info("Reading keys from {} with pattern {}", this.clusterName, keyPattern);
 		CursorBasedResult<String> cbi = null;
@@ -309,7 +309,6 @@ public class DynoJedisDemo {
 
 			List<String> results = cbi.getStringResult();
 			count += results.size();
-			logger.info(">>>>>>>>>>>>>>>>>");
 			int i = 0;
 			for (String res : results) {
 				logger.info("{}) {}", i, res);

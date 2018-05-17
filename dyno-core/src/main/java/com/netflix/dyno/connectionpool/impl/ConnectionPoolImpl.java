@@ -359,13 +359,13 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
     }
 
     @Override
-	public <R> Collection<OperationResult<R>> executeWithRing(CursorBasedResult<String> cursor, Operation<CL, R> op) throws DynoException {
+	public <R> Collection<OperationResult<R>> executeWithRing(TokenRackMapper tokenRackMapper, Operation<CL, R> op) throws DynoException {
 
 		// Start recording the operation
 		long startTime = System.currentTimeMillis();
 
 		Collection<Connection<CL>> connections = selectionStrategy
-				.getConnectionsToRing(cursor, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
+				.getConnectionsToRing(tokenRackMapper, cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS);
 
 		LinkedBlockingQueue<Connection<CL>> connQueue = new LinkedBlockingQueue<Connection<CL>>();
 		connQueue.addAll(connections);

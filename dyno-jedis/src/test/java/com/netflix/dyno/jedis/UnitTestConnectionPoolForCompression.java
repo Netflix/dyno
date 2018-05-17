@@ -20,6 +20,7 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.ConnectionContextImpl;
 import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
+import com.netflix.dyno.connectionpool.TokenRackMapper;
 import org.mockito.Matchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -155,7 +156,7 @@ public class UnitTestConnectionPoolForCompression implements ConnectionPool<Jedi
     }
 
     @Override
-    public <R> Collection<OperationResult<R>> executeWithRing(CursorBasedResult<String> cursor, Operation<Jedis, R> op) throws DynoException {
+    public <R> Collection<OperationResult<R>> executeWithRing(TokenRackMapper tokenRackMapper, Operation<Jedis, R> op) throws DynoException {
         return null;
     }
 

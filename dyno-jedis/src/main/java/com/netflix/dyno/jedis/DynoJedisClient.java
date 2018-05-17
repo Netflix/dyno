@@ -793,7 +793,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     private List<OperationResult<ScanResult<String>>> scatterGatherScan(final CursorBasedResult<String> cursor,
             final int count, final String... pattern) {
-        return new ArrayList<>(connPool.executeWithRing(cursor, new BaseKeyOperation<ScanResult<String>>("SCAN", OpName.SCAN) {
+
+        if (!(cursor instanceof TokenRackMapper)) {
+            throw new DynoException("cursor does not implement the TokenRackMapper interface");
+        }
+        return new ArrayList<>(connPool.executeWithRing((TokenRackMapper)cursor, new BaseKeyOperation<ScanResult<String>>("SCAN", OpName.SCAN) {
             @Override
             public ScanResult<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
                 if (pattern != null && pattern.length > 0) {
@@ -3800,7 +3804,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         for (OperationResult<ScanResult<String>> opResult : opResults) {
             results.put(opResult.getNode().getHostAddress(), opResult.getResult());
         }
-        return new CursorBasedResultImpl<>(results, cursor.getTokenRackMap());
+        return new CursorBasedResultImpl<>(results, ((TokenRackMapper)cursor).getTokenRackMap());
     }
 
     @Override

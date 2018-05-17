@@ -101,7 +101,7 @@ public interface ConnectionPool<CL> {
      * @return Collection<OperationResult<R>>
      * @throws DynoException
      */
-    <R> Collection<OperationResult<R>> executeWithRing(CursorBasedResult<String> cursor, Operation<CL, R> op) throws DynoException;
+    <R> Collection<OperationResult<R>> executeWithRing(TokenRackMapper tokenRackMapper, Operation<CL, R> op) throws DynoException;
 
     /**
      * Execute an operation asynchronously.
