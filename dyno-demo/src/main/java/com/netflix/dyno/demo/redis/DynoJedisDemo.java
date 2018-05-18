@@ -314,7 +314,6 @@ public class DynoJedisDemo {
 				logger.info("{}) {}", i, res);
 				i++;
 			}
-			Thread.sleep(1000);
 		} while ((cbi == null) || !cbi.isComplete());
 		long end = System.currentTimeMillis();
 
@@ -1001,7 +1000,7 @@ public class DynoJedisDemo {
 			}
 			case 5: {
 				final boolean writeKeys = Boolean.valueOf(props.getProperty("dyno.demo.scan.populateKeys"));
-				demo.runScanTest(true);
+				demo.runScanTest(writeKeys);
 				break;
 			}
 			case 6: {
