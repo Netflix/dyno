@@ -35,6 +35,7 @@ import javax.xml.parsers.SAXParserFactory;
 
 import com.google.common.collect.Lists;
 import com.netflix.dyno.connectionpool.*;
+import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
@@ -108,7 +109,8 @@ public class DynoJedisDemo {
 
 			@Override
 			public List<Host> getHosts() {
-				return hosts;
+				return getHostsFromDiscovery(clusterName);
+//				return hosts;
 			}
 		};
 
@@ -292,16 +294,31 @@ public class DynoJedisDemo {
 
 		logger.info("Reading keys from {} with pattern {}", this.clusterName, keyPattern);
 		CursorBasedResult<String> cbi = null;
+		long start = System.currentTimeMillis();
+		int count = 0;
 		do {
-			cbi = client.dyno_scan(cbi, 10000, keyPattern);
+			try {
+
+				cbi = client.dyno_scan(cbi, 5, keyPattern);
+			} catch (PoolOfflineException ex) {
+				logger.info("Caught exception.... retrying scan");
+				cbi = null;
+				continue;
+			}
+
 
 			List<String> results = cbi.getStringResult();
+			count += results.size();
+			int i = 0;
 			for (String res : results) {
-				logger.info(res);
+				logger.info("{}) {}", i, res);
+				i++;
 			}
-		} while (!cbi.isComplete());
+		} while ((cbi == null) || !cbi.isComplete());
+		long end = System.currentTimeMillis();
 
-		logger.info("SCAN TEST -- done");
+
+		logger.info("SCAN TEST -- done {} results in {}ms", count, end - start);
 	}
 
 	public void runSScanTest(boolean populateKeys) throws Exception {

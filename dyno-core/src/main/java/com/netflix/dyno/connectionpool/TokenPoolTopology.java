@@ -15,14 +15,19 @@
  */
 package com.netflix.dyno.connectionpool;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
+import org.slf4j.LoggerFactory;
+
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
 
 public class TokenPoolTopology {
+	private static final org.slf4j.Logger Logger = LoggerFactory.getLogger(TokenPoolTopology.class);
 
 	private final ConcurrentHashMap<String, List<TokenStatus>> map = new ConcurrentHashMap<String, List<TokenStatus>>();
+	private final ConcurrentHashMap<String, Map<Long, Host>> rackTokenHostMap = new ConcurrentHashMap<String, Map<Long, Host>>();
 	private final int replicationFactor;
 	
 	public TokenPoolTopology (int replicationFactor) {
@@ -39,6 +44,26 @@ public class TokenPoolTopology {
 		
 		list.add(new TokenStatus(token, hostPool));
 	}
+
+	public void addHostToken(String rack, Long token, Host host) {
+		Logger.info("Adding Host to Topology" + host);
+		Map<Long, Host> tokenHostMap = rackTokenHostMap.get(rack);
+		if (tokenHostMap == null) {
+			tokenHostMap = new HashMap<>();
+			rackTokenHostMap.put(rack, tokenHostMap);
+		}
+		tokenHostMap.put(token, host);
+	}
+
+	public void removeHost(String rack, Long token, Host host) {
+		Logger.info("Removing Host from Topology" + host);
+
+		Map<Long, Host> tokenHostMap = rackTokenHostMap.get(rack);
+		if (tokenHostMap == null) {
+			return;
+		}
+		tokenHostMap.put(token, null);
+	}
 	
 	public ConcurrentHashMap<String, List<TokenStatus>> getAllTokens() {
 		return map;
@@ -48,9 +73,23 @@ public class TokenPoolTopology {
 		return replicationFactor;
 	}
 
+	public String getRandomRack() {
+		List<String> racks = new ArrayList<String>(rackTokenHostMap.keySet());
+		Collections.shuffle(racks);
+		return racks.get(0);
+	}
+
 	public List<TokenStatus> getTokensForRack(String rack) {
 		if (rack != null && map.containsKey(rack)) {
 			return map.get(rack);
+		}
+
+		return null;
+	}
+
+	public Map<Long, Host> getTokenHostsForRack(String rack) {
+		if (rack != null && rackTokenHostMap.containsKey(rack)) {
+			return rackTokenHostMap.get(rack);
 		}
 
 		return null;

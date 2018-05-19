@@ -793,7 +793,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     private List<OperationResult<ScanResult<String>>> scatterGatherScan(final CursorBasedResult<String> cursor,
             final int count, final String... pattern) {
-        return new ArrayList<>(connPool.executeWithRing(new BaseKeyOperation<ScanResult<String>>("SCAN", OpName.SCAN) {
+
+        if (!(cursor instanceof TokenRackMapper)) {
+            throw new DynoException("cursor does not implement the TokenRackMapper interface");
+        }
+        return new ArrayList<>(connPool.executeWithRing((TokenRackMapper)cursor, new BaseKeyOperation<ScanResult<String>>("SCAN", OpName.SCAN) {
             @Override
             public ScanResult<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
                 if (pattern != null && pattern.length > 0) {
@@ -2660,7 +2664,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         Logger.warn("Executing d_keys for pattern: " + pattern);
 
         Collection<OperationResult<Set<String>>> results = connPool
-                .executeWithRing(new BaseKeyOperation<Set<String>>(pattern, OpName.KEYS) {
+                .executeWithRing(new CursorBasedResultImpl<String>(new LinkedHashMap<String, ScanResult<String>>()), new BaseKeyOperation<Set<String>>(pattern, OpName.KEYS) {
 
                     @Override
                     public Set<String> execute(Jedis client, ConnectionContext state) throws DynoException {
@@ -3790,14 +3794,17 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     public CursorBasedResult<String> dyno_scan(CursorBasedResult<String> cursor, int count, String... pattern) {
+        if (cursor == null) {
+            // Create a temporary cursor context which will maintain a map of token to rack
+            cursor = new CursorBasedResultImpl<>(new LinkedHashMap<String, ScanResult<String>>());
+        }
         final Map<String, ScanResult<String>> results = new LinkedHashMap<>();
 
         List<OperationResult<ScanResult<String>>> opResults = scatterGatherScan(cursor, count, pattern);
         for (OperationResult<ScanResult<String>> opResult : opResults) {
             results.put(opResult.getNode().getHostAddress(), opResult.getResult());
         }
-
-        return new CursorBasedResultImpl<>(results);
+        return new CursorBasedResultImpl<>(results, ((TokenRackMapper)cursor).getTokenRackMap());
     }
 
     @Override

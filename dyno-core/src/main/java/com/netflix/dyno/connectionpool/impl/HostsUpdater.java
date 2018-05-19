@@ -51,24 +51,24 @@ public class HostsUpdater {
 			return null;
 		}
 		
-		List<Host> allHosts = hostSupplier.getHosts();
-		if (allHosts == null || allHosts.isEmpty()) {
+		List<Host> allHostsFromHostSupplier = hostSupplier.getHosts();
+		if (allHostsFromHostSupplier == null || allHostsFromHostSupplier.isEmpty()) {
 			throw new NoAvailableHostsException("No available hosts when starting HostsUpdater");
 		}
 
-		List<Host> hostsUp = new ArrayList<>();
-		List<Host> hostsDown = new ArrayList<>();
+		List<Host> hostsUpFromHostSupplier = new ArrayList<>();
+		List<Host> hostsDownFromHostSupplier = new ArrayList<>();
 
-		for (Host host : allHosts) {
+		for (Host host : allHostsFromHostSupplier) {
 			if (host.isUp()) {
-				hostsUp.add(host);
+				hostsUpFromHostSupplier.add(host);
 			} else {
-				hostsDown.add(host);
+				hostsDownFromHostSupplier.add(host);
 			}
 		}
 
 		// if nothing has changed, just return the earlier hosttracker.
-		if (!hostTracker.get().checkIfChanged(new HashSet<>(hostsUp), new HashSet<>(hostsDown))) {
+		if (!hostTracker.get().checkIfChanged(new HashSet<>(hostsUpFromHostSupplier), new HashSet<>(hostsDownFromHostSupplier))) {
 			return hostTracker.get();
 		}
 
@@ -77,8 +77,8 @@ public class HostsUpdater {
 		 * Hence get the hosts from HostSupplier and map them to TokenMapSupplier
 		 * and return them.
 		 */
-		Collections.sort(allHosts);
-		Set<Host> hostSet = new HashSet<>(allHosts);
+		Collections.sort(allHostsFromHostSupplier);
+		Set<Host> hostSet = new HashSet<>(allHostsFromHostSupplier);
 		// Create a list of host/Tokens
 		List<HostToken> hostTokens;
 		if (tokenMapSupplier != null) {
@@ -100,26 +100,37 @@ public class HostsUpdater {
 			allHostSetFromTokenMapSupplier.put(ht.getHost(), ht.getHost());
 		}
 
-		hostsUp.clear();
-		hostsDown.clear();
+		hostsUpFromHostSupplier.clear();
+		hostsDownFromHostSupplier.clear();
 
-		for (Host hostFromHostSupplier : allHosts) {
+		for (Host hostFromHostSupplier : allHostsFromHostSupplier) {
 			if (hostFromHostSupplier.isUp()) {
 				Host hostFromTokenMapSupplier = allHostSetFromTokenMapSupplier.get(hostFromHostSupplier);
 
-				hostsUp.add(new Host(hostFromHostSupplier.getHostName(), hostFromHostSupplier.getIpAddress(),
+				hostsUpFromHostSupplier.add(new Host(hostFromHostSupplier.getHostName(), hostFromHostSupplier.getIpAddress(),
 									 hostFromTokenMapSupplier.getPort(), hostFromTokenMapSupplier.getSecurePort(), hostFromTokenMapSupplier.getRack(),
 									 hostFromTokenMapSupplier.getDatacenter(), Host.Status.Up, hostFromTokenMapSupplier.getHashtag()));
+				allHostSetFromTokenMapSupplier.remove(hostFromTokenMapSupplier);
 			} else {
 				Host hostFromTokenMapSupplier = allHostSetFromTokenMapSupplier.get(hostFromHostSupplier);
 
-				hostsDown.add(new Host(hostFromHostSupplier.getHostName(), hostFromHostSupplier.getIpAddress(),
+				hostsDownFromHostSupplier.add(new Host(hostFromHostSupplier.getHostName(), hostFromHostSupplier.getIpAddress(),
 						hostFromTokenMapSupplier.getPort(), hostFromTokenMapSupplier.getSecurePort(), hostFromTokenMapSupplier.getRack(),
 						hostFromTokenMapSupplier.getDatacenter(), Host.Status.Down, hostFromTokenMapSupplier.getHashtag()));
+				allHostSetFromTokenMapSupplier.remove(hostFromTokenMapSupplier);
 			}
 		}
 
-		HostStatusTracker newTracker = hostTracker.get().computeNewHostStatus(hostsUp, hostsDown);
+		// if a node is down, it might be absent in hostSupplier but has its presence in TokenMapSupplier.
+		// Add that host to the down list here.
+		for (Host h : allHostSetFromTokenMapSupplier.keySet()) {
+			hostsDownFromHostSupplier.add(new Host(h.getHostName(), h.getIpAddress(),
+					h.getPort(), h.getSecurePort(), h.getRack(),
+					h.getDatacenter(), Host.Status.Down, h.getHashtag()));
+
+		}
+
+		HostStatusTracker newTracker = hostTracker.get().computeNewHostStatus(hostsUpFromHostSupplier, hostsDownFromHostSupplier);
 		hostTracker.set(newTracker);
 
 		return hostTracker.get();
