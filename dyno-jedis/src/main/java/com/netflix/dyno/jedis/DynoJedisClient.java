@@ -47,7 +47,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import static com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.CompressionStrategy;
 
 public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, MultiKeyCommands,
-        ScriptingCommands {
+        ScriptingCommands, MultiKeyBinaryCommands {
 
     private static final Logger Logger = org.slf4j.LoggerFactory.getLogger(DynoJedisClient.class);
 
@@ -127,9 +127,18 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         private final List<byte[]> binaryKeys;
         private final OpName op;
 
-        private MultiKeyOperation(final List<String> keys, final OpName o) {
-            this.keys = keys;
-            this.binaryKeys = null;
+        private MultiKeyOperation(final List keys, final OpName o) {
+            if(keys.get(0) instanceof String) {
+                this.keys = keys;
+                this.binaryKeys = null;
+            } else if(keys.get(0) instanceof byte[]) {
+                this.keys = null;
+                this.binaryKeys = keys;
+            } else {
+                this.keys = null;
+                this.binaryKeys = null;
+            }
+
             this.op = o;
         }
 
@@ -140,14 +149,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         @Override
         public String getStringKey() {
-            return this.keys.get(0);
+            return (this.keys != null) ? this.keys.get(0) : null;
         }
 
         public byte[] getBinaryKey() {
-            if (binaryKeys != null)
-                return binaryKeys.get(0);
-            else
-                return null;
+            return (binaryKeys != null) ? binaryKeys.get(0) : null;
         }
 
     }
@@ -250,7 +256,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     private abstract class CompressionValueMultiKeyOperation<T> extends MultiKeyOperation<T>
             implements MultiKeyCompressionOperation<Jedis, T> {
 
-        private CompressionValueMultiKeyOperation(List<String> keys, OpName o) {
+        private CompressionValueMultiKeyOperation(List keys, OpName o) {
             super(keys, o);
         }
 
@@ -2838,7 +2844,209 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
+    public Long del(byte[]... keys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long exists(byte[]... keys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<byte[]> blpop(int timeout, byte[]... keys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<byte[]> brpop(int timeout, byte[]... keys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<byte[]> blpop(byte[]... args) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<byte[]> brpop(byte[]... args) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> keys(byte[] pattern) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<byte[]> mget(byte[]... keys) {
+        return d_mget(keys).getResult();
+    }
+
+    public OperationResult<List<byte[]>> d_mget(final byte[]... keys) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+
+            return connPool.executeWithFailover(new MultiKeyOperation<List<byte[]>>(Arrays.asList(keys), OpName.MGET) {
+                @Override
+                public List<byte[]> execute(Jedis client, ConnectionContext state) {
+                    return client.mget(keys);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(
+                    new CompressionValueMultiKeyOperation<List<byte[]>>(Arrays.asList(keys), OpName.MGET) {
+                        @Override
+                        public List<byte[]> execute(final Jedis client, final ConnectionContext state)
+                                throws DynoException {
+                            return new ArrayList<>(CollectionUtils.transform(client.mget(keys),
+                                    new CollectionUtils.Transform<byte[], byte[]>() {
+                                        @Override
+                                        public byte[] get(byte[] s) {
+                                            return decompressValue(state, String.valueOf(s)).getBytes();
+                                        }
+                                    }));
+                        }
+                    });
+        }
+    }
+
+    @Override
+    public String mset(byte[]... keysvalues) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long msetnx(byte[]... keysvalues) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public String rename(byte[] oldkey, byte[] newkey) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long renamenx(byte[] oldkey, byte[] newkey) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public byte[] rpoplpush(byte[] srckey, byte[] dstkey) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> sdiff(byte[]... keys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long sdiffstore(byte[] dstkey, byte[]... keys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> sinter(byte[]... keys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long sinterstore(byte[] dstkey, byte[]... keys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long smove(byte[] srckey, byte[] dstkey, byte[] member) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long sort(byte[] key, SortingParams sortingParameters, byte[] dstkey) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long sort(byte[] key, byte[] dstkey) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> sunion(byte[]... keys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long sunionstore(byte[] dstkey, byte[]... keys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public String watch(byte[]... keys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
     public String unwatch() {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zinterstore(byte[] dstkey, byte[]... sets) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zinterstore(byte[] dstkey, ZParams params, byte[]... sets) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zunionstore(byte[] dstkey, byte[]... sets) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zunionstore(byte[] dstkey, ZParams params, byte[]... sets) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public byte[] brpoplpush(byte[] source, byte[] destination, int timeout) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long publish(byte[] channel, byte[] message) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public void subscribe(BinaryJedisPubSub jedisPubSub, byte[]... channels) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public void psubscribe(BinaryJedisPubSub jedisPubSub, byte[]... patterns) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public byte[] randomBinaryKey() {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long bitop(BitOP op, byte[] destKey, byte[]... srcKeys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public String pfmerge(byte[] destkey, byte[]... sourcekeys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long pfcount(byte[]... keys) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
