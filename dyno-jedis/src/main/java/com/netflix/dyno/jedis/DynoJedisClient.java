@@ -27,12 +27,14 @@ import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.connectionpool.impl.lb.HttpEndpointBasedTokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
-import com.netflix.dyno.contrib.*;
-
+import com.netflix.dyno.contrib.ArchaiusConnectionPoolConfiguration;
+import com.netflix.dyno.contrib.DynoCPMonitor;
+import com.netflix.dyno.contrib.DynoOPMonitor;
+import com.netflix.dyno.contrib.EurekaHostsSupplier;
+import org.apache.commons.lang3.ArrayUtils;
 import org.slf4j.Logger;
-
-import redis.clients.jedis.BinaryClient.LIST_POSITION;
 import redis.clients.jedis.*;
+import redis.clients.jedis.BinaryClient.LIST_POSITION;
 import redis.clients.jedis.params.geo.GeoRadiusParam;
 import redis.clients.jedis.params.sortedset.ZAddParams;
 import redis.clients.jedis.params.sortedset.ZIncrByParams;
@@ -42,7 +44,6 @@ import java.io.IOException;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicReference;
-import org.apache.commons.lang3.ArrayUtils;
 
 import static com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.CompressionStrategy;
 
@@ -128,12 +129,19 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         private final OpName op;
 
         private MultiKeyOperation(final List keys, final OpName o) {
-            if(keys.get(0) instanceof String) {
-                this.keys = keys;
-                this.binaryKeys = null;
-            } else if(keys.get(0) instanceof byte[]) {
-                this.keys = null;
-                this.binaryKeys = keys;
+            Object firstKey = (keys != null) ? keys.get(0) : null;
+
+            if(firstKey != null) {
+                if (firstKey instanceof String) {//string key
+                    this.keys = keys;
+                    this.binaryKeys = null;
+                } else if (firstKey instanceof byte[]) {//binary key
+                    this.keys = null;
+                    this.binaryKeys = keys;
+                } else {//something went wrong here
+                    this.keys = null;
+                    this.binaryKeys = null;
+                }
             } else {
                 this.keys = null;
                 this.binaryKeys = null;
