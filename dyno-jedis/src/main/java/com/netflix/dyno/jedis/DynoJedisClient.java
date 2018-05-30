@@ -130,7 +130,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         private MultiKeyOperation(final List keys, final OpName o) {
             //filter nulls
-            keys.removeIf(Objects::isNull);
+            keys.removeAll(Collections.singletonList(null));
 
             Object firstKey = (keys != null && keys.size() > 0) ? keys.get(0) : null;
 
