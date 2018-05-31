@@ -14,6 +14,7 @@ subprojects {
     apply plugin: 'java'
     apply plugin: 'idea'
     apply plugin: 'eclipse'
+    sourceCompatibility = 1.8
 
     repositories {
         jcenter()
@@ -88,6 +89,16 @@ project(':dyno-jedis') {
         compile 'redis.clients:jedis:2.9.0'
     }
 }
+
+project(':dyno-client') {
+    apply plugin: 'osgi'
+    apply plugin: 'project-report'
+
+    dependencies {
+        compile project(':dyno-jedis')
+    }
+}
+
 
 project(':dyno-redisson') {
     apply plugin: 'osgi'
