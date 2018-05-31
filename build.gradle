@@ -1,5 +1,5 @@
 plugins {
-    id 'nebula.netflixoss' version '3.6.4'
+    id 'nebula.netflixoss' version '5.0.0'
 }
 
 // Establish version and status
@@ -15,6 +15,9 @@ subprojects {
     apply plugin: 'idea'
     apply plugin: 'eclipse'
     apply plugin: 'nebula.compile-api'
+
+    sourceCompatibility = '1.8'
+    targetCompatibility = '1.8'
 
     repositories {
         jcenter()
