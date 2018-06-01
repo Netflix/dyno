@@ -140,7 +140,7 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
         // to a dynomite server
         // hence trying them all
         Set<HostToken> allTokens = new HashSet<HostToken>();
-        Set<Host> remainingHosts = new TreeSet<>(activeHosts);
+        Set<Host> remainingHosts = new HashSet<>(activeHosts);
 
         for (Host host : activeHosts) {
             try {
