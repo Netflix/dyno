@@ -15,11 +15,7 @@
  */
 package com.netflix.dyno.connectionpool.impl.lb;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import com.netflix.dyno.connectionpool.exception.TimeoutException;
 import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
@@ -144,12 +140,18 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
         // to a dynomite server
         // hence trying them all
         Set<HostToken> allTokens = new HashSet<HostToken>();
+        Set<Host> remainingHosts = new HashSet<>(activeHosts);
 
         for (Host host : activeHosts) {
             try {
                 List<HostToken> hostTokens = parseTokenListFromJson(getTopologyJsonPayload((host.getHostAddress())));
                 for (HostToken hToken : hostTokens) {
                     allTokens.add(hToken);
+                    remainingHosts.remove(hToken.getHost());
+                }
+                if (remainingHosts.size() == 0) {
+                    Logger.info("Received token information for " + allTokens.size() + " hosts. Not querying other hosts");
+                    break;
                 }
             } catch (Exception e) {
                 Logger.warn("Could not get json response for token topology [" + e.getMessage() + "]");
