@@ -25,13 +25,14 @@ package com.netflix.dyno.connectionpool.impl.utils;
 public class ConfigUtils {
 
     public static String getLocalZone() {
-	String az = System.getenv("EC2_AVAILABILITY_ZONE");
+	String localRack = System.getenv("LOCAL_RACK") == null ? System.getProperty("LOCAL_RACK") : System.getenv("LOCAL_RACK");
 
-	if (az == null) {
-	    az = System.getProperty("EC2_AVAILABILITY_ZONE");
+	//backward compatible
+	if (localRack == null) {
+		localRack = System.getenv("EC2_AVAILABILITY_ZONE") == null ? System.getProperty("EC2_AVAILABILITY_ZONE") : System.getenv("EC2_AVAILABILITY_ZONE");
 	}
 
-	return az;
+	return localRack;
     }
 
     /**
@@ -39,19 +40,17 @@ public class ConfigUtils {
      * @return the datacenter that the client is in
      */
     public static String getDataCenter() {
-	// first try with getEnv
-	String dc = System.getenv("EC2_REGION");
+	String localDatacenter = System.getenv("LOCAL_DATACENTER") == null ? System.getProperty("LOCAL_DATACENTER") : System.getenv("LOCAL_DATACENTER");
 
-	if (dc == null) {
-	    // then try with getProperty
-	    dc = System.getProperty("EC2_REGION");
+	//backward compatible
+	if (localDatacenter == null) {
+		localDatacenter = System.getenv("EC2_REGION") == null ? System.getProperty("EC2_REGION") : System.getenv("EC2_REGION");
 	}
 
-	if (dc == null) {
+	if (localDatacenter == null) {
 	    return getDataCenterFromRack(getLocalZone());
-	} else {
-	    return dc;
 	}
+	return localDatacenter;
 
     }
 

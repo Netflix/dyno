@@ -4300,7 +4300,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                             + "To make the client aware of the local rack either use "
                             + "ConnectionPoolConfigurationImpl.setLocalRack() when constructing the client "
                             + "instance or ensure EC2_AVAILABILTY_ZONE is set as an environment variable, e.g. "
-                            + "run with -DEC2_AVAILABILITY_ZONE=us-east-1c";
+                            + "run with -DLOCAL_RACK=us-east-1c";
                     config.setLocalZoneAffinity(false);
                     Logger.warn(warningMessage);
                 }
