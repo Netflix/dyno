@@ -15,11 +15,27 @@
  */
 package com.netflix.dyno.demo.redis;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.InputStream;
+import com.google.common.collect.Lists;
+import com.netflix.dyno.connectionpool.*;
+import com.netflix.dyno.connectionpool.Host.Status;
+import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
+import com.netflix.dyno.connectionpool.impl.lb.HostToken;
+import com.netflix.dyno.jedis.DynoJedisClient;
+import com.netflix.dyno.jedis.DynoJedisPipeline;
+import org.apache.http.HttpResponse;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.xml.sax.Attributes;
+import org.xml.sax.SAXException;
+import org.xml.sax.helpers.DefaultHandler;
+import redis.clients.jedis.Response;
+import redis.clients.jedis.ScanParams;
+import redis.clients.jedis.ScanResult;
+
+import javax.xml.parsers.SAXParser;
+import javax.xml.parsers.SAXParserFactory;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.*;
@@ -29,29 +45,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import javax.xml.parsers.SAXParser;
-import javax.xml.parsers.SAXParserFactory;
-
-import com.google.common.collect.Lists;
-import com.netflix.dyno.connectionpool.*;
-import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.xml.sax.Attributes;
-import org.xml.sax.SAXException;
-import org.xml.sax.helpers.DefaultHandler;
-
-import redis.clients.jedis.Response;
-
-import com.netflix.dyno.connectionpool.Host.Status;
-import com.netflix.dyno.connectionpool.impl.lb.HostToken;
-import com.netflix.dyno.jedis.DynoJedisClient;
-import com.netflix.dyno.jedis.DynoJedisPipeline;
-import redis.clients.jedis.ScanParams;
-import redis.clients.jedis.ScanResult;
 
 public class DynoJedisDemo {
 
@@ -772,8 +765,8 @@ public class DynoJedisDemo {
 			throw new IllegalArgumentException("Discovery URL not found");
 		}
 
-		String region = System.getProperty("EC2_REGION");
-		final String discoveryUrl = String.format(System.getProperty(discoveryKey), region);
+		String localDatacenter = System.getProperty("LOCAL_DATACENTER");
+		final String discoveryUrl = String.format(System.getProperty(discoveryKey), localDatacenter);
 
 		final String url = String.format("http://%s/%s", discoveryUrl, clusterName);
 
