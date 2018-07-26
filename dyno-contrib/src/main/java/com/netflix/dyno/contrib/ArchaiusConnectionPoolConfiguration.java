@@ -53,15 +53,15 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	private final RetryPolicyFactory retryPolicyFactory;
     private final DynamicBooleanProperty failOnStartupIfNoHosts;
 
-	private final DynamicBooleanProperty isDualWriteEnabled;
-    private final DynamicStringProperty dualWriteClusterName;
-    private final DynamicIntProperty dualWritePercentage;
+	private DynamicBooleanProperty isDualWriteEnabled;
+    private DynamicStringProperty dualWriteClusterName;
+    private DynamicIntProperty dualWritePercentage;
 
 	public ArchaiusConnectionPoolConfiguration(String name) {
 		super(name);
-		
-		String propertyPrefix = DynoPrefix + name; 
-		
+
+		String propertyPrefix = DynoPrefix + name;
+
 		maxConnsPerHost = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.maxConnsPerHost", super.getMaxConnsPerHost());
 		maxTimeoutWhenExhausted = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.maxTimeoutWhenExhausted", super.getMaxTimeoutWhenExhausted());
 		maxFailoverCount = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".connection.maxFailoverCount", super.getMaxFailoverCount());
@@ -83,7 +83,7 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
         dualWritePercentage = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".dualwrite.percentage", super.getDualWritePercentage());
 	}
 
-	
+
 	@Override
 	public String getName() {
 		return super.getName();
@@ -125,7 +125,7 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
 	public boolean localZoneAffinity() {
 		return localZoneAffinity.get();
 	}
-	
+
 	@Override
 	public LoadBalancingStrategy getLoadBalancingStrategy() {
 		return loadBalanceStrategy;
@@ -170,6 +170,18 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
     public int getDualWritePercentage() {
         return dualWritePercentage.get();
     }
+
+	public void setIsDualWriteEnabled(DynamicBooleanProperty booleanProperty) {
+		this.isDualWriteEnabled = booleanProperty;
+	}
+
+	public void setDualWriteClusterName(DynamicStringProperty stringProperty) {
+		this.dualWriteClusterName = stringProperty;
+	}
+
+	public void setDualWritePercentage(DynamicIntProperty intProperty) {
+		this.dualWritePercentage = intProperty;
+	}
 
     @Override
     public String toString() {
