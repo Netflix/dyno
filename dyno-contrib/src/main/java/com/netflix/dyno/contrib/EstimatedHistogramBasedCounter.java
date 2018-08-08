@@ -15,6 +15,7 @@
  */
 package com.netflix.dyno.contrib;
 
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.netflix.dyno.connectionpool.impl.utils.EstimatedHistogram;
 import com.netflix.servo.annotations.DataSourceType;
@@ -62,7 +63,7 @@ public abstract class EstimatedHistogramBasedCounter extends AbstractMonitor<Num
 	/** {@inheritDoc} */
 	@Override
 	public String toString() {
-		return Objects.toStringHelper(this)
+		return MoreObjects.toStringHelper(this)
 				.add("config", config)
 				.add("count", getValue())
 				.toString();
