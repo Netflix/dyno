@@ -175,6 +175,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
      * <li>{@link #getSet(String, String) GETSET}</li>
      * <li>{@link #set(String, String) SET}</li>
      * <li>{@link #setex(String, int, String) SETEX}</li>
+     * <li>{@link #psetex(String, long, String) PSETEX)</li>
      * </ul>
      * <ul>
      * <lh>Hash Operations</lh>
@@ -1511,6 +1512,32 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             });
         }
     }
+    
+    @Override
+    public String psetex(final String key, final long milliseconds, final String value) {
+        return d_psetex(key, milliseconds, value).getResult();
+    }
+
+    public OperationResult<String> d_psetex(final String key, final long milliseconds, final String value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.PSETEX) {
+                @Override
+                public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                    return client.psetex(key, milliseconds, value);
+                }
+            });
+        } else {
+            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.PSETEX) {
+                @Override
+                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                    return client.psetex(key, milliseconds, compressValue(value, state));
+                }
+            });
+        }
+    }
+      
+
+
 
     @Override
     public Long setnx(final String key, final String value) {
@@ -4571,11 +4598,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public ScanResult<Entry<String, String>> hscan(String arg0, String arg1, ScanParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public String psetex(String arg0, long arg1, String arg2) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
