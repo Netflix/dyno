@@ -323,6 +323,14 @@ public class CircularListTest {
 		checkValues(new ArrayList<Integer>(subMap.values()));
 	}
 
+	@Test
+	public void testCircularListGet() {
+		// integer overflow on read index should not result in exception
+		for (long i = 0; i < (long) Integer.MAX_VALUE + 10; i++) {
+			cList.getNextElement();
+		}
+	}
+
 	private class TestWorker {
 
 		private final ConcurrentHashMap<Integer, Integer> map = new ConcurrentHashMap<Integer, Integer>();
