@@ -18,7 +18,7 @@ package com.netflix.dyno.connectionpool.impl.lb;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -37,7 +37,7 @@ public class CircularList<T> {
 	// The thread safe reference to the inner list. Maintaining an atomic ref at this level helps enabling swapping out of the entire list 
 	// underneath when there is a change to the list such as element addition or removal
 	private final AtomicReference<InnerList> ref  = new AtomicReference<InnerList>(null);
-	
+
 	/**
 	 * Constructor
 	 * @param origList
@@ -59,7 +59,6 @@ public class CircularList<T> {
 	 * @param newList
 	 */
 	public void swapWithList(Collection<T> newList) {
-		
 		InnerList newInnerList = new InnerList(newList);
 		ref.set(newInnerList);
 	}
@@ -68,8 +67,7 @@ public class CircularList<T> {
 	 * Add an element to the list. This causes the inner list to be swapped out
 	 * @param element
 	 */
-	public void addElement(T element) {
-		
+	public synchronized void addElement(T element) {
 		List<T> origList = ref.get().list;
 		boolean isPresent = origList.contains(element);
 		if (isPresent) {
@@ -86,8 +84,7 @@ public class CircularList<T> {
 	 * Remove an element from this list. This causes the inner list to be swapped out
 	 * @param element
 	 */
-	public void removeElement(T element) {
-		
+	public synchronized void removeElement(T element) {
 		List<T> origList = ref.get().list;
 		boolean isPresent = origList.contains(element);
 		if (!isPresent) {
@@ -123,39 +120,31 @@ public class CircularList<T> {
 	 * @author poberai
 	 *
 	 */
-	private class InnerList { 
-		
-		private List<T> list = new ArrayList<T>();
+	private class InnerList {
+		private final List<T> list;
 		private final Integer size;
 
 		// The rotating index over the list. currentIndex always indicates the index of the element that was last accessed
-		private AtomicInteger currentIndex = new AtomicInteger(0);
+		// Using AtomicLong instead of AtomicInteger to avoid resetting value on overflow. Range of long is good enough
+		// to not wrap currentIndex.
+		private final AtomicLong currentIndex = new AtomicLong(0L);
 		
 		private InnerList(Collection<T> newList) {
 			if (newList != null) {
-				list.addAll(newList);
+				list = new ArrayList<>(newList);
 				size = list.size();
 			} else {
+				list = null;
 				size = 0;
 			}
 		}
 		
 		private int getNextIndex() {
-			int current = currentIndex.incrementAndGet();
-			return (current % size);
+			return (int) (currentIndex.incrementAndGet() % size);
 		}
 
 		private T getNextElement() {
-			
-			if (list == null || list.size() == 0) {
-				return null;
-			}
-			
-			if (list.size() == 1) {
-				return list.get(0);
-			}
-			
-			return list.get(getNextIndex());
+			return (list == null || list.size() == 0) ?  null : list.get(getNextIndex());
 		}
 		
 		private List<T> getList() {
