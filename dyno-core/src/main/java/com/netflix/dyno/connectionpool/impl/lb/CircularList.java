@@ -50,7 +50,7 @@ public class CircularList<T> {
 	 * Get the next element in the list
 	 * @return T
 	 */ 
-	public T getNextElement() {
+	public synchronized T getNextElement() {
 		return ref.get().getNextElement();
 	}
 
