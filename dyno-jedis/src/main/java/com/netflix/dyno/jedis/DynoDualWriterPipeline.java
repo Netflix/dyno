@@ -19,7 +19,7 @@ import java.util.concurrent.Future;
 /**
  * Dual writer for pipeline commands. This dual writer will apply mutation to both
  * the primary and shadow Dyno clusters but the response returned is only for the
- * primary dynomite cluster. Non-mutation operations are targetted only to primary
+ * primary dynomite cluster. Non-mutation operations are targeted only to primary
  * dynomite clusters.
  */
 public class DynoDualWriterPipeline extends DynoJedisPipeline {
@@ -54,7 +54,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
      * For async scheduling of Jedis commands on shadow clusters.
      */
     private <R> Future<Response<R>> writeAsync(final String key, Callable<Response<R>> func) {
-        if (sendShadowRequest(key)) {
+        if (canSendShadowRequest(key)) {
             return executor.submit(func);
         }
         return null;
@@ -64,7 +64,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
      *  For async scheduling of Jedis binary commands on shadow clusters.
      */
     private <R> Future<Response<R>> writeAsync(final byte[] key, Callable<Response<R>> func) {
-        if (sendShadowRequest(key)) {
+        if (canSendShadowRequest(key)) {
             return executor.submit(func);
         }
         return null;
@@ -87,20 +87,25 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
      * The idle check is necessary since there may be active host pools however the shadow client may not be able to
      * connect to them, for example, if security groups are not configured properly.
      */
-    private boolean sendShadowRequest(String key) {
+    private boolean canSendShadowRequest(String key) {
         return this.getConnPool().getConfiguration().isDualWriteEnabled() &&
                 !this.getConnPool().isIdle() &&
                 this.getConnPool().getActivePools().size() > 0 &&
                 dial.isInRange(key);
     }
 
-    private boolean sendShadowRequest(byte[] key) {
+    private boolean canSendShadowRequest(byte[] key) {
         return this.getConnPool().getConfiguration().isDualWriteEnabled() &&
                 !this.getConnPool().isIdle() &&
                 this.getConnPool().getActivePools().size() > 0 &&
                 dial.isInRange(key);
     }
 
+    /**
+     * Sync operation will wait for primary cluster and the result is returned. But,
+     * on a shadow cluster the operation is asynchronous and the result is not
+     * returned to client.
+     */
     @Override
     public void sync() {
         scheduleAsync(() -> { shadowPipeline.sync(); return null; });
