@@ -15,11 +15,13 @@
  */
 package com.netflix.dyno.demo.redis;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
 import com.netflix.dyno.connectionpool.*;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
+import com.netflix.dyno.jedis.DynoDualWriterClient;
 import com.netflix.dyno.jedis.DynoJedisClient;
 import com.netflix.dyno.jedis.DynoJedisPipeline;
 import org.apache.http.HttpResponse;
@@ -58,9 +60,15 @@ public class DynoJedisDemo {
 
 	protected final String localRack;
 	protected final String clusterName;
+	protected final String shadowClusterName;
 
 	public DynoJedisDemo(String clusterName, String localRack) {
-		this.clusterName = clusterName;
+		this(clusterName, "", localRack);
+	}
+
+	public DynoJedisDemo(String primaryCluster, String shadowCluster, String localRack) {
+		this.clusterName = primaryCluster;
+		this.shadowClusterName = shadowCluster;
 		this.localRack = localRack;
 	}
 
@@ -98,14 +106,7 @@ public class DynoJedisDemo {
 	}
 
 	private void initWithRemoteCluster(final List<Host> hosts, final int port) throws Exception {
-		final HostSupplier clusterHostSupplier = new HostSupplier() {
-
-			@Override
-			public List<Host> getHosts() {
-				return getHostsFromDiscovery(clusterName);
-//				return hosts;
-			}
-		};
+		final HostSupplier clusterHostSupplier = () -> hosts;
 
 		init(clusterHostSupplier, port, null);
 	}
@@ -118,8 +119,50 @@ public class DynoJedisDemo {
 		initWithRemoteCluster(getHostsFromDiscovery(clusterName), port);
 	}
 
-	public void init(HostSupplier hostSupplier, int port, TokenMapSupplier tokenSupplier) throws Exception {
+	public void initDualClientWithRemoteClustersFromFile(final String primaryHostsFile, final String shadowHostsFile,
+														 final int port) throws Exception {
+		final HostSupplier primaryClusterHostSupplier = () -> {
+			try {
+				return readHostsFromFile(primaryHostsFile, port);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			return null;
+		};
 
+		final HostSupplier shadowClusterHostSupplier = () -> {
+			try {
+				return readHostsFromFile(shadowHostsFile, port);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			return null;
+		};
+		initDualWriterDemo(primaryClusterHostSupplier, shadowClusterHostSupplier,
+				null, null);
+	}
+
+	public void initDualClientWithRemoteClustersFromEurekaUrl(final String primaryClusterName,
+															  final String shadowClusterName) {
+		final HostSupplier primaryClusterHostSupplier = () -> getHostsFromDiscovery(primaryClusterName);
+		final HostSupplier shadowClusterHostSupplier = () -> getHostsFromDiscovery(shadowClusterName);
+
+		initDualWriterDemo(primaryClusterHostSupplier, shadowClusterHostSupplier, null, null);
+	}
+
+	public void initDualWriterDemo(HostSupplier primaryClusterHostSupplier, HostSupplier shadowClusterHostSupplier,
+								   TokenMapSupplier primaryTokenSupplier, TokenMapSupplier shadowTokenSupplier) {
+		this.client = new DynoJedisClient.Builder()
+				.withApplicationName("demo")
+				.withDynomiteClusterName("dyno-dev")
+				.withHostSupplier(primaryClusterHostSupplier)
+				.withDualWriteHostSupplier(shadowClusterHostSupplier)
+				.withTokenMapSupplier(primaryTokenSupplier)
+				.withDualWriteTokenMapSupplier(shadowTokenSupplier)
+				.build();
+	}
+
+	public void init(HostSupplier hostSupplier, int port, TokenMapSupplier tokenSupplier) throws Exception {
 		client = new DynoJedisClient.Builder().withApplicationName("demo").withDynomiteClusterName("dyno_dev")
 				.withHostSupplier(hostSupplier)
 				.withTokenMapSupplier(tokenSupplier)
@@ -931,21 +974,20 @@ public class DynoJedisDemo {
 	 *            dynomite_cluster_name, e.g. dyno_sandbox_quorum
 	 *            </ol>
 	 *            <ol>
+	 *                dynomite_shadow_cluster_name (optional)
+	 *            </ol>
+	 *            <ol>
 	 *            test number, in the set: 1 - simple test 2 - keys test 3 - simple
 	 *            test with hashtag 4- multi-threaded 5 - SCAN test 6 - pipeline 7 -
 	 *            run pipeline with hashtag 7 - runn SSCAN test
 	 *            </ol>
 	 */
 	public static void main(String args[]) throws IOException {
-
 		if (args.length < 2) {
 			System.out.println("Incorrect number of arguments.");
 			printUsage();
 			System.exit(1);
 		}
-
-		String clusterName = args[0];
-		int testNumber = Integer.valueOf(args[1]);
 
 		Properties props = new Properties();
 		props.load(DynoJedisDemo.class.getResourceAsStream("/demo.properties"));
@@ -960,17 +1002,39 @@ public class DynoJedisDemo {
 
 		String rack = props.getProperty("EC2_AVAILABILITY_ZONE", "us-east-1e");
 		String hostsFile = props.getProperty("dyno.demo.hostsFile");
+		String shadowHostsFile = props.getProperty("dyno.demo.shadowHostsFile");
 		int port = Integer.valueOf(props.getProperty("dyno.demo.port", "8102"));
 
-		DynoJedisDemo demo = new DynoJedisDemo(clusterName, rack);
+		DynoJedisDemo demo = new DynoJedisDemo(args[0], rack);
+		int testNumber = -1;
 
 		try {
-			if (hostsFile != null) {
-				demo.initWithRemoteClusterFromFile(hostsFile, port);
-			} else {
-				demo.initWithRemoteClusterFromEurekaUrl(clusterName, port);
+			switch (args.length) {
+				case 2:
+					testNumber = Integer.valueOf(args[1]);
+
+					if (hostsFile != null) {
+						demo.initWithRemoteClusterFromFile(hostsFile, port);
+					} else {
+						demo.initWithRemoteClusterFromEurekaUrl(args[0], port);
+					}
+
+					break;
+				case 3:
+					testNumber = Integer.valueOf(args[2]);
+
+					if (hostsFile != null) {
+						demo.initDualClientWithRemoteClustersFromFile(hostsFile, shadowHostsFile, port);
+					} else {
+						demo.initDualClientWithRemoteClustersFromEurekaUrl(args[0], args[1]);
+					}
+
+					break;
+				default:
+					System.out.println("Incorrect number of arguments.");
+					printUsage();
+					System.exit(1);
 			}
-//			demo.initWithLocalHost();
 
 			System.out.println("Connected");
 
