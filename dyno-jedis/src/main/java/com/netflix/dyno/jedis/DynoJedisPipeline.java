@@ -424,7 +424,7 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
 		Response<R> execute(final byte[] key, final OpName opName) {
 			checkKey(key);
-			return execute(key, opName);
+			return executeOperation(opName);
 		}
 
 		Response<R> execute(final String key, final OpName opName) {
