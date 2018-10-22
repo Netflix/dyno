@@ -18,6 +18,7 @@ package com.netflix.dyno.jedis;
 import com.netflix.dyno.connectionpool.ConnectionPool;
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.OperationResult;
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
 import com.netflix.dyno.contrib.DynoOPMonitor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Client that provides 'dual-write' functionality. This is useful when clients wish to move from one dynomite
@@ -46,11 +48,16 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     private static ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
 
+    private final String appName;
+    private final ConnectionPool<Jedis> connPool;
+
     // Client used for dual-write functionality.
     private final DynoJedisClient shadowClient;
 
     // Used to control traffic flow to the dual-write cluster
     private final Dial dial;
+
+    private final AtomicReference<DynoJedisPipelineMonitor> pipelineMonitor = new AtomicReference<>();
 
     public DynoDualWriterClient(String name, String clusterName,
                                 ConnectionPool<Jedis> pool,
@@ -69,12 +76,34 @@ public class DynoDualWriterClient extends DynoJedisClient {
                                 DynoJedisClient shadowClient,
                                 Dial dial) {
         super(name, clusterName, pool, operationMonitor, connectionPoolMonitor);
+        this.appName = name;
+        this.connPool = pool;
         this.shadowClient = shadowClient;
         this.dial = dial;
     }
 
     public Dial getDial() {
         return dial;
+    }
+
+    private DynoJedisPipelineMonitor checkAndInitPipelineMonitor() {
+        if (pipelineMonitor.get() != null) {
+            return pipelineMonitor.get();
+        }
+
+        int flushTimerFrequency = this.connPool.getConfiguration().getTimingCountersResetFrequencySeconds();
+        DynoJedisPipelineMonitor plMonitor = new DynoJedisPipelineMonitor(appName, flushTimerFrequency);
+        boolean success = pipelineMonitor.compareAndSet(null, plMonitor);
+        if (success) {
+            pipelineMonitor.get().init();
+        }
+        return pipelineMonitor.get();
+    }
+
+    @Override
+    public DynoDualWriterPipeline pipelined() {
+        return new DynoDualWriterPipeline(appName, getConnPool(), checkAndInitPipelineMonitor(), getConnPool().getMonitor(),
+                shadowClient.getConnPool(), dial);
     }
 
     private <R> Future<OperationResult<R>> writeAsync(final String key, Callable<OperationResult<R>> func) {
