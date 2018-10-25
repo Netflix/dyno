@@ -109,14 +109,16 @@ public class HostsUpdater {
 
 				hostsUpFromHostSupplier.add(new Host(hostFromHostSupplier.getHostName(), hostFromHostSupplier.getIpAddress(),
 									 hostFromTokenMapSupplier.getPort(), hostFromTokenMapSupplier.getSecurePort(), hostFromTokenMapSupplier.getRack(),
-									 hostFromTokenMapSupplier.getDatacenter(), Host.Status.Up, hostFromTokenMapSupplier.getHashtag()));
+									 hostFromTokenMapSupplier.getDatacenter(), Host.Status.Up, hostFromTokenMapSupplier.getHashtag(),
+									 hostFromTokenMapSupplier.getPassword()));
 				allHostSetFromTokenMapSupplier.remove(hostFromTokenMapSupplier);
 			} else {
 				Host hostFromTokenMapSupplier = allHostSetFromTokenMapSupplier.get(hostFromHostSupplier);
 
 				hostsDownFromHostSupplier.add(new Host(hostFromHostSupplier.getHostName(), hostFromHostSupplier.getIpAddress(),
 						hostFromTokenMapSupplier.getPort(), hostFromTokenMapSupplier.getSecurePort(), hostFromTokenMapSupplier.getRack(),
-						hostFromTokenMapSupplier.getDatacenter(), Host.Status.Down, hostFromTokenMapSupplier.getHashtag()));
+						hostFromTokenMapSupplier.getDatacenter(), Host.Status.Down, hostFromTokenMapSupplier.getHashtag(),
+						hostFromTokenMapSupplier.getPassword()));
 				allHostSetFromTokenMapSupplier.remove(hostFromTokenMapSupplier);
 			}
 		}
