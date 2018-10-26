@@ -966,6 +966,35 @@ public class DynoJedisDemo {
 
 	}
 
+	private void runExpireHashTest() throws Exception {
+		this.numKeys = 10;
+		System.out.println("Expire hash test selected");
+
+		// write
+		long ttl = 5; // seconds
+		for (int i = 0; i < numKeys; i++) {
+			System.out.println("Writing key/value => DynoClientTest-" + i + " / " + i);
+			client.ehset("DynoClientTest","DynoClientTest-" + i, "" + i, ttl);
+		}
+
+		// read
+		System.out.println("Reading expire hash values (before ttl expiry)");
+		for (int i = 0; i < numKeys; i++) {
+			String val = client.ehget("DynoClientTest", "DynoClientTest-" + i);
+			System.out.println("Reading Key: " + i + ", Value: " + val);
+		}
+
+		// sleep for <ttl> seconds
+		Thread.sleep(ttl * 1000);
+
+		// read after expiry
+		System.out.println("Reading expire hash values (after ttl expiry)");
+		for (int i = 0; i < numKeys; i++) {
+			String val = client.ehget("DynoClientTest", "DynoClientTest-" + i);
+			System.out.println("Reading Key: " + i + ", Value: " + val);
+		}
+	}
+
 	/**
 	 *
 	 * @param args
@@ -1084,6 +1113,10 @@ public class DynoJedisDemo {
 			case 11: {
 				demo.runBinaryKeyTest();
 				break;
+			}
+
+			case 12: {
+				demo.runExpireHashTest();
 			}
 			}
 

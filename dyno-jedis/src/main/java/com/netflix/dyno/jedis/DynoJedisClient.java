@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.netflix.dyno.jedis;
 
+import com.google.common.base.Strings;
 import com.netflix.discovery.DiscoveryClient;
 import com.netflix.discovery.EurekaClient;
 import com.netflix.dyno.connectionpool.*;
@@ -31,7 +32,10 @@ import com.netflix.dyno.contrib.ArchaiusConnectionPoolConfiguration;
 import com.netflix.dyno.contrib.DynoCPMonitor;
 import com.netflix.dyno.contrib.DynoOPMonitor;
 import com.netflix.dyno.contrib.EurekaHostsSupplier;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import redis.clients.jedis.*;
 import redis.clients.jedis.BinaryClient.LIST_POSITION;
@@ -48,9 +52,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import static com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.CompressionStrategy;
 
 public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, MultiKeyCommands,
-        ScriptingCommands, MultiKeyBinaryCommands {
+        ScriptingCommands, MultiKeyBinaryCommands, DynoJedisCommands {
 
     private static final Logger Logger = org.slf4j.LoggerFactory.getLogger(DynoJedisClient.class);
+    private static final String DYNO_EXIPREHASH_METADATA_KEYPREFIX = "_metadata:";
 
     private final String appName;
     private final String clusterName;
@@ -4059,6 +4064,542 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public long pfcount(String... keys) {
         throw new UnsupportedOperationException("not yet implemented");
     }
+
+    private boolean validHashtag(final String hashtag) {
+        return !Strings.isNullOrEmpty(hashtag) && hashtag.length() == 2;
+    }
+
+    private String ehashDataKey(String key) throws UnsupportedOperationException {
+        String hashtag = connPool.getConfiguration().getHashtag();
+        if (!validHashtag(hashtag)) {
+            throw new UnsupportedOperationException("hashtags not set");
+        }
+
+        return new StringBuilder(hashtag)
+                .insert(1, key)
+                .toString();
+    }
+
+    private String ehashMetadataKey(String key) throws UnsupportedOperationException {
+        final String hashtag = connPool.getConfiguration().getHashtag();
+        if (!validHashtag(hashtag)) {
+            throw new UnsupportedOperationException("hashtags not set");
+        }
+
+        return new StringBuilder(hashtag)
+                .insert(0, DYNO_EXIPREHASH_METADATA_KEYPREFIX)
+                .insert(DYNO_EXIPREHASH_METADATA_KEYPREFIX.length() + 1, key)
+                .toString();
+    }
+
+    private double timeInEpochSeconds(long ttl) {
+        final long timeSinceEpoch = System.currentTimeMillis() / 1000L;
+
+        return timeSinceEpoch + ttl;
+    }
+
+    @AllArgsConstructor
+    @Getter
+    private class EHMetadataUpdateResult {
+        private final String dataKey;
+        private final String metadataKey;
+        private final Set<String> expiredFields;
+        private final Response<Long> hdelResponse;
+        private final Response<Long> zremResponse;
+    }
+
+    private EHMetadataUpdateResult ehPurgeExpiredFields(DynoJedisPipeline pipeline, String key) {
+        final String metadataKey = ehashMetadataKey(key);
+        final String dataKey = ehashDataKey(key);
+        final double now = timeInEpochSeconds(0);
+
+        // get expired fields
+        final Set<String> expiredFields = this.zrangeByScore(metadataKey, 0, now);
+
+        Response<Long> hdelResponse = null;
+        Response<Long> zremResponse = null;
+        if (expiredFields.size() > 0) {
+            hdelResponse = pipeline.hdel(dataKey, expiredFields.toArray(new String[0]));
+            zremResponse = pipeline.zremrangeByScore(metadataKey, 0, now);
+        }
+
+        return new EHMetadataUpdateResult(dataKey, metadataKey, expiredFields, hdelResponse, zremResponse);
+    }
+
+    private void ehVerifyMetadataUpdate(EHMetadataUpdateResult ehMetadataUpdateResult) {
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
+                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get())) {
+            // If requested field is not in in the expired fields list, correctness of this request is not affected.
+            Logger.debug("Expire hash:{} inconsistent with metadata:{}. Failed to delete expired fields from hash",
+                    ehMetadataUpdateResult.dataKey, ehMetadataUpdateResult.metadataKey);
+        }
+
+        // if fields were not deleted from metadata, correctness is not affected.
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.zremResponse != null &&
+                ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.zremResponse.get()) {
+            Logger.debug("Expire hash:{} inconsistent with metadata:{}. Failed to delete expired fields from metadata",
+                    ehMetadataUpdateResult.dataKey, ehMetadataUpdateResult.metadataKey);
+        }
+    }
+
+    @Override
+    public Long ehset(final String key, final String field, final String value, final long ttl)
+            throws UnsupportedOperationException, DynoException {
+        final DynoJedisPipeline pipeline = this.pipelined();
+        final Response<Long> zResponse = pipeline.zadd(ehashMetadataKey(key), timeInEpochSeconds(ttl), field,
+                ZAddParams.zAddParams().ch());
+        final Response<Long> hResponse = pipeline.hset(ehashDataKey(key), field, value);
+        pipeline.sync();
+
+        // If metadata operation failed, remove the data and throw exception
+        if (zResponse.get() != 1) {
+            d_hdel(key, field);
+            throw new DynoException("Failed to set field:" + field + "; Metadata operation failed:" + zResponse.get());
+        }
+        return hResponse.get();
+    }
+
+    public Long ehsetnx(String key, String field, String value, Long ttl) {
+        final DynoJedisPipeline pipeline = this.pipelined();
+        final Response<Long> zResponse = pipeline.zadd(ehashMetadataKey(key), timeInEpochSeconds(ttl), field,
+                ZAddParams.zAddParams().ch());
+        final Response<Long> hResponse = pipeline.hsetnx(ehashDataKey(key), field, value);
+        pipeline.sync();
+
+        // If metadata operation failed, remove the data and throw exception
+        if (zResponse.get() != 1) {
+            d_hdel(key, field);
+            throw new DynoException("Failed to set field:" + field + "; Metadata operation failed:" + zResponse.get());
+        }
+        return hResponse.get();
+    }
+
+    @Override
+    public String ehget(final String key, final String field)
+            throws UnsupportedOperationException, DynoException {
+        final String dataKey = ehashDataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
+        final Response<String> getResponse = pipeline.hget(dataKey, field);
+        pipeline.sync();
+
+        // verify if all expired fields were removed from data and metadata
+        ehVerifyMetadataUpdate(ehMetadataUpdateResult);
+
+        // Return failure if the requested field was expired and was not removed from the data
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
+                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get()) &&
+                ehMetadataUpdateResult.expiredFields.contains(field)) {
+            throw new DynoException("Failed to update expire hash metadata");
+        }
+
+        return getResponse.get();
+    }
+
+    @Override
+    public Long ehdel(final String key, final String... fields) {
+        final DynoJedisPipeline pipeline = this.pipelined();
+        final Response<Long> zResponse = pipeline.zrem(ehashMetadataKey(key), fields);
+        final Response<Long> hResponse = pipeline.hdel(ehashDataKey(key), fields);
+        pipeline.sync();
+
+        if (zResponse.get().compareTo(hResponse.get()) != 0) {
+            Logger.error("Operation: {} - data: {} and metadata: {} field count mismatch",
+                    OpName.EHDEL, hResponse.get(), zResponse.get());
+        }
+
+        return hResponse.get();
+    }
+
+    @Override
+    public Boolean ehexists(final String key, final String field) {
+        final String dataKey = ehashDataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
+        final Response<Boolean> existsResponse = pipeline.hexists(dataKey, field);
+        pipeline.sync();
+
+        // verify if all expired fields were removed from data and metadata
+        ehVerifyMetadataUpdate(ehMetadataUpdateResult);
+
+        // Return failure if the requested field was expired and was not removed from the data
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
+                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get()) &&
+                ehMetadataUpdateResult.expiredFields.contains(field)) {
+            throw new DynoException("Failed to update expire hash metadata");
+        }
+
+        return existsResponse.get();
+    }
+
+    @Override
+    public Map<String, String> ehgetall(final String key) {
+        final String dataKey = ehashDataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
+        final Response<Map<String, String>> getallResponse = pipeline.hgetAll(dataKey);
+        pipeline.sync();
+
+        // verify if all expired fields were removed from data and metadata
+        ehVerifyMetadataUpdate(ehMetadataUpdateResult);
+
+        // on failure to remove all expired keys, fail
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
+                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get())) {
+            throw new DynoException("Failed to expire hash fields");
+        }
+
+        return getallResponse.get();
+    }
+
+    @Override
+    public Set<String> ehkeys(final String key) {
+        final String dataKey = ehashDataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
+        final Response<Set<String>> getkeysResponse = pipeline.hkeys(dataKey);
+        pipeline.sync();
+
+        // verify if all expired fields were removed from data and metadata
+        ehVerifyMetadataUpdate(ehMetadataUpdateResult);
+
+        // on failure to remove all expired keys, fail
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
+                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get())) {
+            throw new DynoException("Failed to expire hash fields");
+        }
+
+        return getkeysResponse.get();
+    }
+
+    @Override
+    public List<String> ehvals(final String key) {
+        final String dataKey = ehashDataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
+        final Response<List<String>> getvalsResponse = pipeline.hvals(dataKey);
+        pipeline.sync();
+
+        // verify if all expired fields were removed from data and metadata
+        ehVerifyMetadataUpdate(ehMetadataUpdateResult);
+
+        // on failure to remove all expired keys, fail
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
+                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get())) {
+            throw new DynoException("Failed to expire hash fields");
+        }
+
+        return getvalsResponse.get();
+    }
+
+    @Override
+    public List<String> ehmget(final String key, final String... fields) {
+        final String dataKey = ehashDataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
+        final Response<List<String>> mgetResponse = pipeline.hmget(dataKey, fields);
+        pipeline.sync();
+
+        // verify if all expired fields were removed from data and metadata
+        ehVerifyMetadataUpdate(ehMetadataUpdateResult);
+
+        // on failure to remove all expired keys and expired keys contains one of requested fields, fail
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
+                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get()) &&
+                Arrays.asList(fields).stream().anyMatch(x -> ehMetadataUpdateResult.expiredFields.contains(x))) {
+            throw new DynoException("Failed to expire hash fields");
+        }
+
+        return mgetResponse.get();
+    }
+
+    @Override
+    public String ehmset(final String key, final Map<String, Pair<String, Long>> hash) {
+        final DynoJedisPipeline pipeline = this.pipelined();
+        Map<String, String> fields = new HashMap<>();
+        Map<String, Double> metadataFields = new HashMap<>();
+
+        hash.keySet().stream().forEach(f -> {
+            fields.put(f, hash.get(f).getLeft());
+            metadataFields.put(f, timeInEpochSeconds(hash.get(f).getRight()));
+        });
+
+        final Response<Long> zResponse = pipeline.zadd(ehashMetadataKey(key), metadataFields,
+                ZAddParams.zAddParams().ch());
+        final Response<String> hResponse = pipeline.hmset(ehashDataKey(key), fields);
+        pipeline.sync();
+
+        // If metadata operation failed, remove the data and throw exception
+        if (zResponse.get() != hash.size()) {
+            d_hdel(key, fields.keySet().toArray(new String[0]));
+            throw new DynoException("Failed to set fields; Metadata operation failed:" + zResponse.get());
+        }
+        return hResponse.get();
+    }
+
+    @Override
+    public ScanResult<Map.Entry<String, String>> ehscan(final String key, final String cursor) {
+        final String dataKey = ehashDataKey(key);
+
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
+        pipeline.sync();
+
+        // verify if all expired fields were removed from data and metadata
+        ehVerifyMetadataUpdate(ehMetadataUpdateResult);
+
+        // on failure to remove all expired keys, fail
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
+                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get())) {
+            throw new DynoException("Failed to expire hash fields");
+        }
+
+        return hscan(dataKey, cursor);
+    }
+
+    @Override
+    public Long ehincrby(final String key, final String field, final long value) {
+        final String dataKey = ehashDataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
+        final Response<Long> incrbyResponse = pipeline.hincrBy(dataKey, field, value);
+        pipeline.sync();
+
+        // verify if all expired fields were removed from data and metadata
+        ehVerifyMetadataUpdate(ehMetadataUpdateResult);
+
+        // on failure to remove all expired keys and expired keys contains requested field, fail
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
+                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get()) &&
+                ehMetadataUpdateResult.expiredFields.contains(field)) {
+            throw new DynoException("Failed to expire hash fields");
+        }
+
+        return incrbyResponse.get();
+    }
+
+    @Override
+    public Double ehincrbyfloat(final String key, final String field, final double value) {
+        final String dataKey = ehashDataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
+        final Response<Double> incrbyFloatResponse = pipeline.hincrByFloat(dataKey, field, value);
+        pipeline.sync();
+
+        // verify if all expired fields were removed from data and metadata
+        ehVerifyMetadataUpdate(ehMetadataUpdateResult);
+
+        // on failure to remove all expired keys and expired keys contains requested field, fail
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
+                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get()) &&
+                ehMetadataUpdateResult.expiredFields.contains(field)) {
+            throw new DynoException("Failed to expire hash fields");
+        }
+
+        return incrbyFloatResponse.get();
+    }
+
+    @Override
+    public Long ehlen(final String key) {
+        final String dataKey = ehashDataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
+        final Response<Long> hlenResponse = pipeline.hlen(dataKey);
+        pipeline.sync();
+
+        // verify if all expired fields were removed from data and metadata
+        ehVerifyMetadataUpdate(ehMetadataUpdateResult);
+
+        // on failure to remove all expired keys, fail
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
+                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get())) {
+            throw new DynoException("Failed to expire hash fields");
+        }
+
+        return hlenResponse.get();
+    }
+
+    @Override
+    public String ehrename(final String oldKey, final String newKey) {
+        final String dataOldKey = ehashDataKey(oldKey);
+        final String dataNewKey = ehashDataKey(newKey);
+        final String metadataOldKey = ehashMetadataKey(oldKey);
+        final String metadataNewKey = ehashMetadataKey(newKey);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        final Response<String> zrenameResponse = pipeline.rename(metadataOldKey, metadataNewKey);
+        final Response<String> hrenameResponse = pipeline.rename(dataOldKey, dataNewKey);
+        pipeline.sync();
+
+        if (zrenameResponse.get().compareTo("OK") != 0) {
+            rename(dataNewKey, dataOldKey);
+            throw new DynoException("Unable to rename key: " + metadataOldKey + " to key:" + metadataNewKey);
+        }
+
+        return hrenameResponse.get();
+    }
+
+    @Override
+    public Long ehrenamenx(final String oldKey, final String newKey) {
+        final String dataOldKey = ehashDataKey(oldKey);
+        final String dataNewKey = ehashDataKey(newKey);
+        final String metadataOldKey = ehashMetadataKey(oldKey);
+        final String metadataNewKey = ehashMetadataKey(newKey);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        final Response<Long> zrenamenxResponse = pipeline.renamenx(metadataOldKey, metadataNewKey);
+        final Response<Long> hrenamenxResponse = pipeline.renamenx(dataOldKey, dataNewKey);
+        pipeline.sync();
+
+        if (zrenamenxResponse.get() != 1) {
+            rename(dataNewKey, dataOldKey);
+            throw new DynoException("Unable to rename key: " + metadataOldKey + " to key:" + metadataNewKey);
+        }
+
+        return hrenamenxResponse.get();
+    }
+
+    @Override
+    public Long ehexpire(final String key, final int seconds) {
+        final String dataKey = ehashDataKey(key);
+        final String metadataKey = ehashMetadataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        Response<Long> metadataExpireResponse = pipeline.expire(metadataKey, seconds);
+        Response<Long> dataExpireResponse = pipeline.expire(dataKey, seconds);
+        pipeline.sync();
+
+        if (metadataExpireResponse.get().compareTo(dataExpireResponse.get()) != 0) {
+            throw new DynoException("Metadata and data timeout do not match");
+        }
+
+        return dataExpireResponse.get();
+    }
+
+    @Override
+    public Long ehexpireat(final String key, final long timestamp) {
+        final String dataKey = ehashDataKey(key);
+        final String metadataKey = ehashMetadataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        Response<Long> metadataExpireResponse = pipeline.expireAt(metadataKey, timestamp);
+        Response<Long> dataExpireResponse = pipeline.expireAt(dataKey, timestamp);
+        pipeline.sync();
+
+        if (metadataExpireResponse.get().compareTo(dataExpireResponse.get()) != 0) {
+            throw new DynoException("Metadata and data timeout do not match");
+        }
+
+        return dataExpireResponse.get();
+    }
+
+    @Override
+    public Long ehpexpireat(final String key, final long timestamp) {
+        final String dataKey = ehashDataKey(key);
+        final String metadataKey = ehashMetadataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        Response<Long> metadataExpireResponse = pipeline.pexpireAt(metadataKey, timestamp);
+        Response<Long> dataExpireResponse = pipeline.pexpireAt(dataKey, timestamp);
+        pipeline.sync();
+
+        if (metadataExpireResponse.get().compareTo(dataExpireResponse.get()) != 0) {
+            throw new DynoException("Metadata and data timeout do not match");
+        }
+
+        return dataExpireResponse.get();
+    }
+
+    @Override
+    public Long ehpersist(final String key) {
+        final String dataKey = ehashDataKey(key);
+        final String metadataKey = ehashMetadataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        Response<Long> metadataPersistResponse = pipeline.persist(metadataKey);
+        Response<Long> dataPersistResponse = pipeline.persist(dataKey);
+        pipeline.sync();
+
+        if (metadataPersistResponse.get().compareTo(dataPersistResponse.get()) != 0) {
+            throw new DynoException("Metadata and data expiry do not match");
+        }
+
+        return dataPersistResponse.get();
+    }
+
+    @Override
+    public Long ehttl(final String key) {
+        return ttl(ehashDataKey(key));
+    }
+
+    @Override
+    public Long ehttl(final String key, final String field) {
+        double now = timeInEpochSeconds(0);
+        final String metadataKey = ehashMetadataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
+        final Response<Double> zscoreResponse = pipeline.zscore(metadataKey, field);
+        pipeline.sync();
+
+        // verify if all expired fields were removed from data and metadata
+        ehVerifyMetadataUpdate(ehMetadataUpdateResult);
+
+        // on failure to remove all expired keys and expired keys contains requested field, fail
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
+                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get()) &&
+                ehMetadataUpdateResult.expiredFields.contains(field)) {
+            throw new DynoException("Failed to expire hash fields");
+        }
+
+        if (zscoreResponse.get() > 0) {
+            return zscoreResponse.get().longValue() - (long) now;
+        } else {
+            return zscoreResponse.get().longValue();
+        }
+    }
+
+    @Override
+    public Long ehpttl(final String key) {
+        return pttl(ehashDataKey(key));
+    }
+
+    @Override
+    public Long ehpttl(final String key, final String field) {
+        return ehttl(key, field);
+    }
+
+    @Override
+    public List<String> ehsort(final String key) {
+        final String dataKey = ehashDataKey(key);
+        final DynoJedisPipeline pipeline = this.pipelined();
+
+        EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
+        final Response<List<String>> sortResponse = pipeline.sort(dataKey);
+        pipeline.sync();
+
+        // verify if all expired fields were removed from data and metadata
+        ehVerifyMetadataUpdate(ehMetadataUpdateResult);
+
+        // on failure to remove all expired keys, fail
+        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
+                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get())) {
+            throw new DynoException("Failed to expire hash fields");
+        }
+
+        return sortResponse.get();
+    }
+
 
     public void stopClient() {
         if (pipelineMonitor.get() != null) {
