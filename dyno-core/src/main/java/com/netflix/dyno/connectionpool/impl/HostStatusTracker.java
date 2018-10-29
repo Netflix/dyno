@@ -128,9 +128,20 @@ public class HostStatusTracker {
 	 * @return true/false indicating whether the set of hosts has changed or not.
 	 */
 	public boolean checkIfChanged(Collection<Host> hostsUp, Collection<Host> hostsDown) {
-		return activeSetChanged(hostsUp) || inactiveSetChanged(hostsUp, hostsDown);
+		boolean changed = activeSetChanged(hostsUp) || inactiveSetChanged(hostsUp, hostsDown);
+
+		if (changed && logger.isDebugEnabled()) {
+			Set<Host> changedHostsUp = new HashSet<>(hostsUp);
+			changedHostsUp.removeAll(activeHosts);
+			changedHostsUp.forEach(x -> logger.debug("New host up: {}", x.getHostAddress()));
+
+			Set<Host> changedHostsDown = new HashSet<>(hostsDown);
+			changedHostsDown.removeAll(inactiveHosts);
+			changedHostsDown.forEach(x -> logger.debug("New host down: {}", x.getHostAddress()));
+		}
+		return changed;
 	}
-	
+
 	/**
 	 * Helper method that actually changes the state of the class to reflect the new set of hosts up and down
 	 * Note that the new HostStatusTracker is returned that holds onto the new state. Calling classes must update their
