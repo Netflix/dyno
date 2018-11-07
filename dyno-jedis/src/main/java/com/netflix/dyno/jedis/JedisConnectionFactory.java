@@ -39,7 +39,9 @@ import com.netflix.dyno.connectionpool.impl.ConnectionContextImpl;
 import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
 
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisShardInfo;
 import redis.clients.jedis.exceptions.JedisConnectionException;
+import redis.clients.util.Sharded;
 
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;
@@ -75,14 +77,19 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 			this.hostPool = hostPool;
 			Host host = hostPool.getHost();
 
-			if(sslSocketFactory == null)
-			{
-				jedisClient = new Jedis(host.getHostAddress(), host.getPort(), hostPool.getConnectionTimeout(),
-						hostPool.getSocketTimeout());
-			}
-			else {
-				jedisClient = new Jedis(host.getHostAddress(), host.getSecurePort(), hostPool.getConnectionTimeout(),
-						hostPool.getSocketTimeout(), true, sslSocketFactory,  new SSLParameters(), null);
+			if (sslSocketFactory == null) {
+				JedisShardInfo shardInfo = new JedisShardInfo(host.getHostAddress(), host.getPort(),
+						hostPool.getConnectionTimeout(), hostPool.getSocketTimeout(), Sharded.DEFAULT_WEIGHT);
+				shardInfo.setPassword(host.getPassword());
+
+				jedisClient = new Jedis(shardInfo);
+			} else {
+				JedisShardInfo shardInfo = new JedisShardInfo(host.getHostAddress(), host.getPort(),
+						hostPool.getConnectionTimeout(), hostPool.getSocketTimeout(), Sharded.DEFAULT_WEIGHT,
+						true, sslSocketFactory, new SSLParameters(), null);
+				shardInfo.setPassword(host.getPassword());
+
+				jedisClient = new Jedis(shardInfo);
 			}
 		}
 

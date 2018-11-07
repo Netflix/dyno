@@ -16,8 +16,10 @@
 package com.netflix.dyno.connectionpool;
 
 import java.net.InetSocketAddress;
+import java.util.Objects;
 
 import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
+import org.apache.commons.lang3.StringUtils;
 
 /**
  * Class encapsulating information about a host.
@@ -45,6 +47,7 @@ public class Host implements Comparable<Host> {
     private final String datacenter;
     private String hashtag;
     private Status status = Status.Down;
+    private final String password;
 
     public enum Status {
         Up, Down;
@@ -64,6 +67,10 @@ public class Host implements Comparable<Host> {
 
     public Host(String hostname, int port, String rack, Status status, String hashtag) {
         this(hostname, null, port, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
+    }
+
+    public Host(String hostname, int port, String rack, Status status, String hashtag, String password) {
+        this(hostname, null, port, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag, password);
     }
 
     public Host(String hostname, String ipAddress, int port, String rack) {
@@ -88,6 +95,10 @@ public class Host implements Comparable<Host> {
     }
 
     public Host(String name, String ipAddress, int port, int securePort, String rack, String datacenter, Status status, String hashtag) {
+        this(name, ipAddress, port, port, rack, datacenter, status, hashtag, null);
+    }
+
+    public Host(String name, String ipAddress, int port, int securePort, String rack, String datacenter, Status status, String hashtag, String password) {
         this.hostname = name;
         this.ipAddress = ipAddress;
         this.port = port;
@@ -96,6 +107,7 @@ public class Host implements Comparable<Host> {
         this.status = status;
         this.datacenter = datacenter;
         this.hashtag = hashtag;
+        this.password = StringUtils.isEmpty(password) ? null : password;
 
         // Used for the unit tests to prevent host name resolution
         if (port != -1) {
@@ -153,6 +165,10 @@ public class Host implements Comparable<Host> {
         return status == Status.Up;
     }
 
+    public String getPassword() {
+        return password;
+    }
+
     public InetSocketAddress getSocketAddress() {
         return socketAddress;
     }
@@ -205,7 +221,7 @@ public class Host implements Comparable<Host> {
     public String toString() {
 
         return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: "
-                + rack + ", datacenter: " + datacenter + ", status: " + status.name() + ", hashtag=" + hashtag + "]";
-
+                + rack + ", datacenter: " + datacenter + ", status: " + status.name() + ", hashtag="
+                + hashtag +  ", password=" + (Objects.nonNull(password) ? "masked" : "null") + "]";
     }
 }
