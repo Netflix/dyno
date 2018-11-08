@@ -166,7 +166,7 @@ public class ConnectionPoolHealthTracker<CL> implements HealthTracker<CL> {
 
 			if (errorMonitor == null) {
 				
-				errorMonitor = cpConfiguration.getErrorMonitorFactory().createErrorMonitor();
+				errorMonitor = cpConfiguration.getErrorMonitorFactory().createErrorMonitor(hostPool.getAllConnections().size());
 				errorRates.putIfAbsent(host, errorMonitor);
 				errorMonitor = errorRates.get(host);
 			}
