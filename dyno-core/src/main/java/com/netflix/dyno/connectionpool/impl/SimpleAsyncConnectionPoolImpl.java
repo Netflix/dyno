@@ -109,6 +109,16 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 		}
 	}
 
+	@Override
+	public void recycleConnection(Connection<CL> connection) {
+		try {
+			this.closeConnection(connection);
+			createConnection();
+		} finally {
+			cpMonitor.incConnectionRecycled(host);
+		}
+	}
+
 
 	@Override
 	public void markAsDown(DynoException reason) {

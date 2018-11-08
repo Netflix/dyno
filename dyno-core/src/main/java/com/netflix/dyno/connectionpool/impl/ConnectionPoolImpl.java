@@ -100,41 +100,39 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
     private Type poolType;
 
     public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig,
-	    ConnectionPoolMonitor cpMon) {
-	this(cFactory, cpConfig, cpMon, Type.Sync);
+	    ConnectionPoolMonitor cpMon) { this(cFactory, cpConfig, cpMon, Type.Sync);
     }
 
     public ConnectionPoolImpl(ConnectionFactory<CL> cFactory, ConnectionPoolConfiguration cpConfig,
-	    ConnectionPoolMonitor cpMon, Type type) {
-	this.connFactory = cFactory;
-	this.cpConfiguration = cpConfig;
-	this.cpMonitor = cpMon;
-	this.poolType = type;
+		ConnectionPoolMonitor cpMon, Type type) {
+		this.connFactory = cFactory;
+		this.cpConfiguration = cpConfig;
+		this.cpMonitor = cpMon;
+		this.poolType = type;
 
-	this.cpHealthTracker = new ConnectionPoolHealthTracker<CL>(cpConfiguration, connPoolThreadPool);
+		this.cpHealthTracker = new ConnectionPoolHealthTracker<CL>(cpConfiguration, connPoolThreadPool);
 
-	switch (type) {
-	case Sync:
-	    hostConnPoolFactory = new SyncHostConnectionPoolFactory();
-	    break;
-	case Async:
-	    hostConnPoolFactory = new AsyncHostConnectionPoolFactory();
-	    break;
-	default:
-	    throw new RuntimeException("unknown type");
-	}
-	;
+		switch (type) {
+		case Sync:
+			hostConnPoolFactory = new SyncHostConnectionPoolFactory();
+			break;
+		case Async:
+			hostConnPoolFactory = new AsyncHostConnectionPoolFactory();
+			break;
+		default:
+			throw new RuntimeException("unknown type");
+		}
 
-	this.hostsUpdater = new HostsUpdater(cpConfiguration.getHostSupplier(), cpConfiguration.getTokenSupplier());
-
+		this.hostsUpdater = new HostsUpdater(cpConfiguration.getHostSupplier(), cpConfiguration.getTokenSupplier());
     }
+
 
     public String getName() {
 	return cpConfiguration.getName();
     }
 
     public ConnectionPoolMonitor getMonitor() {
-	return cpMonitor;
+		return cpMonitor;
     }
 
     public ConnectionPoolHealthTracker<CL> getHealthTracker() {
@@ -194,7 +192,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 
 				return primed > 0;
 			} catch (DynoException e) {
-				Logger.info("Failed to init host pool for host: " + host, e);
+				Logger.error("Failed to init host pool for host: " + host, e);
 				cpMap.remove(host);
 				return false;
 			}
@@ -343,7 +341,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 						Logger.warn("Received FatalConnectionException; closing connection "
 							+ connection.getContext().getAll() + " to host "
 							+ connection.getParentConnectionPool().getHost());
-						connection.getParentConnectionPool().closeConnection(connection);
+						connection.getParentConnectionPool().recycleConnection(connection);
 						// note - don't increment connection closed metric here;
 						// it's done in closeConnection
 					} else {

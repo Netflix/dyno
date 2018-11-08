@@ -133,6 +133,16 @@ public interface ConnectionPoolMonitor {
     public long getConnectionReturnedCount();
 
     /**
+     * Incremented for each connection recycle.
+     *
+     * @param host
+     *            Host to which connection is returned for recycle
+     */
+    public void incConnectionRecycled(Host host);
+
+    public long getConnectionRecycledCount();
+
+    /**
      * Timeout trying to get a connection from the pool
      */
     public long getPoolExhaustedTimeoutCount();
