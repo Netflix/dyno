@@ -117,7 +117,7 @@ public interface DynoJedisCommands {
      * @return
      *      returns 1 if field set or 0 otherwise.
      */
-    Long ehsetnx(String key, String field, String value, Long ttl);
+    Long ehsetnx(String key, String field, String value, long ttl);
 
     /**
      * Scan fields in the expire hash
@@ -243,12 +243,4 @@ public interface DynoJedisCommands {
      *      returns remaining time in milliseconds if key and field exists, 0 otherwise.
      */
     Long ehpttl(String key, String field);
-
-    /**
-     * Return a sorted list of expire hash fields
-     * @param key expire hash key
-     * @return
-     *      Sorted list of fields.
-     */
-    List<String> ehsort(String key);
 }

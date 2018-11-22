@@ -15,6 +15,7 @@
  ******************************************************************************/
 package com.netflix.dyno.jedis;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.netflix.discovery.DiscoveryClient;
 import com.netflix.discovery.EurekaClient;
@@ -4069,7 +4070,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return !Strings.isNullOrEmpty(hashtag) && hashtag.length() == 2;
     }
 
-    private String ehashDataKey(String key) throws UnsupportedOperationException {
+    @VisibleForTesting
+    String ehashDataKey(String key) throws UnsupportedOperationException {
         String hashtag = connPool.getConfiguration().getHashtag();
         if (!validHashtag(hashtag)) {
             throw new UnsupportedOperationException("hashtags not set");
@@ -4080,7 +4082,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 .toString();
     }
 
-    private String ehashMetadataKey(String key) throws UnsupportedOperationException {
+    @VisibleForTesting
+    String ehashMetadataKey(String key) throws UnsupportedOperationException {
         final String hashtag = connPool.getConfiguration().getHashtag();
         if (!validHashtag(hashtag)) {
             throw new UnsupportedOperationException("hashtags not set");
@@ -4153,23 +4156,26 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         // If metadata operation failed, remove the data and throw exception
         if (zResponse.get() != 1) {
-            d_hdel(key, field);
+            d_hdel(ehashDataKey(key), field);
             throw new DynoException("Failed to set field:" + field + "; Metadata operation failed:" + zResponse.get());
         }
         return hResponse.get();
     }
 
-    public Long ehsetnx(String key, String field, String value, Long ttl) {
+    public Long ehsetnx(final String key, final String field, final String value, final long ttl) {
+        final String ehashDataKey = ehashDataKey(key);
+        final String ehashMetadataKey = ehashMetadataKey(key);
         final DynoJedisPipeline pipeline = this.pipelined();
-        final Response<Long> zResponse = pipeline.zadd(ehashMetadataKey(key), timeInEpochSeconds(ttl), field,
+        final Response<Long> zResponse = pipeline.zadd(ehashMetadataKey, timeInEpochSeconds(ttl), field,
                 ZAddParams.zAddParams().ch());
-        final Response<Long> hResponse = pipeline.hsetnx(ehashDataKey(key), field, value);
+        final Response<Long> hResponse = pipeline.hsetnx(ehashDataKey, field, value);
         pipeline.sync();
 
         // If metadata operation failed, remove the data and throw exception
-        if (zResponse.get() != 1) {
-            d_hdel(key, field);
-            throw new DynoException("Failed to set field:" + field + "; Metadata operation failed:" + zResponse.get());
+        if (zResponse.get() != hResponse.get()) {
+            d_hdel(ehashDataKey, field);
+            d_zrem(ehashMetadataKey, field);
+            throw new DynoException("Metadata inconsistent with data for expireHash: " + ehashDataKey);
         }
         return hResponse.get();
     }
@@ -4337,7 +4343,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         // If metadata operation failed, remove the data and throw exception
         if (zResponse.get() != hash.size()) {
-            d_hdel(key, fields.keySet().toArray(new String[0]));
+            d_hdel(ehashDataKey(key), fields.keySet().toArray(new String[0]));
             throw new DynoException("Failed to set fields; Metadata operation failed:" + zResponse.get());
         }
         return hResponse.get();
@@ -4350,7 +4356,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         final DynoJedisPipeline pipeline = this.pipelined();
 
         EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
-        pipeline.sync();
+
+        if (ehMetadataUpdateResult.expiredFields.size() > 0) {
+            pipeline.sync();
+        } else {
+            pipeline.discardPipelineAndReleaseConnection();
+        }
 
         // verify if all expired fields were removed from data and metadata
         ehVerifyMetadataUpdate(ehMetadataUpdateResult);
@@ -4461,7 +4472,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         final Response<Long> hrenamenxResponse = pipeline.renamenx(dataOldKey, dataNewKey);
         pipeline.sync();
 
-        if (zrenamenxResponse.get() != 1) {
+        if (zrenamenxResponse.get() != 1 && hrenamenxResponse.get() == 1) {
             rename(dataNewKey, dataOldKey);
             throw new DynoException("Unable to rename key: " + metadataOldKey + " to key:" + metadataNewKey);
         }
@@ -4578,28 +4589,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public Long ehpttl(final String key, final String field) {
         return ehttl(key, field);
     }
-
-    @Override
-    public List<String> ehsort(final String key) {
-        final String dataKey = ehashDataKey(key);
-        final DynoJedisPipeline pipeline = this.pipelined();
-
-        EHMetadataUpdateResult ehMetadataUpdateResult = ehPurgeExpiredFields(pipeline, key);
-        final Response<List<String>> sortResponse = pipeline.sort(dataKey);
-        pipeline.sync();
-
-        // verify if all expired fields were removed from data and metadata
-        ehVerifyMetadataUpdate(ehMetadataUpdateResult);
-
-        // on failure to remove all expired keys, fail
-        if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
-                (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get())) {
-            throw new DynoException("Failed to expire hash fields");
-        }
-
-        return sortResponse.get();
-    }
-
 
     public void stopClient() {
         if (pipelineMonitor.get() != null) {
