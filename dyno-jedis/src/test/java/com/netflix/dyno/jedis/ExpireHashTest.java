@@ -200,7 +200,7 @@ public class ExpireHashTest {
         final long minTimeout = 15; //seconds
 
         Map<String, Pair<String, Long>> fields = new HashMap<>();
-        for (int i = 0; i < fieldCount; i++) {
+        for (int i = 1; i <= fieldCount; i++) {
             fields.put(secondaryKeyPrefix + i, new ImmutablePair<>(valuePrefix + i, i + minTimeout));
             if (i % 100 == 0) {
                 Assert.assertEquals("OK", client.ehmset(expireHashKey, fields));
