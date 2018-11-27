@@ -4070,8 +4070,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return !Strings.isNullOrEmpty(hashtag) && hashtag.length() == 2;
     }
 
-    @VisibleForTesting
-    String ehashDataKey(String key) throws UnsupportedOperationException {
+    private String ehashDataKey(String key) throws UnsupportedOperationException {
         String hashtag = connPool.getConfiguration().getHashtag();
         if (!validHashtag(hashtag)) {
             throw new UnsupportedOperationException("hashtags not set");
@@ -4172,7 +4171,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         pipeline.sync();
 
         // If metadata operation failed, remove the data and throw exception
-        if (zResponse.get() != hResponse.get()) {
+        if (!zResponse.get().equals(hResponse.get())) {
             d_hdel(ehashDataKey, field);
             d_zrem(ehashMetadataKey, field);
             throw new DynoException("Metadata inconsistent with data for expireHash: " + ehashDataKey);
@@ -4318,7 +4317,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         // on failure to remove all expired keys and expired keys contains one of requested fields, fail
         if (ehMetadataUpdateResult.expiredFields.size() > 0 && ehMetadataUpdateResult.hdelResponse != null &&
                 (ehMetadataUpdateResult.expiredFields.size() != ehMetadataUpdateResult.hdelResponse.get()) &&
-                Arrays.asList(fields).stream().anyMatch(x -> ehMetadataUpdateResult.expiredFields.contains(x))) {
+                Arrays.stream(fields).anyMatch(ehMetadataUpdateResult.expiredFields::contains)) {
             throw new DynoException("Failed to expire hash fields");
         }
 
@@ -4331,7 +4330,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         Map<String, String> fields = new HashMap<>();
         Map<String, Double> metadataFields = new HashMap<>();
 
-        hash.keySet().stream().forEach(f -> {
+        hash.keySet().forEach(f -> {
             fields.put(f, hash.get(f).getLeft());
             metadataFields.put(f, timeInEpochSeconds(hash.get(f).getRight()));
         });
