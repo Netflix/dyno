@@ -4070,10 +4070,10 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return !Strings.isNullOrEmpty(hashtag) && hashtag.length() == 2;
     }
 
-    private String ehashDataKey(String key) throws UnsupportedOperationException {
+    private String ehashDataKey(String key) {
         String hashtag = connPool.getConfiguration().getHashtag();
         if (!validHashtag(hashtag)) {
-            throw new UnsupportedOperationException("hashtags not set");
+            throw new IllegalStateException("hashtags not set");
         }
 
         return new StringBuilder(hashtag)
@@ -4082,10 +4082,10 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @VisibleForTesting
-    String ehashMetadataKey(String key) throws UnsupportedOperationException {
+    String ehashMetadataKey(String key) {
         final String hashtag = connPool.getConfiguration().getHashtag();
         if (!validHashtag(hashtag)) {
-            throw new UnsupportedOperationException("hashtags not set");
+            throw new IllegalStateException("hashtags not set");
         }
 
         return new StringBuilder(hashtag)
