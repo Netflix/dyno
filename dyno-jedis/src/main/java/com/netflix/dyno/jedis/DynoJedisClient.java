@@ -493,19 +493,28 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Object evalsha(String sha1, int keyCount, String... params) {
-        throw new UnsupportedOperationException("This function is Not Implemented. Please use eval instead.");
+    public Object evalsha(String sha1, int keyCount, String... params) { return d_evalsha(sha1, keyCount, params).getResult(); }
+
+    public OperationResult<Object> d_evalsha(String sha1, int keyCount, String... params) {
+        if (keyCount == 0) {
+            throw new DynoException("Need at least one key in script");
+        }
+        return connPool.executeWithFailover(new BaseKeyOperation<Object>(params[0], OpName.EVALSHA) {
+           @Override
+           public Object execute(Jedis client, ConnectionContext state) {
+               return client.evalsha(sha1, keyCount, params);
+           }
+        });
     }
 
     @Override
     public Object evalsha(String sha1, List<String> keys, List<String> args) {
-        throw new UnsupportedOperationException("This function is Not Implemented. Please use eval instead.");
+        String[] params = ArrayUtils.addAll(keys.toArray(new String[0]), args.toArray(new String[0]));
+        return evalsha(sha1, keys.size(), params);
     }
 
     @Override
-    public Object evalsha(String script) {
-        throw new UnsupportedOperationException("This function is Not Implemented. Please use eval instead.");
-    }
+    public Object evalsha(String sha1) { return evalsha(sha1, 0); }
 
     @Override
     public Boolean scriptExists(String sha1) {
@@ -518,8 +527,15 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public String scriptLoad(String script) {
-        throw new UnsupportedOperationException("This function is Not Implemented");
+    public String scriptLoad(String script) { return d_scriptLoad(script).getResult(); }
+
+    public OperationResult<String> d_scriptLoad(final String script) {
+        return connPool.executeWithFailover(new BaseKeyOperation<String>(script, OpName.SCRIPT_LOAD) {
+            @Override
+            public String execute(Jedis client, ConnectionContext state) {
+                return client.scriptLoad(script);
+            }
+        });
     }
 
     @Override

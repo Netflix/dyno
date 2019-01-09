@@ -1038,6 +1038,23 @@ public class DynoJedisDemo {
 
 	}
 
+	public void runEvalShaTest() throws Exception {
+
+		client.set("EvalShaTestKey", "EVALSHA_WORKS");
+
+		List<String> keys = Lists.newArrayList("EvalShaTestKey");
+		List<String> args = Lists.newArrayList();
+
+		String script_hash = client.scriptLoad("return redis.call('get', KEYS[1])");
+		Object obj = client.evalsha(script_hash, keys, args);
+		if (obj.toString().equals("EVALSHA_WORKS"))
+			System.out.println("EVALSHA Test Succeeded");
+		else
+			System.out.println("EVALSHA Test Failed. Expected: 'EVALSHA_WORKS'; Got: '" + obj.toString());
+
+		client.del(keys.get(0));
+	}
+
 	private void runExpireHashTest() throws Exception {
 		this.numKeys = 10;
 		System.out.println("Expire hash test selected");
@@ -1179,6 +1196,7 @@ public class DynoJedisDemo {
 			}
 			case 10: {
 				demo.runEvalTest();
+				demo.runEvalShaTest();
 				break;
 			}
 
