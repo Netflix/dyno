@@ -41,7 +41,7 @@ import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisShardInfo;
 import redis.clients.jedis.exceptions.JedisConnectionException;
-import redis.clients.util.Sharded;
+import redis.clients.jedis.util.Sharded;
 
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;

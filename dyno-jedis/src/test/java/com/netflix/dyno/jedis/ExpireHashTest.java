@@ -213,7 +213,7 @@ public class ExpireHashTest {
         do {
             ScanResult<Map.Entry<String, String>> values = client.ehscan(expireHashKey, cursor);
             count += values.getResult().size();
-            cursor = values.getStringCursor();
+            cursor = values.getCursor();
         } while(cursor.compareTo("0") != 0);
 
         Assert.assertEquals(fieldCount, count);

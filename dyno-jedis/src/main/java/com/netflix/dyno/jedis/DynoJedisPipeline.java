@@ -30,12 +30,13 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import redis.clients.jedis.BinaryClient.LIST_POSITION;
 import redis.clients.jedis.*;
+import redis.clients.jedis.commands.BinaryRedisPipeline;
+import redis.clients.jedis.commands.RedisPipeline;
 import redis.clients.jedis.exceptions.JedisConnectionException;
-import redis.clients.jedis.params.geo.GeoRadiusParam;
-import redis.clients.jedis.params.sortedset.ZAddParams;
-import redis.clients.jedis.params.sortedset.ZIncrByParams;
+import redis.clients.jedis.params.GeoRadiusParam;
+import redis.clients.jedis.params.ZAddParams;
+import redis.clients.jedis.params.ZIncrByParams;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -570,6 +571,16 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
+	public Response<Long> unlink(String key) {
+		return new PipelineOperation<Long>() {
+			@Override
+			Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
+				return jedisPipeline.unlink(key);
+			}
+		}.execute(key, OpName.UNLINK);
+	}
+
+	@Override
 	public Response<String> echo(final String string) {
 		return new PipelineOperation<String>() {
 
@@ -1043,6 +1054,11 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 		}
 	}
 
+	@Override
+	public Response<Long> hset(String key, Map<String, String> hash) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
 	/**
 	 * This method is a BinaryRedisPipeline command which dyno does not yet properly
 	 * support, therefore the interface is not yet implemented.
@@ -1068,6 +1084,11 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 				}
 			}.execute(key, OpName.HSET);
 		}
+	}
+
+	@Override
+	public Response<Long> hset(byte[] key, Map<byte[], byte[]> hash) {
+		throw new UnsupportedOperationException("not yet implemented");
 	}
 
 	@Override
@@ -1172,7 +1193,7 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
-	public Response<Long> linsert(final String key, final LIST_POSITION where, final String pivot, final String value) {
+	public Response<Long> linsert(final String key, final ListPosition where, final String pivot, final String value) {
 		return new PipelineOperation<Long>() {
 
 			@Override
@@ -1637,6 +1658,11 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
+	public Response<Long> touch(String key) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
 	public Response<Long> ttl(final String key) {
 		return new PipelineOperation<Long>() {
 
@@ -1647,6 +1673,16 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
 		}.execute(key, OpName.TTL);
 
+	}
+
+	@Override
+	public Response<Long> pttl(String key) {
+		return new PipelineOperation<Long>() {
+			@Override
+			Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
+				return jedisPipeline.pttl(key);
+			}
+		}.execute(key, OpName.PTTL);
 	}
 
 	@Override
@@ -1715,6 +1751,16 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
+	public Response<Long> zcount(String key, String min, String max) {
+		return new PipelineOperation<Long>() {
+			@Override
+			Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
+				return jedisPipeline.zcount(key, min, max);
+			}
+		}.execute(key, OpName.ZCOUNT);
+	}
+
+	@Override
 	public Response<Double> zincrby(final String key, final double score, final String member) {
 		return new PipelineOperation<Double>() {
 
@@ -1778,6 +1824,18 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
 		}.execute(key, OpName.ZRANGEBYSCORE);
 
+	}
+
+	@Override
+	public Response<Set<String>> zrangeByScore(String key, String min, String max, int offset, int count) {
+		return new PipelineOperation<Set<String>>() {
+
+			@Override
+			Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
+				return jedisPipeline.zrangeByScore(key, min, max, offset, count);
+			}
+
+		}.execute(key, OpName.ZRANGEBYSCORE);
 	}
 
 	@Override
@@ -1848,6 +1906,18 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
+	public Response<Set<String>> zrevrangeByScore(String key, String max, String min, int offset, int count) {
+		return new PipelineOperation<Set<String>>() {
+
+			@Override
+			Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
+				return jedisPipeline.zrevrangeByScore(key, max, min, offset, count);
+			}
+
+		}.execute(key, OpName.ZREVRANGEBYSCORE);
+	}
+
+	@Override
 	public Response<Set<Tuple>> zrevrangeByScoreWithScores(final String key, final double max, final double min) {
 		return new PipelineOperation<Set<Tuple>>() {
 
@@ -1858,6 +1928,18 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
 		}.execute(key, OpName.ZREVRANGEBYSCOREWITHSCORES);
 
+	}
+
+	@Override
+	public Response<Set<Tuple>> zrevrangeByScoreWithScores(String key, String max, String min) {
+		return new PipelineOperation<Set<Tuple>>() {
+
+			@Override
+			Response<Set<Tuple>> execute(Pipeline jedisPipeline) throws DynoException {
+				return jedisPipeline.zrevrangeByScoreWithScores(key, max, min);
+			}
+
+		}.execute(key, OpName.ZREVRANGEBYSCOREWITHSCORES);
 	}
 
 	@Override
@@ -1872,6 +1954,18 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
 		}.execute(key, OpName.ZREVRANGEBYSCOREWITHSCORES);
 
+	}
+
+	@Override
+	public Response<Set<Tuple>> zrevrangeByScoreWithScores(String key, String max, String min, int offset, int count) {
+		return new PipelineOperation<Set<Tuple>>() {
+
+			@Override
+			Response<Set<Tuple>> execute(Pipeline jedisPipeline) throws DynoException {
+				return jedisPipeline.zrevrangeByScoreWithScores(key, max, min, offset, count);
+			}
+
+		}.execute(key, OpName.ZREVRANGEBYSCOREWITHSCORES);
 	}
 
 	@Override
@@ -1937,6 +2031,18 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
 		}.execute(key, OpName.ZREMRANGEBYSCORE);
 
+	}
+
+	@Override
+	public Response<Long> zremrangeByScore(String key, String min, String max) {
+		return new PipelineOperation<Long>() {
+
+			@Override
+			Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
+				return jedisPipeline.zremrangeByScore(key, min, max);
+			}
+
+		}.execute(key, OpName.ZREMRANGEBYSCORE);
 	}
 
 	@Override
@@ -2078,6 +2184,36 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
+	public Response<Long> hstrlen(String key, String field) {
+		return new PipelineOperation<Long>() {
+			@Override
+			Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
+				return jedisPipeline.hstrlen(key, field);
+			}
+		}.execute(key, OpName.HSTRLEN);
+	}
+
+	@Override
+	public Response<byte[]> dump(String key) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<String> restore(String key, int ttl, byte[] serializedValue) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<String> restoreReplace(String key, int ttl, byte[] serializedValue) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<String> migrate(String host, int port, String key, int destinationDB, int timeout) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
 	public Response<Set<String>> zrevrangeByLex(String key, String max, String min) {
 		throw new UnsupportedOperationException("not yet implemented");
 	}
@@ -2124,8 +2260,18 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
+	public Response<List<GeoRadiusResponse>> georadiusReadonly(String key, double longitude, double latitude, double radius, GeoUnit unit) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
 	public Response<List<GeoRadiusResponse>> georadius(String arg0, double arg1, double arg2, double arg3, GeoUnit arg4,
 			GeoRadiusParam arg5) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<List<GeoRadiusResponse>> georadiusReadonly(String key, double longitude, double latitude, double radius, GeoUnit unit, GeoRadiusParam param) {
 		throw new UnsupportedOperationException("not yet implemented");
 	}
 
@@ -2135,8 +2281,18 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
+	public Response<List<GeoRadiusResponse>> georadiusByMemberReadonly(String key, String member, double radius, GeoUnit unit) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
 	public Response<List<GeoRadiusResponse>> georadiusByMember(String arg0, String arg1, double arg2, GeoUnit arg3,
 			GeoRadiusParam arg4) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<List<GeoRadiusResponse>> georadiusByMemberReadonly(String key, String member, double radius, GeoUnit unit, GeoRadiusParam param) {
 		throw new UnsupportedOperationException("not yet implemented");
 	}
 
@@ -2305,6 +2461,16 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
+	public Response<Long> unlink(byte[] keys) {
+		return new PipelineOperation<Long>() {
+			@Override
+			Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
+				return jedisPipeline.unlink(keys);
+			}
+		}.execute(keys, OpName.UNLINK);
+	}
+
+	@Override
 	public Response<byte[]> echo(byte[] string) {
 		throw new UnsupportedOperationException("not yet implemented");
 	}
@@ -2371,7 +2537,7 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 		}.execute(key, OpName.GETSET);	}
 
 	@Override
-	public Response<Long> getrange(byte[] key, long startOffset, long endOffset) {
+	public Response<byte[]> getrange(byte[] key, long startOffset, long endOffset) {
 		throw new UnsupportedOperationException("not yet implemented");
 	}
 
@@ -2426,7 +2592,7 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
-	public Response<Long> linsert(byte[] key, LIST_POSITION where, byte[] pivot, byte[] value) {
+	public Response<Long> linsert(byte[] key, ListPosition where, byte[] pivot, byte[] value) {
 		throw new UnsupportedOperationException("not yet implemented");
 	}
 
@@ -2580,7 +2746,17 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
+	public Response<Long> touch(byte[] keys) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
 	public Response<Long> ttl(byte[] key) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<Long> pttl(byte[] key) {
 		throw new UnsupportedOperationException("not yet implemented");
 	}
 
@@ -2616,6 +2792,11 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
 	@Override
 	public Response<Long> zcount(byte[] key, double min, double max) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<Long> zcount(byte[] key, byte[] min, byte[] max) {
 		throw new UnsupportedOperationException("not yet implemented");
 	}
 
@@ -2815,6 +2996,26 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
+	public Response<byte[]> dump(byte[] key) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<String> restore(byte[] key, int ttl, byte[] serializedValue) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<String> restoreReplace(byte[] key, int ttl, byte[] serializedValue) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<String> migrate(String host, int port, byte[] key, int destinationDB, int timeout) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
 	public Response<Long> geoadd(byte[] key, double longitude, double latitude, byte[] member) {
 		throw new UnsupportedOperationException("not yet implemented");
 	}
@@ -2851,13 +3052,28 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
+	public Response<List<GeoRadiusResponse>> georadiusReadonly(byte[] key, double longitude, double latitude, double radius, GeoUnit unit) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
 	public Response<List<GeoRadiusResponse>> georadius(byte[] key, double longitude, double latitude, double radius,
 			GeoUnit unit, GeoRadiusParam param) {
 		throw new UnsupportedOperationException("not yet implemented");
 	}
 
 	@Override
+	public Response<List<GeoRadiusResponse>> georadiusReadonly(byte[] key, double longitude, double latitude, double radius, GeoUnit unit, GeoRadiusParam param) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
 	public Response<List<GeoRadiusResponse>> georadiusByMember(byte[] key, byte[] member, double radius, GeoUnit unit) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<List<GeoRadiusResponse>> georadiusByMemberReadonly(byte[] key, byte[] member, double radius, GeoUnit unit) {
 		throw new UnsupportedOperationException("not yet implemented");
 	}
 
@@ -2868,7 +3084,17 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 	}
 
 	@Override
+	public Response<List<GeoRadiusResponse>> georadiusByMemberReadonly(byte[] key, byte[] member, double radius, GeoUnit unit, GeoRadiusParam param) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
 	public Response<List<Long>> bitfield(byte[] key, byte[]... elements) {
+		throw new UnsupportedOperationException("not yet implemented");
+	}
+
+	@Override
+	public Response<Long> hstrlen(byte[] key, byte[] field) {
 		throw new UnsupportedOperationException("not yet implemented");
 	}
 
