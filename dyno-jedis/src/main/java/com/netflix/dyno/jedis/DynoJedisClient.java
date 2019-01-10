@@ -546,13 +546,20 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public Object evalsha(String sha1) { return evalsha(sha1, 0); }
 
     @Override
-    public Boolean scriptExists(String sha1) {
-        throw new UnsupportedOperationException("This function is Not Implemented");
+    public Boolean scriptExists(String sha1) { return d_scriptExists(sha1).getResult(); }
+
+    public OperationResult<Boolean> d_scriptExists(String sha1) {
+        return connPool.executeWithFailover(new BaseKeyOperation<Boolean>(sha1, OpName.SCRIPT_EXISTS) {
+            @Override
+            public Boolean execute(Jedis client, ConnectionContext state) throws DynoException {
+                return client.scriptExists(sha1);
+            }
+        });
     }
 
     @Override
     public List<Boolean> scriptExists(String... sha1) {
-        throw new UnsupportedOperationException("This function is Not Implemented");
+        return scriptExists(sha1);
     }
 
     @Override
@@ -561,8 +568,30 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     public OperationResult<String> d_scriptLoad(final String script) {
         return connPool.executeWithFailover(new BaseKeyOperation<String>(script, OpName.SCRIPT_LOAD) {
             @Override
-            public String execute(Jedis client, ConnectionContext state) {
+            public String execute(Jedis client, ConnectionContext state) throws DynoException {
                 return client.scriptLoad(script);
+            }
+        });
+    }
+
+    public String scriptFlush() { return d_scriptFlush().getResult(); }
+
+    public OperationResult<String> d_scriptFlush() {
+        return connPool.executeWithFailover(new BaseKeyOperation<String>("", OpName.SCRIPT_FLUSH) {
+            @Override
+            public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                return client.scriptFlush();
+            }
+        });
+    }
+
+    public String scriptKill() { return d_scriptKill().getResult(); }
+
+    public OperationResult<String> d_scriptKill() {
+        return connPool.executeWithFailover(new BaseKeyOperation<String>("", OpName.SCRIPT_KILL) {
+            @Override
+            public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                return client.scriptKill();
             }
         });
     }

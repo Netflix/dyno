@@ -1086,20 +1086,36 @@ public class DynoJedisDemo {
   }
 
   public void runEvalShaTest() throws Exception {
-
 		client.set("EvalShaTestKey", "EVALSHA_WORKS");
 
 		List<String> keys = Lists.newArrayList("EvalShaTestKey");
 		List<String> args = Lists.newArrayList();
 
 		String script_hash = client.scriptLoad("return redis.call('get', KEYS[1])");
+
+		// Make sure that the script is saved in Redis' script cache.
+		if (client.scriptExists(script_hash) == Boolean.FALSE) {
+		  throw new Exception("Test failed. Script did not exist when it should have.");
+		}
+
 		Object obj = client.evalsha(script_hash, keys, args);
 		if (obj.toString().equals("EVALSHA_WORKS"))
 			System.out.println("EVALSHA Test Succeeded");
 		else
-			System.out.println("EVALSHA Test Failed. Expected: 'EVALSHA_WORKS'; Got: '" + obj.toString());
+			throw new Exception("EVALSHA Test Failed. Expected: 'EVALSHA_WORKS'; Got: '" + obj.toString());
 
+		// Flush the script cache.
+		client.scriptFlush();
+
+		// Make sure that the script is no longer in the cache.
+		if (client.scriptExists(script_hash) == Boolean.TRUE) {
+			throw new Exception("Test failed. Script existed when it shouldn't have.");
+		}
+
+		// Clean up the created key.
 		client.del(keys.get(0));
+
+		System.out.println("SCRIPT EXISTS and SCRIPT FLUSH Test succeeded.");
 	}
 
 	private void runExpireHashTest() throws Exception {
