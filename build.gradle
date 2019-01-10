@@ -123,6 +123,7 @@ project(':dyno-demo') {
         compile project(':dyno-memcache')
         compile project(':dyno-jedis')
         compile project(':dyno-recipes')
+        compile 'commons-cli:commons-cli:1.4'
     }
 }
 
@@ -133,5 +134,6 @@ project(':dyno-recipes') {
     dependencies {
         compile project(':dyno-core')
         compile project(':dyno-jedis')
+        compile 'com.google.code.gson:gson:2.8.5'
     }
 }

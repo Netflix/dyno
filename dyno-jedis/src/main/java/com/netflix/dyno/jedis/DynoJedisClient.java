@@ -44,7 +44,6 @@ import redis.clients.jedis.params.GeoRadiusParam;
 import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.params.ZAddParams;
 import redis.clients.jedis.params.ZIncrByParams;
-import redis.clients.jedis.util.SafeEncoder;
 
 import javax.net.ssl.SSLSocketFactory;
 import java.io.IOException;
@@ -336,13 +335,16 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return this.getConnPool();
     }
 
+    public <R> OperationResult<R> moduleCommand(JedisGenericOperation<R> handler) {
+        return connPool.executeWithFailover(handler);
+    }
+
     @Override
     public Long append(final String key, final String value) {
         return d_append(key, value).getResult();
     }
 
     public OperationResult<Long> d_append(final String key, final String value) {
-
         return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.APPEND) {
             @Override
             public Long execute(Jedis client, ConnectionContext state) {

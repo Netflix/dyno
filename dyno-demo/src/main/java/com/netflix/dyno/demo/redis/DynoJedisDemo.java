@@ -15,15 +15,17 @@
  */
 package com.netflix.dyno.demo.redis;
 
-import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
+import com.google.gson.Gson;
 import com.netflix.dyno.connectionpool.*;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
-import com.netflix.dyno.jedis.DynoDualWriterClient;
 import com.netflix.dyno.jedis.DynoJedisClient;
 import com.netflix.dyno.jedis.DynoJedisPipeline;
+import com.netflix.dyno.recipes.json.DynoJedisJsonClient;
+import com.netflix.dyno.recipes.json.JsonPath;
+import org.apache.commons.cli.*;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
@@ -63,7 +65,7 @@ public class DynoJedisDemo {
 	protected final String shadowClusterName;
 
 	public DynoJedisDemo(String clusterName, String localRack) {
-		this(clusterName, "", localRack);
+		this(clusterName, null, localRack);
 	}
 
 	public DynoJedisDemo(String primaryCluster, String shadowCluster, String localRack) {
@@ -379,7 +381,7 @@ public class DynoJedisDemo {
 			scanParams.match("*");
 			scanResult = client.sscan(key, cursor, scanParams);
 			matches.addAll(scanResult.getResult());
-			cursor = scanResult.getStringCursor();
+			cursor = scanResult.getCursor();
 			if ("0".equals(cursor)) {
 				break;
 			}
@@ -966,6 +968,50 @@ public class DynoJedisDemo {
 
 	}
 
+	private void runJsonTest() throws Exception {
+		DynoJedisJsonClient jsonClient = new DynoJedisJsonClient(this.client);
+		Gson gson = new Gson();
+		List<String> list = new ArrayList<>();
+		list.add("apple");
+		list.add("orange");
+		Map<String, List<String>> map = new HashMap<>();
+		map.put("fruits", list);
+		final JsonPath jsonPath = new JsonPath().appendSubKey("fruits");
+
+		System.out.println("Get path: " + jsonPath.toString());
+		System.out.println("inserting json: " + list);
+		OperationResult<String> set1Result = jsonClient.set("test1", map);
+		OperationResult<String> set2Result = jsonClient.set("test2", map);
+		OperationResult<Long> arrappendResult = jsonClient.arrappend("test1",
+				new JsonPath().appendSubKey("fruits"), "mango");
+		OperationResult<Long> arrinsertResult = jsonClient.arrinsert("test1",
+				new JsonPath().appendSubKey("fruits"), 0,"banana");
+		OperationResult<String> set3Result = jsonClient.set("test1", new JsonPath().appendSubKey("flowers"),
+				Arrays.asList("rose", "lily"));
+		OperationResult<Class<?>> typeResult = jsonClient.type("test1");
+		OperationResult<Object> get1Result = jsonClient.get("test1", jsonPath);
+		OperationResult<Object> get2Result = jsonClient.get("test2", jsonPath);
+		OperationResult<List<Object>> mgetResult = jsonClient.mget(Arrays.asList("test1", "test2"), jsonPath.atIndex(-1));
+		OperationResult<List<String>> objkeysResult = jsonClient.objkeys("test1");
+		OperationResult<Long> objlenResult = jsonClient.objlen("test1");
+		OperationResult<Long> del1Result = jsonClient.del("test1");
+		OperationResult<Long> del2Result = jsonClient.del("test2");
+
+		System.out.println("Json set1 result: " + set1Result.getResult());
+		System.out.println("Json set2 result: " + set2Result.getResult());
+		System.out.println("Json arrappend result: " + arrappendResult.getResult());
+		System.out.println("Json addinsert result: " + arrinsertResult.getResult());
+		System.out.println("Json set3 result: " + set3Result.getResult());
+		System.out.println("Json type result: " + typeResult.getResult().getTypeName());
+		System.out.println("Json get1 result: " + get1Result.getResult());
+		System.out.println("Json get2 result: " + get2Result.getResult());
+		System.out.println("Json mget result: " + mgetResult.getResult());
+		System.out.println("Json del1 result: " + del1Result.getResult());
+		System.out.println("Json del2 result: " + del2Result.getResult());
+		System.out.println("Json objkeys result: " + objkeysResult.getResult());
+		System.out.println("Json objlen result: " + objlenResult.getResult());
+	}
+
 	private void runExpireHashTest() throws Exception {
 		this.numKeys = 10;
 		System.out.println("Expire hash test selected");
@@ -998,25 +1044,37 @@ public class DynoJedisDemo {
 	/**
 	 *
 	 * @param args
-	 *            Should contain:
 	 *            <ol>
-	 *            dynomite_cluster_name, e.g. dyno_sandbox_quorum
+	 *            -l | -p <clusterName>  [-s <clusterName>] -t <testNumber>
 	 *            </ol>
 	 *            <ol>
-	 *                dynomite_shadow_cluster_name (optional)
-	 *            </ol>
-	 *            <ol>
-	 *            test number, in the set: 1 - simple test 2 - keys test 3 - simple
-	 *            test with hashtag 4- multi-threaded 5 - SCAN test 6 - pipeline 7 -
-	 *            run pipeline with hashtag 7 - runn SSCAN test
+	 *                 -l,--localhost                      localhost
+	 *                 -p,--primaryCluster <clusterName>   Primary cluster
+	 *                 -s,--shadowCluster <clusterName>    Shadow cluster
+	 *                 -t,--test <testNumber>              Test to run
 	 *            </ol>
 	 */
 	public static void main(String args[]) throws IOException {
-		if (args.length < 2) {
-			System.out.println("Incorrect number of arguments.");
-			printUsage();
-			System.exit(1);
-		}
+		Option primaryCluster = new Option("p", "primaryCluster", true, "Primary cluster");
+		primaryCluster.setArgName("clusterName");
+
+		Option secondaryCluster = new Option("s","shadowCluster", true, "Shadow cluster");
+		secondaryCluster.setArgName("clusterName");
+
+		Option localhost = new Option("l", "localhost", false, "localhost");
+		Option test = new Option("t", "test", true, "Test to run");
+		test.setArgName("testNumber");
+		test.setRequired(true);
+
+		OptionGroup cluster = new OptionGroup()
+				.addOption(localhost)
+				.addOption(primaryCluster);
+		cluster.setRequired(true);
+
+		Options options = new Options();
+		options.addOptionGroup(cluster)
+				.addOption(secondaryCluster)
+				.addOption(test);
 
 		Properties props = new Properties();
 		props.load(DynoJedisDemo.class.getResourceAsStream("/demo.properties"));
@@ -1024,7 +1082,7 @@ public class DynoJedisDemo {
 			System.setProperty(name, props.getProperty(name));
 		}
 
-		if (!props.containsKey("EC2_AVAILABILITY_ZONE") && !props.containsKey("dyno.dyno_demo.lbStrategy")) {
+		if (!props.containsKey("EC2_AVAILABILITY_ZONE") && !props.containsKey("dyno.demo.lbStrategy")) {
 			throw new IllegalArgumentException(
 					"MUST set local for load balancing OR set the load balancing strategy to round robin");
 		}
@@ -1034,37 +1092,32 @@ public class DynoJedisDemo {
 		String shadowHostsFile = props.getProperty("dyno.demo.shadowHostsFile");
 		int port = Integer.valueOf(props.getProperty("dyno.demo.port", "8102"));
 
-		DynoJedisDemo demo = new DynoJedisDemo(args[0], rack);
-		int testNumber = -1;
-
+		DynoJedisDemo demo = null;
 		try {
-			switch (args.length) {
-				case 2:
-					testNumber = Integer.valueOf(args[1]);
+			CommandLineParser parser = new DefaultParser();
+			CommandLine cli = parser.parse(options, args);
 
+			int testNumber = Integer.parseInt(cli.getOptionValue("t"));
+			if (cli.hasOption("l")) {
+				demo = new DynoJedisDemo("dyno-localhost", rack);
+				demo.initWithLocalHost();
+			} else {
+				demo = new DynoJedisDemo(cli.getOptionValue("p"), rack);
+				if (cli.hasOption("s")) {
 					if (hostsFile != null) {
 						demo.initWithRemoteClusterFromFile(hostsFile, port);
 					} else {
-						demo.initWithRemoteClusterFromEurekaUrl(args[0], port);
+						demo.initWithRemoteClusterFromEurekaUrl(cli.getOptionValue("p"), port);
 					}
-
-					break;
-				case 3:
-					testNumber = Integer.valueOf(args[2]);
-
+				} else {
 					if (hostsFile != null) {
 						demo.initDualClientWithRemoteClustersFromFile(hostsFile, shadowHostsFile, port);
 					} else {
-						demo.initDualClientWithRemoteClustersFromEurekaUrl(args[0], args[1]);
+						demo.initDualClientWithRemoteClustersFromEurekaUrl(cli.getOptionValue("p"),
+								cli.getOptionValue("s"));
 					}
-
-					break;
-				default:
-					System.out.println("Incorrect number of arguments.");
-					printUsage();
-					System.exit(1);
+				}
 			}
-
 			System.out.println("Connected");
 
 			switch (testNumber) {
@@ -1117,6 +1170,12 @@ public class DynoJedisDemo {
 
 			case 12: {
 				demo.runExpireHashTest();
+				break;
+			}
+
+			case 13: {
+				demo.runJsonTest();
+				break;
 			}
 			}
 
@@ -1132,19 +1191,20 @@ public class DynoJedisDemo {
 
 			// demo.cleanup(demo.numKeys);
 
+		} catch (ParseException pe) {
+			HelpFormatter helpFormatter = new HelpFormatter();
+			helpFormatter.printHelp(120, DynoJedisDemo.class.getSimpleName(), "", options, "", true);
 		} catch (Throwable e) {
 			e.printStackTrace();
 		} finally {
-			demo.stop();
+			if (demo != null) {
+				demo.stop();
+			}
 			System.out.println("Done");
 
 			System.out.flush();
 			System.err.flush();
 			System.exit(0);
 		}
-	}
-
-	protected static void printUsage() {
-		// todo
 	}
 }
