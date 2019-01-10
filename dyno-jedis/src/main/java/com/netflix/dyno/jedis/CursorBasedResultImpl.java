@@ -66,7 +66,7 @@ public class CursorBasedResultImpl<T> implements CursorBasedResult<T>, TokenRack
     public List<String> getStringResult() {
         final List<String> aggregated = new ArrayList<>();
         for (Map.Entry<String, ScanResult<T>> entry: result.entrySet()) {
-            aggregated.add(String.format("%s -> %s", entry.getKey(), entry.getValue().getStringCursor()));
+            aggregated.add(String.format("%s -> %s", entry.getKey(), entry.getValue().getCursor()));
         }
         return aggregated;
     }
@@ -75,7 +75,7 @@ public class CursorBasedResultImpl<T> implements CursorBasedResult<T>, TokenRack
     public String getCursorForHost(String host) {
         ScanResult<T> sr = result.get(host);
         if (sr != null) {
-            return sr.getStringCursor();
+            return sr.getCursor();
         }
 
         return "0";
@@ -84,7 +84,7 @@ public class CursorBasedResultImpl<T> implements CursorBasedResult<T>, TokenRack
     @Override
     public boolean isComplete() {
         for (ScanResult r: result.values()) {
-            if (!r.getStringCursor().equals("0")) {
+            if (!r.getCursor().equals("0")) {
                 return false;
             }
         }
