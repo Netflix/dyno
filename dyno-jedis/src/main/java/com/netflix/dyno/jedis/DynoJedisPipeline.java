@@ -15,6 +15,7 @@
  */
 package com.netflix.dyno.jedis;
 
+import com.google.common.base.Strings;
 import com.netflix.dyno.connectionpool.*;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.exception.DynoException;
@@ -221,6 +222,9 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 			 */
 			String hashValue = StringUtils.substringBetween(key, Character.toString(hashtag.charAt(0)),
 					Character.toString(hashtag.charAt(1)));
+			if (Strings.isNullOrEmpty(hashValue)) {
+				hashValue = key;
+			}
 			checkHashtag(key, hashValue);
 		}
 	}

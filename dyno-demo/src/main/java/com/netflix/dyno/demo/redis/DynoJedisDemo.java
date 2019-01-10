@@ -20,7 +20,10 @@ import com.google.gson.Gson;
 import com.netflix.dyno.connectionpool.*;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
+import com.netflix.dyno.contrib.ArchaiusConnectionPoolConfiguration;
+import com.netflix.dyno.jedis.DynoDualWriterClient;
 import com.netflix.dyno.jedis.DynoJedisClient;
 import com.netflix.dyno.jedis.DynoJedisPipeline;
 import com.netflix.dyno.recipes.json.DynoJedisJsonClient;
@@ -57,6 +60,7 @@ public class DynoJedisDemo {
 	public static final String randomValue = "dcfa7d0973834e5c9f480b65de19d684dcfa7d097383dcfa7d0973834e5c9f480b65de19d684dcfa7d097383dcfa7d0973834e5c9f480b65de19d684dcfa7d097383dcfa7d0973834e5c9f480b65de19d684dcfa7d097383";
 
 	protected DynoJedisClient client;
+	protected DynoJedisClient shadowClusterClient;
 
 	protected int numKeys;
 
@@ -162,6 +166,18 @@ public class DynoJedisDemo {
 				.withTokenMapSupplier(primaryTokenSupplier)
 				.withDualWriteTokenMapSupplier(shadowTokenSupplier)
 				.build();
+
+		ConnectionPoolConfigurationImpl shadowCPConfig =
+				new ArchaiusConnectionPoolConfiguration(shadowClusterName);
+
+		this.shadowClusterClient = new DynoJedisClient.Builder()
+				.withApplicationName("demo")
+				.withDynomiteClusterName("dyno-dev")
+				.withHostSupplier(primaryClusterHostSupplier)
+				.withTokenMapSupplier(primaryTokenSupplier)
+				.withCPConfig(shadowCPConfig)
+				.build();
+
 	}
 
 	public void init(HostSupplier hostSupplier, int port, TokenMapSupplier tokenSupplier) throws Exception {
@@ -191,6 +207,63 @@ public class DynoJedisDemo {
 		for (int i = 0; i < numKeys; i++) {
 			OperationResult<String> result = client.d_get("DynoClientTest-" + i);
 			System.out.println("Reading Key: " + i + ", Value: " + result.getResult() + " " + result.getNode());
+		}
+
+		// read from shadow cluster
+		if (shadowClusterClient != null) {
+			// read
+			for (int i = 0; i < numKeys; i++) {
+				OperationResult<String> result = shadowClusterClient.d_get("DynoClientTest-" + i);
+				System.out.println("Reading Key: " + i + ", Value: " + result.getResult() + " " + result.getNode());
+			}
+		}
+	}
+
+	public void runSimpleDualWriterPipelineTest() {
+		this.numKeys = 10;
+		System.out.println("Simple Dual Writer Pipeline test selected");
+
+		// write
+		DynoJedisPipeline pipeline = client.pipelined();
+		for (int i = 0; i < numKeys; i++) {
+			System.out.println("Writing key/value => DynoClientTest/" + i);
+			pipeline.hset("DynoClientTest", "DynoClientTest-" + i, "" + i);
+		}
+		pipeline.sync();
+
+		// new pipeline
+		pipeline = client.pipelined();
+		for (int i = 0; i < numKeys; i++) {
+			System.out.println("Writing key/value => DynoClientTest-1/" + i);
+			pipeline.hset("DynoClientTest-1", "DynoClientTest-" + i, "" + i);
+		}
+		pipeline.sync();
+
+		// read
+		System.out.println("Reading keys from dual writer pipeline client");
+		for (int i = 0; i < numKeys; i++) {
+			OperationResult<String> result = client.d_hget("DynoClientTest", "DynoClientTest-" + i);
+			System.out.println("Reading Key: DynoClientTest/" + i + ", Value: " + result.getResult() + " " + result.getNode());
+			result = client.d_hget("DynoClientTest-1", "DynoClientTest-" + i);
+			System.out.println("Reading Key: DynoClientTest-1/" + i + ", Value: " + result.getResult() + " " + result.getNode());
+		}
+
+		// read from shadow cluster
+		System.out.println("Reading keys from shadow Jedis client");
+		if (shadowClusterClient != null) {
+			// read
+			for (int i = 0; i < numKeys; i++) {
+				OperationResult<String> result = shadowClusterClient.d_hget("DynoClientTest", "DynoClientTest-" + i);
+				System.out.println("Reading Key: DynoClientTest/" + i + ", Value: " + result.getResult() + " " + result.getNode());
+				result = shadowClusterClient.d_hget("DynoClientTest-1", "DynoClientTest-" + i);
+				System.out.println("Reading Key: DynoClientTest-1/" + i + ", Value: " + result.getResult() + " " + result.getNode());
+			}
+		}
+
+		try {
+			pipeline.close();
+		} catch (Throwable t) {
+			t.printStackTrace();
 		}
 	}
 
@@ -1010,6 +1083,23 @@ public class DynoJedisDemo {
 		System.out.println("Json del2 result: " + del2Result.getResult());
 		System.out.println("Json objkeys result: " + objkeysResult.getResult());
 		System.out.println("Json objlen result: " + objlenResult.getResult());
+  }
+
+  public void runEvalShaTest() throws Exception {
+
+		client.set("EvalShaTestKey", "EVALSHA_WORKS");
+
+		List<String> keys = Lists.newArrayList("EvalShaTestKey");
+		List<String> args = Lists.newArrayList();
+
+		String script_hash = client.scriptLoad("return redis.call('get', KEYS[1])");
+		Object obj = client.evalsha(script_hash, keys, args);
+		if (obj.toString().equals("EVALSHA_WORKS"))
+			System.out.println("EVALSHA Test Succeeded");
+		else
+			System.out.println("EVALSHA Test Failed. Expected: 'EVALSHA_WORKS'; Got: '" + obj.toString());
+
+		client.del(keys.get(0));
 	}
 
 	private void runExpireHashTest() throws Exception {
@@ -1160,6 +1250,7 @@ public class DynoJedisDemo {
 			}
 			case 10: {
 				demo.runEvalTest();
+				demo.runEvalShaTest();
 				break;
 			}
 

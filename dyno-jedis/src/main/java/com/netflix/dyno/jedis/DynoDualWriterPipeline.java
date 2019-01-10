@@ -39,7 +39,7 @@ import java.util.concurrent.Future;
  */
 public class DynoDualWriterPipeline extends DynoJedisPipeline {
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(DynoDualWriterPipeline.class);
-    private static ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    private static ExecutorService executor = Executors.newSingleThreadExecutor();
     private final ConnectionPoolImpl<Jedis> connPool;
     private final DynoJedisPipeline shadowPipeline;
     private final DynoDualWriterClient.Dial dial;
