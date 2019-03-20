@@ -202,7 +202,6 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
 
     @Override
     public void incConnectionRecycled(Host host) {
-        this.incConnectionReturned(host);
         this.connectionRecycledCount.incrementAndGet();
     }
 

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright 2017 Netflix, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,11 +15,7 @@
  */
 package com.netflix.dyno.jedis;
 
-import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.HostSupplier;
-import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
-import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.After;
@@ -28,10 +24,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.MockitoAnnotations;
 import redis.clients.jedis.ScanResult;
-import redis.embedded.RedisServer;
 
 import java.io.IOException;
-import java.net.ServerSocket;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -42,17 +36,16 @@ import java.util.stream.Collectors;
  * given for SET operations
  */
 public class ExpireHashTest {
-
     private static final String REDIS_RACK = "rack-1c";
     private static final String REDIS_DATACENTER = "rack-1";
     private DynoJedisClient client;
-    private TokenMapAndHostSupplierImpl tokenMapAndHostSupplier;
+    private UnitTestTokenMapAndHostSupplierImpl tokenMapAndHostSupplier;
 
     @Before
     public void before() throws IOException {
         MockitoAnnotations.initMocks(this);
 
-        tokenMapAndHostSupplier = new TokenMapAndHostSupplierImpl(3);
+        tokenMapAndHostSupplier = new UnitTestTokenMapAndHostSupplierImpl(3, REDIS_RACK);
         final ConnectionPoolConfigurationImpl connectionPoolConfiguration =
                 new ConnectionPoolConfigurationImpl(REDIS_RACK);
         connectionPoolConfiguration.withTokenSupplier(tokenMapAndHostSupplier);
@@ -108,7 +101,7 @@ public class ExpireHashTest {
         Assert.assertEquals("bar", client.ehget(expireHashKey, "foo"));
 
         Thread.sleep(veryShortTimeout * 1000L);
-        Assert.assertEquals(null, client.ehget(expireHashKey, "hello"));
+        Assert.assertNull(client.ehget(expireHashKey, "hello"));
         Assert.assertEquals("bob", client.ehget(expireHashKey, "alice"));
         Assert.assertEquals("bar", client.ehget(expireHashKey, "foo"));
 
@@ -135,7 +128,7 @@ public class ExpireHashTest {
         Assert.assertEquals(2, mFields.size());
 
         Thread.sleep(shortTimeout * 1000L);
-        Assert.assertEquals(null, client.ehget(expireHashKey, "alice"));
+        Assert.assertNull(client.ehget(expireHashKey, "alice"));
         Assert.assertEquals("bar", client.ehget(expireHashKey, "foo"));
 
         // verify metadata explicitly
@@ -217,56 +210,5 @@ public class ExpireHashTest {
         } while(cursor.compareTo("0") != 0);
 
         Assert.assertEquals(fieldCount, count);
-    }
-
-    private static class TokenMapAndHostSupplierImpl implements TokenMapSupplier, HostSupplier {
-        private final Map<Host, HostToken> hostTokenMap = new HashMap<>();
-        private final List<RedisServer> redisServers = new ArrayList<>();
-
-        public TokenMapAndHostSupplierImpl(int hostCount) throws IOException {
-            int hostTokenStride = Integer.MAX_VALUE / hostCount;
-
-            for(int i = 0; i < hostCount; i++) {
-                int port = findFreePort();
-                RedisServer redisServer = new RedisServer(port);
-                redisServer.start();
-                redisServers.add(redisServer);
-
-                Host host = new Host("localhost", port, REDIS_RACK, Host.Status.Up);
-                hostTokenMap.put(host, new HostToken((long) i * hostTokenStride, host));
-            }
-        }
-
-        private int findFreePort() {
-
-            int port = 0;
-            while (port == 0) {
-                try {
-                    ServerSocket socket = new ServerSocket(0);
-                    port = socket.getLocalPort();
-                    socket.close();
-                } catch (IOException e) {
-                    // find next port
-                }
-            }
-            return port;
-        }
-
-        @Override
-        public List<HostToken> getTokens(Set<Host> activeHosts) {
-            return new ArrayList<>(hostTokenMap.values());
-        }
-
-        @Override
-        public HostToken getTokenForHost(Host host, Set<Host> activeHosts) {
-            return hostTokenMap.get(host);
-        }
-
-        @Override
-        public List<Host> getHosts() {
-            return new ArrayList<>(hostTokenMap.keySet());
-        }
-
-        public void shutdown() { redisServers.forEach(x -> x.stop());}
     }
 }

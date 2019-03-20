@@ -140,4 +140,6 @@ public interface HostConnectionPool<CL> {
     int getConnectionTimeout();
 
     int getSocketTimeout();
+
+    int size();
 }

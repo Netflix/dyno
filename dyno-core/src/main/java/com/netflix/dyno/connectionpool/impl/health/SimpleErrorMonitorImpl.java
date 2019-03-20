@@ -21,10 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 		private final AtomicInteger errorCount = new AtomicInteger(0);
 		private final int threshold;
-		private final int maxValue;
 
-		public SimpleErrorMonitorImpl(int maxValue, int numErrorThreshold) {
-			this.maxValue = maxValue;
+		public SimpleErrorMonitorImpl(int numErrorThreshold) {
 			threshold = numErrorThreshold;
 		}
 
@@ -32,8 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 		public boolean trackError(int numErrors) {
 
 			int currentCount = errorCount.addAndGet(numErrors);
-			if (currentCount >= threshold ||
-					(maxValue > 0 && currentCount == maxValue)) {
+			if (currentCount >= threshold) {
 				// Reset the count
 				boolean success = errorCount.compareAndSet(currentCount, 0);
 				if (success) {
@@ -47,26 +44,24 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 	
 	public static class SimpleErrorMonitorFactory implements ErrorMonitorFactory {
-		private int maxValue;
 		private int threshold; 
 		
 		public SimpleErrorMonitorFactory() {
-			this(0, 10); // default
+			this(10); // default
 		}
 
-		public SimpleErrorMonitorFactory(int maxValue, int simpleErrorThreshold) {
-			this.maxValue = maxValue;
+		public SimpleErrorMonitorFactory(int simpleErrorThreshold) {
 			this.threshold = simpleErrorThreshold;
 		}
 
 		@Override
 		public ErrorMonitor createErrorMonitor() {
-			return new SimpleErrorMonitorImpl(maxValue, threshold);
+			return new SimpleErrorMonitorImpl(this.threshold);
 		}
 
 		@Override
 		public ErrorMonitor createErrorMonitor(int maxValue) {
-			return new SimpleErrorMonitorImpl(maxValue, threshold);
+			return new SimpleErrorMonitorImpl(maxValue);
 		}
 
 		// TODO add setter and keep error threshold in sync with maxConnsPerHost OR switch to error rate monitor

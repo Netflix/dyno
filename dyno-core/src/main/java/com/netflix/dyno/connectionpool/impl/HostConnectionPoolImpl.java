@@ -270,6 +270,11 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		return cpConfig.getSocketTimeout();
 	}
 
+	@Override
+	public int size() {
+		return cpState.get().connectionsCount();
+	}
+
 	private interface ConnectionPoolState<CL> {
 		
 		
@@ -282,7 +287,8 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		boolean closeConnection(Connection<CL> connection);
 
 		void recycleConnection(Connection<CL> connection);
-		
+
+		int connectionsCount();
 	}
 	
 	
@@ -307,8 +313,13 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				
 				return connection;
 			} catch (DynoConnectException e) {
-				if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
-					Logger.error("Failed to create connection", e);
+				/* adding error log under debug flag to avoid flooding log lines
+				   while debugging specific error scenarios.
+				 */
+				if (Logger.isDebugEnabled()) {
+					if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
+						Logger.error("Failed to create connection", e);
+					}
 				}
 				monitor.incConnectionCreateFailed(host, e);
 				throw e;
@@ -354,14 +365,19 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
 		@Override
 		public void recycleConnection(Connection<CL> connection) {
-			try {
-				this.closeConnection(connection);
-				// Create a new connection and add it to pool
-				createConnectionWithRetries();
-			} finally {
+			this.closeConnection(connection);
+			monitor.incConnectionReturned(host);
+			// Create a new connection and add it to pool
+			if (createConnectionWithRetries()) {
 				monitor.incConnectionRecycled(host);
-				// incrementing recycle count will also increment the connection returned count
+			} else {
+				Logger.error("Connection recycle failed to create a new connection");
 			}
+		}
+
+		@Override
+		public int connectionsCount() {
+			return numActiveConnections.get();
 		}
 
 		@Override
@@ -441,6 +457,11 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		public void recycleConnection(Connection<CL> connection) {
 			this.closeConnection(connection);
 		}
+
+		@Override
+		public int connectionsCount() {
+			return 0;
+		}
 	}
 	
 	private class ConnectionPoolNotInited implements ConnectionPoolState<CL> {
@@ -471,6 +492,11 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		@Override
 		public void recycleConnection(Connection<CL> connection) {
 			throw new DynoConnectException("Pool must be initialized first");
+		}
+
+		@Override
+		public int connectionsCount() {
+			return 0;
 		}
 	}
 	
