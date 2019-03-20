@@ -1,12 +1,27 @@
+/*******************************************************************************
+ * Copyright 2018 Netflix
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
 package com.netflix.dyno.jedis;
 
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.*;
-import redis.clients.jedis.params.geo.GeoRadiusParam;
-import redis.clients.jedis.params.sortedset.ZAddParams;
-import redis.clients.jedis.params.sortedset.ZIncrByParams;
+import redis.clients.jedis.params.GeoRadiusParam;
+import redis.clients.jedis.params.ZAddParams;
+import redis.clients.jedis.params.ZIncrByParams;
 
 import java.util.List;
 import java.util.Map;
@@ -24,7 +39,7 @@ import java.util.concurrent.Future;
  */
 public class DynoDualWriterPipeline extends DynoJedisPipeline {
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(DynoDualWriterPipeline.class);
-    private static ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    private static ExecutorService executor = Executors.newSingleThreadExecutor();
     private final ConnectionPoolImpl<Jedis> connPool;
     private final DynoJedisPipeline shadowPipeline;
     private final DynoDualWriterClient.Dial dial;
@@ -285,7 +300,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     }
 
     @Override
-    public Response<Long> linsert(final String key, final BinaryClient.LIST_POSITION where, final String pivot, final String value) {
+    public Response<Long> linsert(final String key, final ListPosition where, final String pivot, final String value) {
         writeAsync(key, () -> shadowPipeline.linsert(key, where, pivot, value));
 
         return DynoDualWriterPipeline.super.linsert(key,where, pivot, value);
@@ -718,7 +733,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     }
 
     @Override
-    public Response<Long> getrange(byte[] key, long startOffset, long endOffset) {
+    public Response<byte[]> getrange(byte[] key, long startOffset, long endOffset) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -773,7 +788,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     }
 
     @Override
-    public Response<Long> linsert(byte[] key, BinaryClient.LIST_POSITION where, byte[] pivot, byte[] value) {
+    public Response<Long> linsert(byte[] key, ListPosition where, byte[] pivot, byte[] value) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
