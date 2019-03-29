@@ -58,6 +58,7 @@ import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
 public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
 	private static final Logger Logger = LoggerFactory.getLogger(HostConnectionPoolImpl.class);
+	private static final int CONNECTION_CREATE_RETRY_CNT = 3;
 	
 	// The connections available for this connection pool
 	private final LinkedBlockingQueue<Connection<CL>> availableConnections = new LinkedBlockingQueue<Connection<CL>>();
@@ -105,6 +106,11 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 	@Override
 	public boolean closeConnection(Connection<CL> connection) {
 		return cpState.get().closeConnection(connection);
+	}
+
+	@Override
+	public void recycleConnection(Connection<CL> connection) {
+		cpState.get().recycleConnection(connection);
 	}
 
 	@Override
@@ -185,7 +191,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		
 		int successfullyCreated = 0; 
 		
-		for (int i=0; i<cpConfig.getMaxConnsPerHost(); i++) {
+		for (int i = 0; i < cpConfig.getMaxConnsPerHost(); i++) {
 			boolean success = createConnectionWithRetries();
 			if (success) {
 				successfullyCreated++;
@@ -207,7 +213,7 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 	private boolean createConnectionWithRetries() {
 		
 		boolean success = false;
-		RetryPolicy retry = new RetryNTimes.RetryFactory(3).getRetryPolicy();
+		RetryPolicy retry = new RetryNTimes.RetryFactory(CONNECTION_CREATE_RETRY_CNT).getRetryPolicy();
 		
 		retry.begin();
 		
@@ -264,6 +270,11 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		return cpConfig.getSocketTimeout();
 	}
 
+	@Override
+	public int size() {
+		return cpState.get().connectionsCount();
+	}
+
 	private interface ConnectionPoolState<CL> {
 		
 		
@@ -274,7 +285,10 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		boolean returnConnection(Connection<CL> connection);
 		
 		boolean closeConnection(Connection<CL> connection);
-		
+
+		void recycleConnection(Connection<CL> connection);
+
+		int connectionsCount();
 	}
 	
 	
@@ -299,18 +313,19 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				
 				return connection;
 			} catch (DynoConnectException e) {
+				/* adding error log under debug flag to avoid flooding log lines
+				   while debugging specific error scenarios.
+				 */
 				if (Logger.isDebugEnabled()) {
-                    if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
-                        Logger.error("Failed to create connection", e);
-                    }
+					if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
+						Logger.error("Failed to create connection", e);
+					}
 				}
 				monitor.incConnectionCreateFailed(host, e);
 				throw e;
 			} catch (RuntimeException e) {
-				if (Logger.isDebugEnabled()) {
-                    if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
-                        Logger.error("Failed to create connection", e);
-                    }
+				if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
+					Logger.error("Failed to create connection", e);
 				}
 				monitor.incConnectionCreateFailed(host, e);
 				throw new DynoConnectException(e);
@@ -322,21 +337,13 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		public boolean returnConnection(Connection<CL> connection) {
 			try {
 				if (numActiveConnections.get() > cpConfig.getMaxConnsPerHost()) {
-
                     // Just close the connection
                     return closeConnection(connection);
-
-                } else if (numActiveConnections.get() < cpConfig.getMaxConnsPerHost()) {
-
-                    // Create a connection and add it to the pool
-                    createConnectionWithRetries();
-
+                } else {
+					// Add the given connection back to the pool
+					availableConnections.add(connection);
+					return false;
 				}
-
-				// Add the given connection back to the pool
-				availableConnections.add(connection);
-				return false;
-
 			} finally { 
 				monitor.incConnectionReturned(host);
 			}
@@ -355,7 +362,24 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				monitor.incConnectionClosed(host, connection.getLastException());
 			}
 		}
-		
+
+		@Override
+		public void recycleConnection(Connection<CL> connection) {
+			this.closeConnection(connection);
+			monitor.incConnectionReturned(host);
+			// Create a new connection and add it to pool
+			if (createConnectionWithRetries()) {
+				monitor.incConnectionRecycled(host);
+			} else {
+				Logger.error("Connection recycle failed to create a new connection");
+			}
+		}
+
+		@Override
+		public int connectionsCount() {
+			return numActiveConnections.get();
+		}
+
 		@Override
 		public Connection<CL> borrowConnection(int duration, TimeUnit unit) {
 
@@ -428,6 +452,16 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 				monitor.incConnectionClosed(host, connection.getLastException());
 			}
 		}
+
+		@Override
+		public void recycleConnection(Connection<CL> connection) {
+			this.closeConnection(connection);
+		}
+
+		@Override
+		public int connectionsCount() {
+			return 0;
+		}
 	}
 	
 	private class ConnectionPoolNotInited implements ConnectionPoolState<CL> {
@@ -453,6 +487,16 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 		@Override
 		public boolean closeConnection(Connection<CL> connection) {
 			throw new DynoConnectException("Pool must be initialized first");
+		}
+
+		@Override
+		public void recycleConnection(Connection<CL> connection) {
+			throw new DynoConnectException("Pool must be initialized first");
+		}
+
+		@Override
+		public int connectionsCount() {
+			return 0;
 		}
 	}
 	

@@ -82,6 +82,7 @@ public class MonitorConsole implements MonitorConsoleMBean {
          .append("\nConnections[" )
              .append("   created: " ).append(cpMonitor.getConnectionCreatedCount())
              .append(",  closed: "  ).append(cpMonitor.getConnectionClosedCount())
+             .append(",  recycled: ").append(cpMonitor.getConnectionRecycledCount())
              .append(",  createFailed: "  ).append(cpMonitor.getConnectionCreateFailedCount())
              .append(",  borrowed: ").append(cpMonitor.getConnectionBorrowedCount())
              .append(",  returned: ").append(cpMonitor.getConnectionReturnedCount())

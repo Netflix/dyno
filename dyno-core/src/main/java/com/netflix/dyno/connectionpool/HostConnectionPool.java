@@ -81,6 +81,13 @@ public interface HostConnectionPool<CL> {
     boolean closeConnection(Connection<CL> connection);
 
     /**
+     * Recycle a connection by closing this and adding a new connection to the pool
+     *
+     * @param connection
+     */
+    void recycleConnection(Connection<CL> connection);
+
+    /**
      * Shut down the host so no more connections may be created when
      * borrowConnections is called and connections will be terminated when
      * returnConnection is called.
@@ -133,4 +140,6 @@ public interface HostConnectionPool<CL> {
     int getConnectionTimeout();
 
     int getSocketTimeout();
+
+    int size();
 }

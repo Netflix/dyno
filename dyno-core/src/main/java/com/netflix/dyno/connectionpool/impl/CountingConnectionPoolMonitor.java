@@ -45,6 +45,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     private final AtomicLong connectionCreateFailureCount = new AtomicLong();
     private final AtomicLong connectionBorrowCount  = new AtomicLong();
     private final AtomicLong connectionReturnCount  = new AtomicLong();
+    private final AtomicLong connectionRecycledCount = new AtomicLong();
     private final AtomicLong operationFailoverCount = new AtomicLong();
 
     private final AtomicLong poolTimeoutCount       = new AtomicLong();
@@ -199,6 +200,14 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
         return this.connectionReturnCount.get();
     }
 
+    @Override
+    public void incConnectionRecycled(Host host) {
+        this.connectionRecycledCount.incrementAndGet();
+    }
+
+    @Override
+    public long getConnectionRecycledCount() { return this.connectionRecycledCount.get(); }
+
     public long getPoolExhaustedTimeoutCount() {
         return this.poolExhastedCount.get();
     }
@@ -257,6 +266,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
                     .append(",createFailed="     ).append(connectionCreateFailureCount.get())
                     .append(",borrow="     ).append(connectionBorrowCount.get())
                     .append(",return="     ).append(connectionReturnCount.get())
+                    .append(",recycle="    ).append(connectionRecycledCount.get())
                 .append("], Operations[")
                     .append( "success="    ).append(operationSuccessCount.get())
                     .append(",failure="    ).append(operationFailureCount.get())

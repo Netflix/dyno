@@ -57,13 +57,11 @@ public class ConnectionPoolHealthTracker<CL> implements HealthTracker<CL> {
 
 	private final AtomicBoolean startedPing = new AtomicBoolean(false);
 	
-	private static final Integer DEFAULT_SLEEP_MILLIS = 10*1000; 
-	private static final Integer DEFAULT_POOL_RECONNECT_WAIT_MILLIS = 5*1000; 
-	private final Integer SleepMillis; 
+	private final Integer SleepMillis;
 	private final Integer PoolReconnectWaitMillis; 
 	
 	public ConnectionPoolHealthTracker(ConnectionPoolConfiguration config, ScheduledExecutorService thPool) {
-		this(config, thPool, DEFAULT_SLEEP_MILLIS, DEFAULT_POOL_RECONNECT_WAIT_MILLIS);
+		this(config, thPool, config.getHealthTrackerDelayMillis(), config.getPoolReconnectWaitMillis());
 	}
 		
 	public ConnectionPoolHealthTracker(ConnectionPoolConfiguration config, ScheduledExecutorService thPool, int sleepMillis, int poolReconnectWaitMillis) {
@@ -166,7 +164,7 @@ public class ConnectionPoolHealthTracker<CL> implements HealthTracker<CL> {
 
 			if (errorMonitor == null) {
 				
-				errorMonitor = cpConfiguration.getErrorMonitorFactory().createErrorMonitor();
+				errorMonitor = cpConfiguration.getErrorMonitorFactory().createErrorMonitor(hostPool.size());
 				errorRates.putIfAbsent(host, errorMonitor);
 				errorMonitor = errorRates.get(host);
 			}

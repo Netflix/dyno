@@ -109,6 +109,14 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 		}
 	}
 
+	@Override
+	public void recycleConnection(Connection<CL> connection) {
+		this.closeConnection(connection);
+		cpMonitor.incConnectionReturned(host);
+		createConnection();
+		cpMonitor.incConnectionRecycled(host);
+	}
+
 
 	@Override
 	public void markAsDown(DynoException reason) {
@@ -224,4 +232,7 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 	public boolean isShutdown() {
 		return !active.get();
 	}
+
+	@Override
+	public int size() { return rrSelector.getSize(); }
 }
