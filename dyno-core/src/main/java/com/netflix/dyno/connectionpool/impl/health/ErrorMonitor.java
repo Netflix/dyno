@@ -27,8 +27,10 @@ public interface ErrorMonitor {
 	boolean trackError(int numErrors);
 
 	
-	public static interface ErrorMonitorFactory {
-		
-		public ErrorMonitor createErrorMonitor();
+	interface ErrorMonitorFactory {
+
+		@Deprecated
+		ErrorMonitor createErrorMonitor();
+		ErrorMonitor createErrorMonitor(int maxValue);
 	}
 }

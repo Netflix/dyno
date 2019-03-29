@@ -205,6 +205,16 @@ public interface ConnectionPoolConfiguration {
      */
     int getDualWritePercentage();
 
+    /**
+     * Returns the schedule time delay in milliseconds for the connection pool health tracker
+     */
+    int getHealthTrackerDelayMillis();
+    /**
+     * Returns the amount of time pool reconnect has to wait before establishing new connections.
+     * @return
+     */
+    int getPoolReconnectWaitMillis();
+
     String getHashtag();
 
 }

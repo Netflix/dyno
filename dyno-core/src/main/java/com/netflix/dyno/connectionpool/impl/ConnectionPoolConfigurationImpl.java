@@ -49,6 +49,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     private static final int DEFAULT_VALUE_COMPRESSION_THRESHOLD_BYTES = 5 * 1024; // By default, compression is OFF
 	private static final boolean DEFAULT_IS_DUAL_WRITE_ENABLED = false;
     private static final int DEFAULT_DUAL_WRITE_PERCENTAGE = 0;
+    private static final int DEFAULT_HEALTH_TRACKER_DELAY_MILLIS = 10 * 1000;
+    private static final int DEFAULT_POOL_RECONNECT_WAIT_MILLIS = 5 * 1000;
 
     private HostSupplier hostSupplier;
 	private TokenMapSupplier tokenSupplier;
@@ -77,6 +79,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 	private boolean isDualWriteEnabled = DEFAULT_IS_DUAL_WRITE_ENABLED;
     private String dualWriteClusterName = null;
     private int dualWritePercentage = DEFAULT_DUAL_WRITE_PERCENTAGE;
+    private int healthTrackerDelayMillis = DEFAULT_HEALTH_TRACKER_DELAY_MILLIS;
+    private int poolReconnectWaitMillis = DEFAULT_POOL_RECONNECT_WAIT_MILLIS;
 
 
     private RetryPolicyFactory retryFactory = new RetryPolicyFactory() {
@@ -126,6 +130,8 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         this.dualWriteClusterName = config.getDualWriteClusterName();
         this.dualWritePercentage = config.getDualWritePercentage();
         this.hashtag = config.getHashtag();
+        this.healthTrackerDelayMillis = config.getHealthTrackerDelayMillis();
+        this.poolReconnectWaitMillis = config.getPoolReconnectWaitMillis();
     }
 	
 	@Override
@@ -240,6 +246,16 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     }
 
 	@Override
+	public int getHealthTrackerDelayMillis() {
+		return healthTrackerDelayMillis;
+	}
+
+	@Override
+	public int getPoolReconnectWaitMillis() {
+		return poolReconnectWaitMillis;
+	}
+
+	@Override
 	public String toString() {
 		return "ConnectionPoolConfigurationImpl{" +
 				"name=" + name +
@@ -269,7 +285,9 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 				", dualWritePercentage=" + dualWritePercentage +
 				", retryFactory=" + retryFactory +
 				", errorMonitorFactory=" + errorMonitorFactory +
-				", hashtag=" + hashtag + 
+				", hashtag=" + hashtag +
+				", healthTrackerDelayMillis=" + healthTrackerDelayMillis +
+				", poolReconnectWaitMillis=" + poolReconnectWaitMillis +
 				'}';
 	}
 
@@ -388,6 +406,16 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 
     public ConnectionPoolConfigurationImpl withHostConnectionPoolFactory(HostConnectionPoolFactory factory) {
         hostConnectionPoolFactory = factory;
+        return this;
+    }
+
+    public ConnectionPoolConfigurationImpl withHealthTrackerDelayMills(int millis) {
+        healthTrackerDelayMillis = millis;
+        return this;
+    }
+
+    public ConnectionPoolConfigurationImpl withPoolReconnectWaitMillis(int millis) {
+        poolReconnectWaitMillis = millis;
         return this;
     }
 
