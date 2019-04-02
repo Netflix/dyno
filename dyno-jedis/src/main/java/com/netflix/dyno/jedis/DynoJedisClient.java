@@ -4275,11 +4275,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         final Response<Long> hResponse = pipeline.hset(ehashDataKey(key), field, value);
         pipeline.sync();
 
-        // If metadata operation failed, remove the data and throw exception
-        if (zResponse.get() != 1) {
-            d_hdel(ehashDataKey(key), field);
-            throw new DynoException("Failed to set field:" + field + "; Metadata operation failed:" + zResponse.get());
-        }
         return hResponse.get();
     }
 
@@ -4462,11 +4457,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         final Response<String> hResponse = pipeline.hmset(ehashDataKey(key), fields);
         pipeline.sync();
 
-        // If metadata operation failed, remove the data and throw exception
-        if (zResponse.get() != hash.size()) {
-            d_hdel(ehashDataKey(key), fields.keySet().toArray(new String[0]));
-            throw new DynoException("Failed to set fields; Metadata operation failed:" + zResponse.get());
-        }
         return hResponse.get();
     }
 
