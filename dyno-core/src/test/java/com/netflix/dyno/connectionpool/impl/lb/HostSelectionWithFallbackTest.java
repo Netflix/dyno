@@ -15,9 +15,26 @@
  */
 package com.netflix.dyno.connectionpool.impl.lb;
 
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import com.netflix.dyno.connectionpool.BaseOperation;
+import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancingStrategy;
+import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
+import com.netflix.dyno.connectionpool.HashPartitioner;
+import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.Host.Status;
+import com.netflix.dyno.connectionpool.HostConnectionPool;
+import com.netflix.dyno.connectionpool.RetryPolicy;
+import com.netflix.dyno.connectionpool.TokenMapSupplier;
+import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
+import com.netflix.dyno.connectionpool.impl.CountingConnectionPoolMonitor;
+import com.netflix.dyno.connectionpool.impl.RetryNTimes;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -30,28 +47,10 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import com.netflix.dyno.connectionpool.RetryPolicy;
-import com.netflix.dyno.connectionpool.impl.RetryNTimes;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
-
-import com.netflix.dyno.connectionpool.BaseOperation;
-import com.netflix.dyno.connectionpool.Connection;
-import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancingStrategy;
-import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
-import com.netflix.dyno.connectionpool.HashPartitioner;
-import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.Host.Status;
-import com.netflix.dyno.connectionpool.HostConnectionPool;
-import com.netflix.dyno.connectionpool.TokenMapSupplier;
-import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
-import com.netflix.dyno.connectionpool.impl.CountingConnectionPoolMonitor;
-import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
-import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
 import static org.junit.Assert.assertEquals;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class HostSelectionWithFallbackTest {
 
@@ -78,8 +77,13 @@ public class HostSelectionWithFallbackTest {
 	private final ConnectionPoolConfigurationImpl cpConfig = new ConnectionPoolConfigurationImpl("test");
 	private final ConnectionPoolMonitor cpMonitor = new CountingConnectionPoolMonitor();
 
-	Host h1 = new Host("h1", "localTestRack", Status.Up);
-	Host h2 = new Host("h2", "localTestRack", Status.Up);
+	String dc = "us-east-1";
+	String rack1 = "us-east-1c";
+	String rack2 = "us-east-1d";
+	String rack3 = "us-east-1e";
+
+	Host h1 = new Host("h1", rack1, Status.Up);
+	Host h2 = new Host("h2", rack1, Status.Up);
 	Host h3 = new Host("h3", "remoteRack1", Status.Up);
 	Host h4 = new Host("h4", "remoteRack1", Status.Up);
 	Host h5 = new Host("h5", "remoteRack2", Status.Up);
@@ -90,8 +94,8 @@ public class HostSelectionWithFallbackTest {
 
 	@Before
 	public void beforeTest() {
-		cpConfig.setLocalRack("localTestRack");
-                cpConfig.setLocalDataCenter("localTestRack");
+		cpConfig.setLocalRack(rack1);
+                cpConfig.setLocalDataCenter(dc);
 		cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.RoundRobin);
 		cpConfig.withTokenSupplier(getTokenMapSupplier());
 	}
@@ -396,21 +400,21 @@ public class HostSelectionWithFallbackTest {
         HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
 
         List<HostToken> hostTokens = Arrays.asList(
-                new HostToken(1383429731L, new Host("host-1", -1, "localTestRack")), // Use -1 otherwise the port is opened which works
-                new HostToken(2815085496L, new Host("host-2", -1, "localTestRack")),
-                new HostToken(4246741261L, new Host("host-3", -1, "localTestRack" )),
-                new HostToken(1383429731L, new Host("host-4", -1, "localTestRack")),
-                new HostToken(2815085496L, new Host("host-5", -1, "localTestRack")),
-                new HostToken(4246741261L, new Host("host-6", -1, "localTestRack")),
-                new HostToken(1383429731L, new Host("host-7", -1, "localTestRack")),
-                new HostToken(2815085496L, new Host("host-8", -1, "localTestRack")),
-                new HostToken(4246741261L, new Host("host-9", -1, "localTestRack")),
-                new HostToken(1383429731L, new Host("host-7", -1, "localTestRack")),
-                new HostToken(2815085496L, new Host("host-8", -1, "localTestRack")),
-                new HostToken(4246741261L, new Host("host-9", -1, "localTestRack")),
-                new HostToken(1383429731L, new Host("host-7", -1, "localTestRack")),
-                new HostToken(2815085496L, new Host("host-8", -1, "localTestRack")),
-                new HostToken(4246741261L, new Host("host-9", -1, "localTestRack"))
+                new HostToken(1383429731L, new Host("host-1", -1, rack1)), // Use -1 otherwise the port is opened which works
+                new HostToken(2815085496L, new Host("host-2", -1, rack1)),
+                new HostToken(4246741261L, new Host("host-3", -1, rack1 )),
+                new HostToken(1383429731L, new Host("host-4", -1, rack1)),
+                new HostToken(2815085496L, new Host("host-5", -1, rack1)),
+                new HostToken(4246741261L, new Host("host-6", -1, rack1)),
+                new HostToken(1383429731L, new Host("host-7", -1, rack1)),
+                new HostToken(2815085496L, new Host("host-8", -1, rack1)),
+                new HostToken(4246741261L, new Host("host-9", -1, rack1)),
+                new HostToken(1383429731L, new Host("host-7", -1, rack1)),
+                new HostToken(2815085496L, new Host("host-8", -1, rack1)),
+                new HostToken(4246741261L, new Host("host-9", -1, rack1)),
+                new HostToken(1383429731L, new Host("host-7", -1, rack1)),
+                new HostToken(2815085496L, new Host("host-8", -1, rack1)),
+                new HostToken(4246741261L, new Host("host-9", -1, rack1))
 
         );
 
@@ -428,12 +432,12 @@ public class HostSelectionWithFallbackTest {
 		HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
 
         List<HostToken> hostTokens = Arrays.asList(
-                new HostToken(1111L, new Host("host-1", -1, "localTestRack")),
-                new HostToken(1111L, new Host("host-2", -1, "localTestRack")),
-                new HostToken(1111L, new Host("host-3", -1, "localTestRack")),
-                new HostToken(2222L, new Host("host-4", -1, "localTestRack")),
-                new HostToken(2222L, new Host("host-5", -1, "localTestRack")),
-                new HostToken(2222L, new Host("host-6", -1, "localTestRack"))
+                new HostToken(1111L, new Host("host-1", -1, rack1)),
+                new HostToken(1111L, new Host("host-2", -1, rack1)),
+                new HostToken(1111L, new Host("host-3", -1, rack1)),
+                new HostToken(2222L, new Host("host-4", -1, rack1)),
+                new HostToken(2222L, new Host("host-5", -1, rack1)),
+                new HostToken(2222L, new Host("host-6", -1, rack1))
         );
 
 		int rf = selection.calculateReplicationFactor(hostTokens);
@@ -443,17 +447,17 @@ public class HostSelectionWithFallbackTest {
 
     @Test
     public void testReplicationFactorOf2() {
-        cpConfig.setLocalRack("us-east-1c");
+        cpConfig.setLocalRack(rack1);
         cpConfig.setLoadBalancingStrategy(LoadBalancingStrategy.TokenAware);
         cpConfig.withTokenSupplier(getTokenMapSupplier());
 
         HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
 
         List<HostToken> hostTokens = Arrays.asList(
-                new HostToken(1111L, new Host("host-1", -1, "localTestRack")),
-                new HostToken(1111L, new Host("host-2", -1, "localTestRack")),
-                new HostToken(2222L, new Host("host-4", -1, "localTestRack")),
-                new HostToken(2222L, new Host("host-5", -1, "localTestRack"))
+                new HostToken(1111L, new Host("host-1", -1, rack1)),
+                new HostToken(1111L, new Host("host-2", -1, rack1)),
+                new HostToken(2222L, new Host("host-4", -1, rack1)),
+                new HostToken(2222L, new Host("host-5", -1, rack1))
         );
 
         int rf = selection.calculateReplicationFactor(hostTokens);
@@ -489,9 +493,9 @@ public class HostSelectionWithFallbackTest {
         HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
 
         List<HostToken> hostTokens = Arrays.asList(
-                new HostToken(1111L, new Host("host-1", -1, "localTestRack")),
-                new HostToken(1111L, new Host("host-2", -1, "localTestRack")),
-                new HostToken(2222L, new Host("host-4", -1, "localTestRack"))
+                new HostToken(1111L, new Host("host-1", -1, rack1)),
+                new HostToken(1111L, new Host("host-2", -1, rack1)),
+                new HostToken(2222L, new Host("host-4", -1, rack1))
         );
 
         selection.calculateReplicationFactor(hostTokens);
@@ -507,12 +511,12 @@ public class HostSelectionWithFallbackTest {
         HostSelectionWithFallback<Integer> selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
 
         List<HostToken> hostTokens = Arrays.asList(
-                new HostToken(3530913378L, new Host("host-1", -1, "localTestRack")),
-                new HostToken(1383429731L, new Host("host-1", -1, "localTestRack")),
-                new HostToken(3530913378L, new Host("host-2", -1, "localTestRack")),
-                new HostToken(1383429731L, new Host("host-2", -1, "localTestRack")),
-                new HostToken(1383429731L, new Host("host-3", -1, "localTestRack")),
-                new HostToken(3530913378L, new Host("host-3", -1, "localTestRack")),
+                new HostToken(3530913378L, new Host("host-1", -1, rack1)),
+                new HostToken(1383429731L, new Host("host-1", -1, rack1)),
+                new HostToken(3530913378L, new Host("host-2", -1, rack1)),
+                new HostToken(1383429731L, new Host("host-2", -1, rack1)),
+                new HostToken(1383429731L, new Host("host-3", -1, rack1)),
+                new HostToken(3530913378L, new Host("host-3", -1, rack1)),
 
                 new HostToken(3530913378L, new Host("host-4", -1, "remoteRack1")),
                 new HostToken(1383429731L, new Host("host-4", -1, "remoteRack1")),
