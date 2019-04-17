@@ -1085,6 +1085,13 @@ public class DynoJedisDemo {
 				case 2:
 					testNumber = Integer.valueOf(args[1]);
 
+			int testNumber = Integer.parseInt(cli.getOptionValue("t"));
+			if (cli.hasOption("l")) {
+				demo = new DynoJedisDemo("dyno-localhost", rack);
+				demo.initWithLocalHost();
+			} else {
+				demo = new DynoJedisDemo(cli.getOptionValue("p"), rack);
+				if (!cli.hasOption("s")) {
 					if (hostsFile != null) {
 						demo.initWithRemoteClusterFromFile(hostsFile, port);
 					} else {
