@@ -1209,7 +1209,7 @@ public class DynoJedisDemo {
 				demo.initWithLocalHost();
 			} else {
 				demo = new DynoJedisDemo(cli.getOptionValue("p"), rack);
-				if (cli.hasOption("s")) {
+				if (!cli.hasOption("s")) {
 					if (hostsFile != null) {
 						demo.initWithRemoteClusterFromFile(hostsFile, port);
 					} else {
