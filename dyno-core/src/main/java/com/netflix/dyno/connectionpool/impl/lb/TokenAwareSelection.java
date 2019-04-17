@@ -15,15 +15,6 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl.lb;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import com.netflix.dyno.connectionpool.exception.BadRequestException;
-import org.apache.commons.lang3.StringUtils;
-
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.HashPartitioner;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
@@ -34,6 +25,13 @@ import com.netflix.dyno.connectionpool.impl.hash.BinarySearchTokenMapper;
 import com.netflix.dyno.connectionpool.impl.hash.Murmur1HashPartitioner;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
+import org.apache.commons.lang3.StringUtils;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Concrete implementation of the {@link HostSelectionStrategy} interface using
@@ -103,7 +101,7 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
                 throw new NoAvailableHostsException("Token not found for key " + key);
             }
 
-            hostPool = tokenPools.get(hToken.getToken());;
+            hostPool = tokenPools.get(hToken.getToken());
             if (hostPool == null) {
                 throw new NoAvailableHostsException(
                         "Could not find host connection pool for key: " + key + ", hash: " + tokenMapper.hash(key) + " Token:" + hToken.getToken());

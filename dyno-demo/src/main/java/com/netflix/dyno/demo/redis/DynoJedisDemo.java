@@ -17,15 +17,30 @@ package com.netflix.dyno.demo.redis;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.Lists;
-import com.netflix.dyno.connectionpool.*;
+import com.google.gson.Gson;
+import com.netflix.dyno.connectionpool.CursorBasedResult;
+import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
+import com.netflix.dyno.connectionpool.HostBuilder;
+import com.netflix.dyno.connectionpool.HostSupplier;
+import com.netflix.dyno.connectionpool.OperationResult;
+import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.contrib.ArchaiusConnectionPoolConfiguration;
-import com.netflix.dyno.jedis.DynoDualWriterClient;
 import com.netflix.dyno.jedis.DynoJedisClient;
 import com.netflix.dyno.jedis.DynoJedisPipeline;
+import com.netflix.dyno.recipes.json.DynoJedisJsonClient;
+import com.netflix.dyno.recipes.json.JsonPath;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.OptionGroup;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
@@ -39,10 +54,23 @@ import redis.clients.jedis.ScanResult;
 
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -266,7 +294,7 @@ public class DynoJedisDemo {
 
 	/**
 	 * This tests covers the use of binary keys
-	 * 
+	 *
 	 * @throws Exception
 	 */
 	public void runBinaryKeyTest() throws Exception {
@@ -275,7 +303,7 @@ public class DynoJedisDemo {
         byte[] videoInt =ByteBuffer.allocate(4).putInt(new Integer(100)).array();
         byte[] locInt =ByteBuffer.allocate(4).putInt(new Integer(200)).array();
         byte[] overallKey = new byte[videoInt.length + locInt.length];
-		
+
 		byte[] firstWindow = ByteBuffer.allocate(4).putFloat(new Float(1.25)).array();
 		byte[] secondWindow = ByteBuffer.allocate(4).putFloat(new Float(1.5)).array();
 		byte[] thirdWindow = ByteBuffer.allocate(4).putFloat(new Float(1.75)).array();
@@ -285,22 +313,22 @@ public class DynoJedisDemo {
 				+ fourthWindow.length];
 
         byte[] newKey = new byte[videoInt.length+locInt.length];
-		
+
 		// write
 		client.set(overallKey, overallVal);
 		System.out.println("Writing Key: " +  new String(overallKey, Charset.forName("UTF-8")));
-		
+
 		// read
 		OperationResult<byte[]> result = client.d_get(newKey);
 		System.out.println("Reading Key: " + new String(newKey, Charset.forName("UTF-8")) + ", Value: " + result.getResult().toString() + " " + result.getNode());
-		
+
 	}
 
 	/**
 	 * To run this test, the hashtag FP must be set on the Dynomite cluster. The
 	 * assumed hashtag for this test is {} hence each key is foo-{<String>}. To
 	 * validate that this test succeeds observe the cluster manually.
-	 * 
+	 *
 	 * @throws Exception
 	 */
 	public void runSimpleTestWithHashtag() throws Exception {
@@ -756,7 +784,7 @@ public class DynoJedisDemo {
 	/**
 	 * This demo runs a pipeline across ten different keys. The pipeline leverages
 	 * the hash value {bar} to determine the node where to send the data.
-	 * 
+	 *
 	 * @throws Exception
 	 */
 	public void runPipelineWithHashtag() throws Exception {
@@ -1072,7 +1100,7 @@ public class DynoJedisDemo {
 					"MUST set local for load balancing OR set the load balancing strategy to round robin");
 		}
 
-		String rack = props.getProperty("EC2_AVAILABILITY_ZONE", "us-east-1e");
+		String rack = props.getProperty("EC2_AVAILABILITY_ZONE", null);
 		String hostsFile = props.getProperty("dyno.demo.hostsFile");
 		String shadowHostsFile = props.getProperty("dyno.demo.shadowHostsFile");
 		int port = Integer.valueOf(props.getProperty("dyno.demo.port", "8102"));
