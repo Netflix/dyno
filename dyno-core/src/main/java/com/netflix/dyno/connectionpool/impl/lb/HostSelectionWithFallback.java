@@ -314,12 +314,7 @@ public class HostSelectionWithFallback<CL> {
 			return false;
 		}
 		Host host = hPool.getHost();
-
-		if (!host.isUp()) {
-			return false;
-		} else {
-			return hPool.isActive();
-		}
+		return host.isUp() && hPool.isActive();
 	}
 
 	private Map<HostToken, HostConnectionPool<CL>> getHostPoolsForRack(final Map<HostToken, HostConnectionPool<CL>> map, final String rack) {
