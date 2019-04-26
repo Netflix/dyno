@@ -42,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 /**
  * Acts as a coordinator over multiple HostSelectionStrategy implementations, where each maps to a particular rack.
@@ -334,6 +335,7 @@ public class HostSelectionWithFallback<CL> {
 	}
 
 	/**
+	 * Initialize the topology with the host pools obtained from discovery.
 	 * hPools comes from discovery.
 	 * @param hPools
 	 */
@@ -358,16 +360,7 @@ public class HostSelectionWithFallback<CL> {
 		}
 
 		// Initialize Remote selectors
-		Set<String> remoteRacks = new HashSet<String>();
-		for (Host host : hPools.keySet()) {
-			String rack = host.getRack();
-			if(localRack == null && rack != null) {
-				remoteRacks.add(rack);
-			}
-			else if (localRack != null && !localRack.isEmpty() && rack != null && !rack.isEmpty() && !localRack.equals(rack)) {
-				remoteRacks.add(rack);
-			}
-		}
+		Set<String> remoteRacks = hPools.keySet().stream().map(h -> h.getRack()).filter(rack -> !rack.equals(localRack)).collect(Collectors.toSet());
 
 		for (String rack : remoteRacks) {
 			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForRack(tokenPoolMap, rack);
@@ -381,10 +374,22 @@ public class HostSelectionWithFallback<CL> {
         topology.set(createTokenPoolTopology(allHostTokens));
 	}
 
+	/**
+	 * Calculate replication factor from the given list of hosts
+	 * @param allHostTokens
+	 * @return replicationFactor
+	 */
 	int calculateReplicationFactor(List<HostToken> allHostTokens) {
 		return calculateReplicationFactorForDC(allHostTokens, null);
 	}
 
+	/**
+	 * Calculate replication factor for a datacenter.
+	 * If datacenter is null we use one of the hosts from the list and use its DC.
+	 * @param allHostTokens
+	 * @param dataCenter
+	 * @return replicationFactor for the dataCenter
+	 */
 	int calculateReplicationFactorForDC(List<HostToken> allHostTokens, String dataCenter) {
 		Map<Long, Integer> groups = new HashMap<>();
 
@@ -392,11 +397,14 @@ public class HostSelectionWithFallback<CL> {
 		if (dataCenter == null) {
 		    if(localRack != null) {
 				dataCenter = localRack.substring(0, localRack.length() - 1);
+			} else {
+		        // No DC specified. Get the DC from the first host and use its replication factor
+		    	dataCenter = allHostTokens.get(0).getHost().getRack().substring(0, localRack.length() - 1);
 			}
 		}
 
 		for (HostToken hostToken: uniqueHostTokens) {
-		    if(dataCenter == null || hostToken.getHost().getRack().contains(dataCenter)) {
+		    if(hostToken.getHost().getRack().contains(dataCenter)) {
 				Long token = hostToken.getToken();
 				if (groups.containsKey(token)) {
 					int current = groups.get(token);
@@ -486,6 +494,11 @@ public class HostSelectionWithFallback<CL> {
 		}
 	}
 
+	/**
+	 * Create token pool topology from the host tokens
+	 * @param allHostTokens
+	 * @return tokenPoolTopology with the host information
+	 */
 	public TokenPoolTopology createTokenPoolTopology(List<HostToken> allHostTokens) {
 		TokenPoolTopology topology = new TokenPoolTopology(replicationFactor.get());
 		for (HostToken hostToken : allHostTokens) {
