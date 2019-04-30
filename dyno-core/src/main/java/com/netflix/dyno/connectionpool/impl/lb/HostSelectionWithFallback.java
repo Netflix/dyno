@@ -360,7 +360,7 @@ public class HostSelectionWithFallback<CL> {
 		}
 
 		// Initialize Remote selectors
-		Set<String> remoteRacks = hPools.keySet().stream().map(h -> h.getRack()).filter(rack -> !rack.equals(localRack)).collect(Collectors.toSet());
+		Set<String> remoteRacks = hPools.keySet().stream().map(h -> h.getRack()).filter(rack -> rack != null && !rack.equals(localRack)).collect(Collectors.toSet());
 
 		for (String rack : remoteRacks) {
 			Map<HostToken, HostConnectionPool<CL>> dcPools = getHostPoolsForRack(tokenPoolMap, rack);
