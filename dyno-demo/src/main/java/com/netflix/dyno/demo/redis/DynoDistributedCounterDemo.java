@@ -15,19 +15,21 @@
  ******************************************************************************/
 package com.netflix.dyno.demo.redis;
 
+import com.netflix.dyno.recipes.counter.DynoCounter;
+import com.netflix.dyno.recipes.counter.DynoJedisBatchCounter;
+import com.netflix.dyno.recipes.counter.DynoJedisCounter;
+import com.netflix.dyno.recipes.counter.DynoJedisPipelineCounter;
+
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import com.netflix.dyno.recipes.counter.DynoCounter;
-import com.netflix.dyno.recipes.counter.DynoJedisBatchCounter;
-import com.netflix.dyno.recipes.counter.DynoJedisPipelineCounter;
-import com.netflix.dyno.recipes.counter.DynoJedisCounter;
 
 /**
  * Demo of {@link DynoCounter} implementations.
@@ -234,12 +236,17 @@ public class DynoDistributedCounterDemo extends DynoJedisDemo {
      *             <ol>dynomite_cluster_name</ol>
      *             <ol># of distributed counters (optional)</ol>
      */
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
 
         final String clusterName = args[0];
 
         final DynoDistributedCounterDemo demo = new DynoDistributedCounterDemo(clusterName, "us-east-1e");
         int numCounters = (args.length == 2) ? Integer.valueOf(args[1]) : 1;
+        Properties props = new Properties();
+        props.load(DynoDistributedCounterDemo.class.getResourceAsStream("/demo.properties"));
+        for (String name : props.stringPropertyNames()) {
+            System.setProperty(name, props.getProperty(name));
+        }
 
         try {
             demo.initWithRemoteClusterFromEurekaUrl(args[0], 8102);
