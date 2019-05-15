@@ -394,6 +394,8 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 						cpMonitor.incOperationSuccess(connection.getHost(), System.currentTimeMillis() - startTime);
 
 						results.add(result);
+						
+						lastException = null;
 
 					} catch (NoAvailableHostsException e) {
 						cpMonitor.incOperationFailure(null, e);
