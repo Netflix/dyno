@@ -111,7 +111,7 @@ public class DynoDistributedCounterDemo extends DynoJedisDemo {
                                final AtomicInteger failure) {
 
         final Random random = new Random(System.currentTimeMillis());
-        final int numCounters = counters.size() > 1 ? counters.size() -1 : 1;
+        final int numCounters = counters.size() > 1 ? counters.size() - 1 : 1;
 
         for (int i = 0; i < numWriters; i++) {
 
@@ -222,7 +222,7 @@ public class DynoDistributedCounterDemo extends DynoJedisDemo {
     }
 
     public void cleanup(DynoCounter counter) throws Exception {
-        for (String key: counter.getGeneratedKeys()) {
+        for (String key : counter.getGeneratedKeys()) {
             System.out.println("deleting key: " + key);
             client.del(key);
             counter.close();
@@ -263,7 +263,6 @@ public class DynoDistributedCounterDemo extends DynoJedisDemo {
             System.out.println("Done");
         }
     }
-
 
 
 }

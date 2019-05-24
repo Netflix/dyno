@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 
 /**
  * Tests generic commands.
- *
+ * <p>
  * Note - The underlying jedis client has been mocked to echo back the value
  * given for SET operations
  */
@@ -72,7 +72,7 @@ public class ExpireHashTest {
         final String expireHashKey = "expireHashKey";
 
         Assert.assertEquals(new Long(1L), client.ehset(expireHashKey, "hello", "world", 900));
-        Assert.assertEquals(new Long(0L), client.ehsetnx(expireHashKey, "hello", "world",900));
+        Assert.assertEquals(new Long(0L), client.ehsetnx(expireHashKey, "hello", "world", 900));
         Assert.assertEquals("world", client.ehget(expireHashKey, "hello"));
         Assert.assertTrue(client.ehexists(expireHashKey, "hello"));
         Assert.assertEquals(new Long(1L), client.ehdel(expireHashKey, "hello"));
@@ -149,7 +149,7 @@ public class ExpireHashTest {
             fields.put(secondaryKeyPrefix + i, new ImmutablePair<>(valuePrefix + i, i + minTimeout));
         }
 
-        Assert.assertEquals("OK", client.ehmset(expireHashKey,fields));
+        Assert.assertEquals("OK", client.ehmset(expireHashKey, fields));
         long startTime = System.currentTimeMillis();
         Map<String, String> allFields = client.ehgetall(expireHashKey);
         List<String> mgetFields = client.ehmget(expireHashKey, fields.keySet().toArray(new String[0]));
@@ -207,7 +207,7 @@ public class ExpireHashTest {
             ScanResult<Map.Entry<String, String>> values = client.ehscan(expireHashKey, cursor);
             count += values.getResult().size();
             cursor = values.getCursor();
-        } while(cursor.compareTo("0") != 0);
+        } while (cursor.compareTo("0") != 0);
 
         Assert.assertEquals(fieldCount, count);
     }

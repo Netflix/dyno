@@ -23,6 +23,7 @@ public class JsonPath {
     public JsonPath() {
         pathBuilder = new StringBuilder();
     }
+
     public JsonPath(String path) {
         pathBuilder = new StringBuilder().append(path);
     }

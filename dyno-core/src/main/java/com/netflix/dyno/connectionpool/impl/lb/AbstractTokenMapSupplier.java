@@ -62,7 +62,7 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
  *      "rack": "dyno_sandbox--useast1e",
  *      "token": "1383429731",
  *      "zone": "us-east-1e",
- *      "hashtag" : "{}"      
+ *      "hashtag" : "{}"
  *  },
  *  {
  *      "dc": "eu-west-1",
@@ -81,7 +81,7 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
  *      "token": "1383429731",
  *      "zone": "eu-west-1b",
  *      "hashtag" : "{}"
-      
+ *
  *  },
  *  {
  *      "dc": "us-east-1",
@@ -91,14 +91,13 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
  *      "token": "1383429731",
  *      "zone": "us-east-1d",
  *      "hashtag" : "{}"
-
+ *
  *  }
- *]
+ * ]
  * </pre>
  *
  * @author poberai
  * @author ipapapa
- *
  */
 public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
 

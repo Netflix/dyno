@@ -1,12 +1,12 @@
 /**
  * Copyright 2016 Netflix, Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package com.netflix.dyno.contrib.consul;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -38,22 +39,22 @@ import com.netflix.dyno.connectionpool.HostSupplier;
 /**
  * Simple class that implements {@link Supplier}<{@link List}<{@link Host}>>. It provides a List<{@link Host}>
  * using the {@link DiscoveryManager} which is the consul client. 
- * 
+ *
  * Note that the class needs the consul application name to discover all instances for that application.
- * 
+ *
  * Example of register at consul
- * 
-  curl -X PUT http://localhost:8500/v1/agent/service/register -d "{
-           \"ID\": \"dynomite-8102\",
-           \"Name\": \"dynomite\",
-           \"Tags\": [\"datacenter=dc\",\"cloud=openstack\",\"rack=dc-rack\"],
-           \"Address\": \"127.0.0.2\",
-           \"Port\": 8102,
-           \"Check\": {
-           \"Interval\": \"10s\",
-           \"HTTP\": \"http://127.0.0.1:22222/ping\"
-          }}"
- * 
+ *
+ curl -X PUT http://localhost:8500/v1/agent/service/register -d "{
+ \"ID\": \"dynomite-8102\",
+ \"Name\": \"dynomite\",
+ \"Tags\": [\"datacenter=dc\",\"cloud=openstack\",\"rack=dc-rack\"],
+ \"Address\": \"127.0.0.2\",
+ \"Port\": 8102,
+ \"Check\": {
+ \"Interval\": \"10s\",
+ \"HTTP\": \"http://127.0.0.1:22222/ping\"
+ }}"
+ *
  * @author tiodollar
  */
 public class ConsulHostsSupplier implements HostSupplier {

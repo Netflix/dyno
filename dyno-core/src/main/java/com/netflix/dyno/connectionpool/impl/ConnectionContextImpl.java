@@ -1,12 +1,12 @@
 /*******************************************************************************
  * Copyright 2011 Netflix
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,30 +22,30 @@ import com.netflix.dyno.connectionpool.ConnectionContext;
 
 public class ConnectionContextImpl implements ConnectionContext {
 
-	private final ConcurrentHashMap<String, Object> context = new ConcurrentHashMap<String, Object>();
-	
-	@Override
-	public void setMetadata(String key, Object obj) {
-		context.put(key, obj);
-	}
+    private final ConcurrentHashMap<String, Object> context = new ConcurrentHashMap<String, Object>();
 
-	@Override
-	public Object getMetadata(String key) {
-		return context.get(key);
-	}
+    @Override
+    public void setMetadata(String key, Object obj) {
+        context.put(key, obj);
+    }
 
-	@Override
-	public boolean hasMetadata(String key) {
-		return context.containsKey(key);
-	}
+    @Override
+    public Object getMetadata(String key) {
+        return context.get(key);
+    }
 
-	@Override
-	public void reset() {
-		context.clear();
-	}
+    @Override
+    public boolean hasMetadata(String key) {
+        return context.containsKey(key);
+    }
 
-	@Override
-	public Map<String, Object> getAll() {
-		return context;
-	}
+    @Override
+    public void reset() {
+        context.clear();
+    }
+
+    @Override
+    public Map<String, Object> getAll() {
+        return context;
+    }
 }

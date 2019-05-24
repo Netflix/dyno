@@ -26,9 +26,8 @@ import java.util.List;
  * Callers must invoke {@link #close}.
  * </p>
  *
- * @see {@link AutoCloseable}
- *
  * @author jcacciatore
+ * @see {@link AutoCloseable}
  */
 public interface DynoCounter extends AutoCloseable {
 

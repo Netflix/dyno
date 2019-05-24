@@ -29,8 +29,8 @@ import com.netflix.dyno.jedis.DynoJedisClient;
 import javax.annotation.concurrent.ThreadSafe;
 
 /**
- *  Batch implementation of {@link DynoCounter} that uses an in-memory counter to
- *  track {@link #incr()} calls and flushes the value at the given frequency.
+ * Batch implementation of {@link DynoCounter} that uses an in-memory counter to
+ * track {@link #incr()} calls and flushes the value at the given frequency.
  */
 @ThreadSafe
 public class DynoJedisBatchCounter implements DynoCounter {

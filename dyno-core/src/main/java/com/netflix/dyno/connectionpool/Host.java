@@ -1,12 +1,12 @@
 /*******************************************************************************
  * Copyright 2011 Netflix
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,7 +23,7 @@ import org.apache.commons.lang3.StringUtils;
 
 /**
  * Class encapsulating information about a host.
- *
+ * <p>
  * This is immutable except for the host status. Note that the HostSupplier may
  * not know the Dynomite port, whereas the Host object created by the load
  * balancer may receive the port the cluster_describe REST call. Hence, we must
@@ -31,7 +31,6 @@ import org.apache.commons.lang3.StringUtils;
  *
  * @author poberai
  * @author ipapapa
- *
  */
 public class Host implements Comparable<Host> {
 
@@ -90,7 +89,7 @@ public class Host implements Comparable<Host> {
     }
 
     public Host(String name, String ipAddress, int port, String rack, String datacenter, Status status,
-            String hashtag) {
+                String hashtag) {
         this(name, ipAddress, port, port, rack, datacenter, status, hashtag);
     }
 
@@ -199,7 +198,7 @@ public class Host implements Comparable<Host> {
             return false;
 
         Host other = (Host) obj;
-        
+
         boolean equals = true;
 
         equals &= (hostname != null) ? hostname.equals(other.hostname) : other.hostname == null;
@@ -222,6 +221,6 @@ public class Host implements Comparable<Host> {
 
         return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: "
                 + rack + ", datacenter: " + datacenter + ", status: " + status.name() + ", hashtag="
-                + hashtag +  ", password=" + (Objects.nonNull(password) ? "masked" : "null") + "]";
+                + hashtag + ", password=" + (Objects.nonNull(password) ? "masked" : "null") + "]";
     }
 }

@@ -34,9 +34,9 @@ import static org.mockito.Mockito.when;
 
 /**
  * Tests compression commands.
- *
+ * <p>
  * Note - The underlying jedis client has been mocked to echo back the value given for SET operations and to
- *        ensure values over a 2KB threshold are compressed for HMSET operations.
+ * ensure values over a 2KB threshold are compressed for HMSET operations.
  */
 public class CompressionTest {
 
@@ -61,7 +61,7 @@ public class CompressionTest {
 
         opMonitor = new LastOperationMonitor();
 
-        connectionPool = new  UnitTestConnectionPoolForCompression(config, opMonitor);
+        connectionPool = new UnitTestConnectionPoolForCompression(config, opMonitor);
 
         client = new DynoJedisClient.TestBuilder()
                 .withAppname("CompressionTest")
@@ -125,7 +125,7 @@ public class CompressionTest {
 
         Assert.assertEquals(result.size(), keys.length);
 
-        for (int i = 0; i< keys.length; i++) {
+        for (int i = 0; i < keys.length; i++) {
             String value = result.get(i);
             Assert.assertEquals(value, values[i]);
         }
@@ -148,7 +148,7 @@ public class CompressionTest {
         String s = "ABCDEFG__abcdefg__1234567890'\"\\+=-::ABCDEFG__abcdefg__1234567890'\"\\+=-::ABCDEFG__abcdefg__1234567890'\"\\+=-";
         byte[] val = s.getBytes();
 
-        byte[] compressed =  ZipUtils.compressBytesNonBase64(val);
+        byte[] compressed = ZipUtils.compressBytesNonBase64(val);
 
         Assert.assertTrue(compressed.length < val.length);
 

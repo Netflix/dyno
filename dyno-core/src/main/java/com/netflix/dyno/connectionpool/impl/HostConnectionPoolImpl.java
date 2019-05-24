@@ -1,12 +1,12 @@
 /*******************************************************************************
  * Copyright 2011 Netflix
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -41,135 +41,134 @@ import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
 
 /**
  * Main impl for {@link HostConnectionPool}
- * 
- * This class does not allow shared access to the connections being managed for this pool. 
- * Hence it uses a {@link LinkedBlockingQueue} to manage the available connections. 
- * When a connection needs to be borrowed, we wait or poll the queue. As connections are returned, they are added back into the queue. 
- * This is the normal behavior during the "Active" state of this pool. 
- * 
- * The class also manages another state called "Inactive" where it can be put "Down" where it stops accepting requests for borrowing more connections, 
- * and simply terminates every connection that is returned to it. This is generally useful when the host is going away, or where the error rate 
- * from the connections of this pool are greater than a configured error threshold and then an external component decides to recycle the connection pool. 
- * 
- * @author poberai
+ * <p>
+ * This class does not allow shared access to the connections being managed for this pool.
+ * Hence it uses a {@link LinkedBlockingQueue} to manage the available connections.
+ * When a connection needs to be borrowed, we wait or poll the queue. As connections are returned, they are added back into the queue.
+ * This is the normal behavior during the "Active" state of this pool.
+ * <p>
+ * The class also manages another state called "Inactive" where it can be put "Down" where it stops accepting requests for borrowing more connections,
+ * and simply terminates every connection that is returned to it. This is generally useful when the host is going away, or where the error rate
+ * from the connections of this pool are greater than a configured error threshold and then an external component decides to recycle the connection pool.
  *
  * @param <CL>
+ * @author poberai
  */
 public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
-	private static final Logger Logger = LoggerFactory.getLogger(HostConnectionPoolImpl.class);
-	private static final int CONNECTION_CREATE_RETRY_CNT = 3;
-	
-	// The connections available for this connection pool
-	private final LinkedBlockingQueue<Connection<CL>> availableConnections = new LinkedBlockingQueue<Connection<CL>>();
-	// Track the no of connections open (both available and in use)
-	private final AtomicInteger numActiveConnections = new AtomicInteger(0);
-	
-	// Private members required by this class
-	private final Host host; 
-	private final ConnectionFactory<CL> connFactory; 
-	private final ConnectionPoolConfiguration cpConfig; 
-	private final ConnectionPoolMonitor monitor; 
-	
-	// states that dictate the behavior of the pool
-	
-	// cp not inited is the starting state of the pool. The pool will not allow connections to be borrowed in this state
-	private final ConnectionPoolState<CL> cpNotInited = new ConnectionPoolNotInited();
-	// cp active is where connections of the pool can be borrowed and returned
-	private final ConnectionPoolState<CL> cpActive = new ConnectionPoolActive(this);
-	// cp reconnecting is where connections cannot be borrowed and all returning connections will be shutdown
-	private final ConnectionPoolState<CL> cpReconnecting = new ConnectionPoolReconnectingOrDown();
-	// similar to reconnecting
-	private final ConnectionPoolState<CL> cpDown = new ConnectionPoolReconnectingOrDown();
-	
-	// The thread safe reference to the pool state
-	private final AtomicReference<ConnectionPoolState<CL>> cpState = new AtomicReference<ConnectionPoolState<CL>>(cpNotInited);
-	
-	public HostConnectionPoolImpl(Host host, ConnectionFactory<CL> conFactory, 
-			                      ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor poolMonitor) {
-		this.host = host;
-		this.connFactory = conFactory;
-		this.cpConfig = cpConfig;
-		this.monitor = poolMonitor;
-	}
-	
-	@Override
-	public Connection<CL> borrowConnection(int duration, TimeUnit unit) throws DynoException {
-		return cpState.get().borrowConnection(duration, unit);
-	}
+    private static final Logger Logger = LoggerFactory.getLogger(HostConnectionPoolImpl.class);
+    private static final int CONNECTION_CREATE_RETRY_CNT = 3;
 
-	@Override
-	public boolean returnConnection(Connection<CL> connection) {
-		return cpState.get().returnConnection(connection);
-	}
+    // The connections available for this connection pool
+    private final LinkedBlockingQueue<Connection<CL>> availableConnections = new LinkedBlockingQueue<Connection<CL>>();
+    // Track the no of connections open (both available and in use)
+    private final AtomicInteger numActiveConnections = new AtomicInteger(0);
 
-	@Override
-	public boolean closeConnection(Connection<CL> connection) {
-		return cpState.get().closeConnection(connection);
-	}
+    // Private members required by this class
+    private final Host host;
+    private final ConnectionFactory<CL> connFactory;
+    private final ConnectionPoolConfiguration cpConfig;
+    private final ConnectionPoolMonitor monitor;
 
-	@Override
-	public void recycleConnection(Connection<CL> connection) {
-		cpState.get().recycleConnection(connection);
-	}
+    // states that dictate the behavior of the pool
 
-	@Override
-	public void markAsDown(DynoException reason) {
+    // cp not inited is the starting state of the pool. The pool will not allow connections to be borrowed in this state
+    private final ConnectionPoolState<CL> cpNotInited = new ConnectionPoolNotInited();
+    // cp active is where connections of the pool can be borrowed and returned
+    private final ConnectionPoolState<CL> cpActive = new ConnectionPoolActive(this);
+    // cp reconnecting is where connections cannot be borrowed and all returning connections will be shutdown
+    private final ConnectionPoolState<CL> cpReconnecting = new ConnectionPoolReconnectingOrDown();
+    // similar to reconnecting
+    private final ConnectionPoolState<CL> cpDown = new ConnectionPoolReconnectingOrDown();
+
+    // The thread safe reference to the pool state
+    private final AtomicReference<ConnectionPoolState<CL>> cpState = new AtomicReference<ConnectionPoolState<CL>>(cpNotInited);
+
+    public HostConnectionPoolImpl(Host host, ConnectionFactory<CL> conFactory,
+                                  ConnectionPoolConfiguration cpConfig, ConnectionPoolMonitor poolMonitor) {
+        this.host = host;
+        this.connFactory = conFactory;
+        this.cpConfig = cpConfig;
+        this.monitor = poolMonitor;
+    }
+
+    @Override
+    public Connection<CL> borrowConnection(int duration, TimeUnit unit) throws DynoException {
+        return cpState.get().borrowConnection(duration, unit);
+    }
+
+    @Override
+    public boolean returnConnection(Connection<CL> connection) {
+        return cpState.get().returnConnection(connection);
+    }
+
+    @Override
+    public boolean closeConnection(Connection<CL> connection) {
+        return cpState.get().closeConnection(connection);
+    }
+
+    @Override
+    public void recycleConnection(Connection<CL> connection) {
+        cpState.get().recycleConnection(connection);
+    }
+
+    @Override
+    public void markAsDown(DynoException reason) {
         if (Logger.isDebugEnabled()) {
             Logger.debug(String.format("Marking Host Connection Pool %s DOWN", getHost()));
         }
-		
-		ConnectionPoolState<CL> currentState = cpState.get();
-		
-		if (currentState == cpDown) {
-			if (Logger.isDebugEnabled()) {
-				Logger.debug("CP is already down, hence ignoring mark as down request");
-			}
-			return;
-		}
-		
-		if (!(cpState.compareAndSet(currentState, cpDown))) {
-			// someone already beat us to it
-			return;
-		}
-		
-		monitor.hostDown(host, reason);
-        monitor.resetConnectionBorrowedLatStats(); // NOTE - SIDE EFFECT
-	}
 
-	@Override
+        ConnectionPoolState<CL> currentState = cpState.get();
+
+        if (currentState == cpDown) {
+            if (Logger.isDebugEnabled()) {
+                Logger.debug("CP is already down, hence ignoring mark as down request");
+            }
+            return;
+        }
+
+        if (!(cpState.compareAndSet(currentState, cpDown))) {
+            // someone already beat us to it
+            return;
+        }
+
+        monitor.hostDown(host, reason);
+        monitor.resetConnectionBorrowedLatStats(); // NOTE - SIDE EFFECT
+    }
+
+    @Override
     public void reconnect() {
 
         markAsDown(null);
-		reconnect(cpDown);
-	
-		if (cpState.get() == cpActive) {
-			monitor.hostUp(host, this);
-		}
-	}
+        reconnect(cpDown);
 
-	@Override
-	public void shutdown() {
-		
-		Logger.info("Shutting down connection pool for host:" + host);
-		cpState.set(cpDown);
-		
-		List<Connection<CL>> connections = new ArrayList<Connection<CL>>();
-		availableConnections.drainTo(connections);
-		
-		for (Connection<CL> connection : connections) {
-			cpState.get().closeConnection(connection);
-		}
-	}
+        if (cpState.get() == cpActive) {
+            monitor.hostUp(host, this);
+        }
+    }
 
-	@Override
-	public int primeConnections() throws DynoException {
+    @Override
+    public void shutdown() {
 
-		Logger.info("Priming connection pool for host:" + host + ", with conns:" + cpConfig.getMaxConnsPerHost());
+        Logger.info("Shutting down connection pool for host:" + host);
+        cpState.set(cpDown);
 
-		if(cpState.get() != cpNotInited) {
-			throw new DynoException("Connection pool has already been inited, cannot prime connections for host:" + host);
-		}
+        List<Connection<CL>> connections = new ArrayList<Connection<CL>>();
+        availableConnections.drainTo(connections);
+
+        for (Connection<CL> connection : connections) {
+            cpState.get().closeConnection(connection);
+        }
+    }
+
+    @Override
+    public int primeConnections() throws DynoException {
+
+        Logger.info("Priming connection pool for host:" + host + ", with conns:" + cpConfig.getMaxConnsPerHost());
+
+        if (cpState.get() != cpNotInited) {
+            throw new DynoException("Connection pool has already been inited, cannot prime connections for host:" + host);
+        }
 
         int primedConnectionCount = reconnect(cpNotInited);
 
@@ -180,208 +179,207 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
         }
 
         return primedConnectionCount;
-	}
+    }
 
-	private int reconnect(ConnectionPoolState<CL> prevState) throws DynoException {
+    private int reconnect(ConnectionPoolState<CL> prevState) throws DynoException {
 
-		if (!(cpState.compareAndSet(prevState, cpReconnecting))) {
-			Logger.info("Reconnect connections already called by someone else, ignoring reconnect connections request");
-			return 0;
-		}
-		
-		int successfullyCreated = 0; 
-		
-		for (int i = 0; i < cpConfig.getMaxConnsPerHost(); i++) {
-			boolean success = createConnectionWithRetries();
-			if (success) {
-				successfullyCreated++;
-			}
-		}
-		
-		if (successfullyCreated == cpConfig.getMaxConnsPerHost()) {
-			if (!(cpState.compareAndSet(cpReconnecting, cpActive))) {
-				throw new IllegalStateException("something went wrong with prime connections");
-			}
-		} else {
-			if (!(cpState.compareAndSet(cpReconnecting, cpDown))) {
-				throw new IllegalStateException("something went wrong with prime connections");
-			}
-		}
-		return successfullyCreated;
-	}
-	
-	private boolean createConnectionWithRetries() {
-		
-		boolean success = false;
-		RetryPolicy retry = new RetryNTimes.RetryFactory(CONNECTION_CREATE_RETRY_CNT).getRetryPolicy();
-		
-		retry.begin();
-		
-		while (retry.allowRetry()) {
-			
-			try {
-				cpActive.createConnection();
-				retry.success();
-				success = true;
-				break;
-			} catch (DynoException e) {
-				retry.failure(e);
-			}
-		}
-		
-		return success;
-	}
+        if (!(cpState.compareAndSet(prevState, cpReconnecting))) {
+            Logger.info("Reconnect connections already called by someone else, ignoring reconnect connections request");
+            return 0;
+        }
 
-	@Override
-	public Host getHost() {
-		return host;
-	}
+        int successfullyCreated = 0;
 
-	@Override
-	public boolean isActive() {
-		return cpState.get() == cpActive;
-	}
+        for (int i = 0; i < cpConfig.getMaxConnsPerHost(); i++) {
+            boolean success = createConnectionWithRetries();
+            if (success) {
+                successfullyCreated++;
+            }
+        }
 
-	@Override
-	public boolean isShutdown() {
-		return cpState.get() == cpDown;
-	}
-	
-	/**
-	 * DO NOT call this method on this pool. This pool needs to manage shared thread safe access to connections
-	 * and hence at any given time all connections are being used by some operation. 
-	 * In any case getAllConnections() is meant for ping based active monitoring of connections which is not needed for this 
-	 * pool since it is "sync" in nature. For sync pools we collect feedback from the operations directly and relay that to 
-	 * ConnectionPoolHealthChecker.
-	 * 
-	 */
-	@Override
-	public Collection<Connection<CL>> getAllConnections() {
-		throw new RuntimeException("Not Implemented");
-	}
+        if (successfullyCreated == cpConfig.getMaxConnsPerHost()) {
+            if (!(cpState.compareAndSet(cpReconnecting, cpActive))) {
+                throw new IllegalStateException("something went wrong with prime connections");
+            }
+        } else {
+            if (!(cpState.compareAndSet(cpReconnecting, cpDown))) {
+                throw new IllegalStateException("something went wrong with prime connections");
+            }
+        }
+        return successfullyCreated;
+    }
 
-	@Override
-	public int getConnectionTimeout() {
-		return cpConfig.getConnectTimeout();
-	}
+    private boolean createConnectionWithRetries() {
 
-	@Override
-	public int getSocketTimeout() {
-		return cpConfig.getSocketTimeout();
-	}
+        boolean success = false;
+        RetryPolicy retry = new RetryNTimes.RetryFactory(CONNECTION_CREATE_RETRY_CNT).getRetryPolicy();
 
-	@Override
-	public int size() {
-		return cpState.get().connectionsCount();
-	}
+        retry.begin();
 
-	private interface ConnectionPoolState<CL> {
-		
-		
-		Connection<CL> createConnection(); 
-		
-		Connection<CL> borrowConnection(int duration, TimeUnit unit);
-		
-		boolean returnConnection(Connection<CL> connection);
-		
-		boolean closeConnection(Connection<CL> connection);
+        while (retry.allowRetry()) {
 
-		void recycleConnection(Connection<CL> connection);
+            try {
+                cpActive.createConnection();
+                retry.success();
+                success = true;
+                break;
+            } catch (DynoException e) {
+                retry.failure(e);
+            }
+        }
 
-		int connectionsCount();
-	}
-	
-	
-	private class ConnectionPoolActive implements ConnectionPoolState<CL> {
+        return success;
+    }
 
-		private final HostConnectionPoolImpl<CL> pool; 
-		
-		private ConnectionPoolActive(HostConnectionPoolImpl<CL> cp) {
-			pool = cp;
-		}
-		
-		@Override
-		public Connection<CL> createConnection() {
-			
-			try { 
-				Connection<CL> connection = connFactory.createConnection((HostConnectionPool<CL>) pool, null);
-				connection.open();
-				availableConnections.add(connection);
+    @Override
+    public Host getHost() {
+        return host;
+    }
 
-				monitor.incConnectionCreated(host);
-				numActiveConnections.incrementAndGet();
-				
-				return connection;
-			} catch (DynoConnectException e) {
+    @Override
+    public boolean isActive() {
+        return cpState.get() == cpActive;
+    }
+
+    @Override
+    public boolean isShutdown() {
+        return cpState.get() == cpDown;
+    }
+
+    /**
+     * DO NOT call this method on this pool. This pool needs to manage shared thread safe access to connections
+     * and hence at any given time all connections are being used by some operation.
+     * In any case getAllConnections() is meant for ping based active monitoring of connections which is not needed for this
+     * pool since it is "sync" in nature. For sync pools we collect feedback from the operations directly and relay that to
+     * ConnectionPoolHealthChecker.
+     */
+    @Override
+    public Collection<Connection<CL>> getAllConnections() {
+        throw new RuntimeException("Not Implemented");
+    }
+
+    @Override
+    public int getConnectionTimeout() {
+        return cpConfig.getConnectTimeout();
+    }
+
+    @Override
+    public int getSocketTimeout() {
+        return cpConfig.getSocketTimeout();
+    }
+
+    @Override
+    public int size() {
+        return cpState.get().connectionsCount();
+    }
+
+    private interface ConnectionPoolState<CL> {
+
+
+        Connection<CL> createConnection();
+
+        Connection<CL> borrowConnection(int duration, TimeUnit unit);
+
+        boolean returnConnection(Connection<CL> connection);
+
+        boolean closeConnection(Connection<CL> connection);
+
+        void recycleConnection(Connection<CL> connection);
+
+        int connectionsCount();
+    }
+
+
+    private class ConnectionPoolActive implements ConnectionPoolState<CL> {
+
+        private final HostConnectionPoolImpl<CL> pool;
+
+        private ConnectionPoolActive(HostConnectionPoolImpl<CL> cp) {
+            pool = cp;
+        }
+
+        @Override
+        public Connection<CL> createConnection() {
+
+            try {
+                Connection<CL> connection = connFactory.createConnection((HostConnectionPool<CL>) pool, null);
+                connection.open();
+                availableConnections.add(connection);
+
+                monitor.incConnectionCreated(host);
+                numActiveConnections.incrementAndGet();
+
+                return connection;
+            } catch (DynoConnectException e) {
 				/* adding error log under debug flag to avoid flooding log lines
 				   while debugging specific error scenarios.
 				 */
-				if (Logger.isDebugEnabled()) {
-					if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
-						Logger.error("Failed to create connection", e);
-					}
-				}
-				monitor.incConnectionCreateFailed(host, e);
-				throw e;
-			} catch (RuntimeException e) {
-				if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
-					Logger.error("Failed to create connection", e);
-				}
-				monitor.incConnectionCreateFailed(host, e);
-				throw new DynoConnectException(e);
-			}
-		}
+                if (Logger.isDebugEnabled()) {
+                    if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
+                        Logger.error("Failed to create connection", e);
+                    }
+                }
+                monitor.incConnectionCreateFailed(host, e);
+                throw e;
+            } catch (RuntimeException e) {
+                if (monitor.getConnectionCreateFailedCount() % 10000 == 0) {
+                    Logger.error("Failed to create connection", e);
+                }
+                monitor.incConnectionCreateFailed(host, e);
+                throw new DynoConnectException(e);
+            }
+        }
 
 
-		@Override
-		public boolean returnConnection(Connection<CL> connection) {
-			try {
-				if (numActiveConnections.get() > cpConfig.getMaxConnsPerHost()) {
+        @Override
+        public boolean returnConnection(Connection<CL> connection) {
+            try {
+                if (numActiveConnections.get() > cpConfig.getMaxConnsPerHost()) {
                     // Just close the connection
                     return closeConnection(connection);
                 } else {
-					// Add the given connection back to the pool
-					availableConnections.add(connection);
-					return false;
-				}
-			} finally { 
-				monitor.incConnectionReturned(host);
-			}
-		}
+                    // Add the given connection back to the pool
+                    availableConnections.add(connection);
+                    return false;
+                }
+            } finally {
+                monitor.incConnectionReturned(host);
+            }
+        }
 
-		@Override
-		public boolean closeConnection(Connection<CL> connection) {
-			try  {
-				connection.close();
-				return true;
-			} catch (Exception e) {
-				Logger.error("Failed to close connection for host: " + host + " " + e.getMessage());
-				return false;
-			} finally {
-				numActiveConnections.decrementAndGet();
-				monitor.incConnectionClosed(host, connection.getLastException());
-			}
-		}
+        @Override
+        public boolean closeConnection(Connection<CL> connection) {
+            try {
+                connection.close();
+                return true;
+            } catch (Exception e) {
+                Logger.error("Failed to close connection for host: " + host + " " + e.getMessage());
+                return false;
+            } finally {
+                numActiveConnections.decrementAndGet();
+                monitor.incConnectionClosed(host, connection.getLastException());
+            }
+        }
 
-		@Override
-		public void recycleConnection(Connection<CL> connection) {
-			this.closeConnection(connection);
-			monitor.incConnectionReturned(host);
-			// Create a new connection and add it to pool
-			if (createConnectionWithRetries()) {
-				monitor.incConnectionRecycled(host);
-			} else {
-				Logger.error("Connection recycle failed to create a new connection");
-			}
-		}
+        @Override
+        public void recycleConnection(Connection<CL> connection) {
+            this.closeConnection(connection);
+            monitor.incConnectionReturned(host);
+            // Create a new connection and add it to pool
+            if (createConnectionWithRetries()) {
+                monitor.incConnectionRecycled(host);
+            } else {
+                Logger.error("Connection recycle failed to create a new connection");
+            }
+        }
 
-		@Override
-		public int connectionsCount() {
-			return numActiveConnections.get();
-		}
+        @Override
+        public int connectionsCount() {
+            return numActiveConnections.get();
+        }
 
-		@Override
-		public Connection<CL> borrowConnection(int duration, TimeUnit unit) {
+        @Override
+        public Connection<CL> borrowConnection(int duration, TimeUnit unit) {
 
             if (numActiveConnections.get() < 1) {
                 // Need to throw something other than DynoConnectException in order to bubble past HostSelectionWithFallback
@@ -391,116 +389,115 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
             }
 
             // Start recording how long it takes to get the connection - for insight/metrics
-			long startTime = System.nanoTime()/1000;
+            long startTime = System.nanoTime() / 1000;
 
-			Connection<CL> conn = null;
-			try {
-				// wait on the connection pool with a timeout
-				conn = availableConnections.poll(duration, unit);
-			} catch (InterruptedException e) {
-				Logger.info("Thread interrupted when waiting on connections");
-				throw new DynoConnectException(e);
-			}
+            Connection<CL> conn = null;
+            try {
+                // wait on the connection pool with a timeout
+                conn = availableConnections.poll(duration, unit);
+            } catch (InterruptedException e) {
+                Logger.info("Thread interrupted when waiting on connections");
+                throw new DynoConnectException(e);
+            }
 
-			long delay = System.nanoTime()/1000 - startTime;
+            long delay = System.nanoTime() / 1000 - startTime;
 
-			if (conn == null) {
+            if (conn == null) {
                 throw new PoolTimeoutException("Fast fail waiting for connection from pool")
                         .setHost(getHost())
                         .setLatency(delay);
-			}
+            }
 
             monitor.incConnectionBorrowed(host, delay);
-			return conn;
-		}
-	}
+            return conn;
+        }
+    }
 
 
-	
-	private class ConnectionPoolReconnectingOrDown implements ConnectionPoolState<CL> {
-		
-		private ConnectionPoolReconnectingOrDown() {
-		}
+    private class ConnectionPoolReconnectingOrDown implements ConnectionPoolState<CL> {
 
-		@Override
-		public Connection<CL> createConnection() {
-			throw new PoolOfflineException(getHost(), "Cannot create new connection when pool is down");
-		}
+        private ConnectionPoolReconnectingOrDown() {
+        }
 
-		@Override
-		public Connection<CL> borrowConnection(int duration, TimeUnit unit) {
-			throw new PoolOfflineException(getHost(), "Cannot borrow connection when pool is down");
-		}
+        @Override
+        public Connection<CL> createConnection() {
+            throw new PoolOfflineException(getHost(), "Cannot create new connection when pool is down");
+        }
 
-		@Override
-		public boolean returnConnection(Connection<CL> connection) {
-			
-			monitor.incConnectionReturned(host);
-			return closeConnection(connection);
-		}
+        @Override
+        public Connection<CL> borrowConnection(int duration, TimeUnit unit) {
+            throw new PoolOfflineException(getHost(), "Cannot borrow connection when pool is down");
+        }
 
-		@Override
-		public boolean closeConnection(Connection<CL> connection) {
-			try  {
-				connection.close();
-				return true;
-			} catch (Exception e) {
-				Logger.warn("Failed to close connection for host: " + host + " " + e.getMessage());
-				return false;
-			} finally {
-				numActiveConnections.decrementAndGet();
-				monitor.incConnectionClosed(host, connection.getLastException());
-			}
-		}
+        @Override
+        public boolean returnConnection(Connection<CL> connection) {
 
-		@Override
-		public void recycleConnection(Connection<CL> connection) {
-			this.closeConnection(connection);
-		}
+            monitor.incConnectionReturned(host);
+            return closeConnection(connection);
+        }
 
-		@Override
-		public int connectionsCount() {
-			return 0;
-		}
-	}
-	
-	private class ConnectionPoolNotInited implements ConnectionPoolState<CL> {
-		
-		private ConnectionPoolNotInited() {
-		}
+        @Override
+        public boolean closeConnection(Connection<CL> connection) {
+            try {
+                connection.close();
+                return true;
+            } catch (Exception e) {
+                Logger.warn("Failed to close connection for host: " + host + " " + e.getMessage());
+                return false;
+            } finally {
+                numActiveConnections.decrementAndGet();
+                monitor.incConnectionClosed(host, connection.getLastException());
+            }
+        }
 
-		@Override
-		public Connection<CL> createConnection() {
-			throw new DynoConnectException("Pool must be initialized first");
-		}
+        @Override
+        public void recycleConnection(Connection<CL> connection) {
+            this.closeConnection(connection);
+        }
 
-		@Override
-		public Connection<CL> borrowConnection(int duration, TimeUnit unit) {
-			throw new DynoConnectException("Pool must be initialized first");
-		}
+        @Override
+        public int connectionsCount() {
+            return 0;
+        }
+    }
 
-		@Override
-		public boolean returnConnection(Connection<CL> connection) {
-			throw new DynoConnectException("Pool must be initialized first");
-		}
+    private class ConnectionPoolNotInited implements ConnectionPoolState<CL> {
 
-		@Override
-		public boolean closeConnection(Connection<CL> connection) {
-			throw new DynoConnectException("Pool must be initialized first");
-		}
+        private ConnectionPoolNotInited() {
+        }
 
-		@Override
-		public void recycleConnection(Connection<CL> connection) {
-			throw new DynoConnectException("Pool must be initialized first");
-		}
+        @Override
+        public Connection<CL> createConnection() {
+            throw new DynoConnectException("Pool must be initialized first");
+        }
 
-		@Override
-		public int connectionsCount() {
-			return 0;
-		}
-	}
-	
-	public String toString() {
-		return "HostConnectionPool: [Host: " + host + ", Pool active: " + isActive() + "]";
-	}
+        @Override
+        public Connection<CL> borrowConnection(int duration, TimeUnit unit) {
+            throw new DynoConnectException("Pool must be initialized first");
+        }
+
+        @Override
+        public boolean returnConnection(Connection<CL> connection) {
+            throw new DynoConnectException("Pool must be initialized first");
+        }
+
+        @Override
+        public boolean closeConnection(Connection<CL> connection) {
+            throw new DynoConnectException("Pool must be initialized first");
+        }
+
+        @Override
+        public void recycleConnection(Connection<CL> connection) {
+            throw new DynoConnectException("Pool must be initialized first");
+        }
+
+        @Override
+        public int connectionsCount() {
+            return 0;
+        }
+    }
+
+    public String toString() {
+        return "HostConnectionPool: [Host: " + host + ", Pool active: " + isActive() + "]";
+    }
 }
