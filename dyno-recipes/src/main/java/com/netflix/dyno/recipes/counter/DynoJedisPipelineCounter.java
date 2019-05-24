@@ -40,9 +40,8 @@ import com.netflix.dyno.recipes.util.Tuple;
  * Note that this implementation is thread-safe whereas {@link DynoJedisPipeline} is not.
  * </p>
  *
- * @see <a href="http://redis.io/topics/pipelining">Redis Pipelining</a>
- *
  * @author jcacciatore
+ * @see <a href="http://redis.io/topics/pipelining">Redis Pipelining</a>
  */
 @ThreadSafe
 public class DynoJedisPipelineCounter extends DynoJedisCounter {
@@ -150,7 +149,7 @@ public class DynoJedisPipelineCounter extends DynoJedisCounter {
             this.queue = queue;
             this.keys = keys;
             keysAndPipelines = new ArrayList<Tuple<String, DynoJedisPipeline>>(keys.size());
-            for (String key: keys) {
+            for (String key : keys) {
                 keysAndPipelines.add(new Tuple<String, DynoJedisPipeline>(key, client.pipelined()));
             }
         }

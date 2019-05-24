@@ -28,5 +28,4 @@ public interface ConnectionPoolConfigurationPublisher {
     void publish();
 
 
-
 }

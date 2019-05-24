@@ -18,7 +18,7 @@ public class UnitTestTokenMapAndHostSupplierImpl implements TokenMapSupplier, Ho
     public UnitTestTokenMapAndHostSupplierImpl(int serverCount, String rack) throws IOException {
         int hostTokenStride = Integer.MAX_VALUE / serverCount;
 
-        for(int i = 0; i < serverCount; i++) {
+        for (int i = 0; i < serverCount; i++) {
             int port = findFreePort();
             RedisServer redisServer = new RedisServer(port);
             redisServer.start();
@@ -59,10 +59,16 @@ public class UnitTestTokenMapAndHostSupplierImpl implements TokenMapSupplier, Ho
         return new ArrayList<>(hostTokenMap.keySet());
     }
 
-    public void shutdown() { redisServers.forEach(x -> x.getLeft().stop()); }
+    public void shutdown() {
+        redisServers.forEach(x -> x.getLeft().stop());
+    }
 
-    public void pauseServer(int idx) { redisServers.get(idx).getLeft().stop(); }
+    public void pauseServer(int idx) {
+        redisServers.get(idx).getLeft().stop();
+    }
 
-    public void resumeServer(int idx) { redisServers.get(idx).getLeft().start(); }
+    public void resumeServer(int idx) {
+        redisServers.get(idx).getLeft().start();
+    }
 }
 

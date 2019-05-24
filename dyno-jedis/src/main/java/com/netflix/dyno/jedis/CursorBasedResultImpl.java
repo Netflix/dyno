@@ -56,7 +56,7 @@ public class CursorBasedResultImpl<T> implements CursorBasedResult<T>, TokenRack
     @Override
     public List<T> getResult() {
         final List<T> aggregated = new ArrayList<>();
-        for (ScanResult<T> sr: result.values()) {
+        for (ScanResult<T> sr : result.values()) {
             aggregated.addAll(sr.getResult());
         }
         return aggregated;
@@ -83,8 +83,8 @@ public class CursorBasedResultImpl<T> implements CursorBasedResult<T>, TokenRack
 
     @Override
     public boolean isComplete() {
-        for (ScanResult r: result.values()) {
-            if (!r.getStringCursor().equals("0")) {
+        for (ScanResult r : result.values()) {
+            if (!r.getCursor().equals("0")) {
                 return false;
             }
         }

@@ -50,141 +50,141 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 
     private static final org.slf4j.Logger Logger = LoggerFactory.getLogger(JedisConnectionFactory.class);
 
-	private final OperationMonitor opMonitor;
+    private final OperationMonitor opMonitor;
     private final SSLSocketFactory sslSocketFactory;
 
-	public JedisConnectionFactory(OperationMonitor monitor, SSLSocketFactory sslSocketFactory) {
-		this.opMonitor = monitor;
+    public JedisConnectionFactory(OperationMonitor monitor, SSLSocketFactory sslSocketFactory) {
+        this.opMonitor = monitor;
         this.sslSocketFactory = sslSocketFactory;
-	}
+    }
 
-	@Override
-	public Connection<Jedis> createConnection(HostConnectionPool<Jedis> pool, ConnectionObservor connectionObservor)
-			throws DynoConnectException, ThrottledException {
+    @Override
+    public Connection<Jedis> createConnection(HostConnectionPool<Jedis> pool, ConnectionObservor connectionObservor)
+            throws DynoConnectException, ThrottledException {
 
-		return new JedisConnection(pool);
-	}
+        return new JedisConnection(pool);
+    }
 
-	public class JedisConnection implements Connection<Jedis> {
+    public class JedisConnection implements Connection<Jedis> {
 
-		private final HostConnectionPool<Jedis> hostPool;
-		private final Jedis jedisClient;
-		private final ConnectionContextImpl context = new ConnectionContextImpl();
+        private final HostConnectionPool<Jedis> hostPool;
+        private final Jedis jedisClient;
+        private final ConnectionContextImpl context = new ConnectionContextImpl();
 
-		private DynoConnectException lastDynoException;
+        private DynoConnectException lastDynoException;
 
-		public JedisConnection(HostConnectionPool<Jedis> hostPool) {
-			this.hostPool = hostPool;
-			Host host = hostPool.getHost();
+        public JedisConnection(HostConnectionPool<Jedis> hostPool) {
+            this.hostPool = hostPool;
+            Host host = hostPool.getHost();
 
-			if (sslSocketFactory == null) {
-				JedisShardInfo shardInfo = new JedisShardInfo(host.getHostAddress(), host.getPort(),
-						hostPool.getConnectionTimeout(), hostPool.getSocketTimeout(), Sharded.DEFAULT_WEIGHT);
-				shardInfo.setPassword(host.getPassword());
+            if (sslSocketFactory == null) {
+                JedisShardInfo shardInfo = new JedisShardInfo(host.getHostAddress(), host.getPort(),
+                        hostPool.getConnectionTimeout(), hostPool.getSocketTimeout(), Sharded.DEFAULT_WEIGHT);
+                shardInfo.setPassword(host.getPassword());
 
-				jedisClient = new Jedis(shardInfo);
-			} else {
-				JedisShardInfo shardInfo = new JedisShardInfo(host.getHostAddress(), host.getPort(),
-						hostPool.getConnectionTimeout(), hostPool.getSocketTimeout(), Sharded.DEFAULT_WEIGHT,
-						true, sslSocketFactory, new SSLParameters(), null);
-				shardInfo.setPassword(host.getPassword());
+                jedisClient = new Jedis(shardInfo);
+            } else {
+                JedisShardInfo shardInfo = new JedisShardInfo(host.getHostAddress(), host.getPort(),
+                        hostPool.getConnectionTimeout(), hostPool.getSocketTimeout(), Sharded.DEFAULT_WEIGHT,
+                        true, sslSocketFactory, new SSLParameters(), null);
+                shardInfo.setPassword(host.getPassword());
 
-				jedisClient = new Jedis(shardInfo);
-			}
-		}
+                jedisClient = new Jedis(shardInfo);
+            }
+        }
 
-		@Override
-		public <R> OperationResult<R> execute(Operation<Jedis, R> op) throws DynoException {
+        @Override
+        public <R> OperationResult<R> execute(Operation<Jedis, R> op) throws DynoException {
 
-			long startTime = System.nanoTime()/1000;
-			String opName = op.getName();
+            long startTime = System.nanoTime() / 1000;
+            String opName = op.getName();
 
-			OperationResultImpl<R> opResult = null;
+            OperationResultImpl<R> opResult = null;
 
-			try {
-				R result = op.execute(jedisClient, context);
-				if (context.hasMetadata("compression") || context.hasMetadata("decompression")) {
+            try {
+                R result = op.execute(jedisClient, context);
+                if (context.hasMetadata("compression") || context.hasMetadata("decompression")) {
                     opMonitor.recordSuccess(opName, true);
                 } else {
                     opMonitor.recordSuccess(opName);
                 }
-				opResult = new OperationResultImpl<R>(opName, result, opMonitor);
-				opResult.addMetadata("connectionId", String.valueOf(this.hashCode()));
+                opResult = new OperationResultImpl<R>(opName, result, opMonitor);
+                opResult.addMetadata("connectionId", String.valueOf(this.hashCode()));
                 return opResult;
 
-			} catch (JedisConnectionException ex) {
+            } catch (JedisConnectionException ex) {
                 Logger.warn("Caught JedisConnectionException: " + ex.getMessage());
-				opMonitor.recordFailure(opName, ex.getMessage());
-				lastDynoException = (DynoConnectException) new FatalConnectionException(ex).setAttempt(1).setHost(this.getHost());
-				throw lastDynoException;
+                opMonitor.recordFailure(opName, ex.getMessage());
+                lastDynoException = (DynoConnectException) new FatalConnectionException(ex).setAttempt(1).setHost(this.getHost());
+                throw lastDynoException;
 
-			} catch (RuntimeException ex) {
+            } catch (RuntimeException ex) {
                 Logger.warn("Caught RuntimeException: " + ex.getMessage());
-				opMonitor.recordFailure(opName, ex.getMessage());
-				lastDynoException = (DynoConnectException) new FatalConnectionException(ex).setAttempt(1).setHost(this.getHost());
-				throw lastDynoException;
+                opMonitor.recordFailure(opName, ex.getMessage());
+                lastDynoException = (DynoConnectException) new FatalConnectionException(ex).setAttempt(1).setHost(this.getHost());
+                throw lastDynoException;
 
-			} finally {
-				long duration = System.nanoTime()/1000 - startTime;
-				if (opResult != null) {
-					opResult.setLatency(duration, TimeUnit.MICROSECONDS);
-				}
-			}
-		}
+            } finally {
+                long duration = System.nanoTime() / 1000 - startTime;
+                if (opResult != null) {
+                    opResult.setLatency(duration, TimeUnit.MICROSECONDS);
+                }
+            }
+        }
 
-		@Override
-		public <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<Jedis, R> op) throws DynoException {
-			throw new NotImplementedException();
-		}
+        @Override
+        public <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<Jedis, R> op) throws DynoException {
+            throw new NotImplementedException();
+        }
 
-		@Override
-		public void close() {
-			jedisClient.quit();
-			jedisClient.disconnect();
-		}
+        @Override
+        public void close() {
+            jedisClient.quit();
+            jedisClient.disconnect();
+        }
 
-		@Override
-		public Host getHost() {
-			return hostPool.getHost();
-		}
+        @Override
+        public Host getHost() {
+            return hostPool.getHost();
+        }
 
-		@Override
-		public void open() throws DynoException {
-			jedisClient.connect();
-		}
+        @Override
+        public void open() throws DynoException {
+            jedisClient.connect();
+        }
 
-		@Override
-		public DynoConnectException getLastException() {
-			return lastDynoException;
-		}
+        @Override
+        public DynoConnectException getLastException() {
+            return lastDynoException;
+        }
 
-		@Override
-		public HostConnectionPool<Jedis> getParentConnectionPool() {
-			return hostPool;
-		}
+        @Override
+        public HostConnectionPool<Jedis> getParentConnectionPool() {
+            return hostPool;
+        }
 
-		@Override
-		public void execPing() {
-			final String result;
+        @Override
+        public void execPing() {
+            final String result;
 
-			try {
-				result = jedisClient.ping();
-			} catch (JedisConnectionException e) {
-				throw new DynoConnectException("Unsuccessful ping", e);
-			}
+            try {
+                result = jedisClient.ping();
+            } catch (JedisConnectionException e) {
+                throw new DynoConnectException("Unsuccessful ping", e);
+            }
 
-			if (result == null || result.isEmpty()) {
-				throw new DynoConnectException("Unsuccessful ping, got empty result");
-			}
-		}
+            if (result == null || result.isEmpty()) {
+                throw new DynoConnectException("Unsuccessful ping, got empty result");
+            }
+        }
 
-		@Override
-		public ConnectionContext getContext() {
-			return context;
-		}
+        @Override
+        public ConnectionContext getContext() {
+            return context;
+        }
 
-		public Jedis getClient() {
-			return jedisClient;
-		}
-	}
+        public Jedis getClient() {
+            return jedisClient;
+        }
+    }
 }

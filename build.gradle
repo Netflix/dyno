@@ -43,7 +43,7 @@ subprojects {
 project(':dyno-core') {
     apply plugin: 'osgi'
     apply plugin: 'project-report'
-    
+
     dependencies {
         compile 'org.apache.commons:commons-math:2.2'
         compile 'org.apache.commons:commons-lang3:3.6'
@@ -54,7 +54,7 @@ project(':dyno-core') {
 project(':dyno-contrib') {
     apply plugin: 'osgi'
     apply plugin: 'project-report'
-    
+
     dependencies {
         compile project(':dyno-core')
         compile 'com.google.inject:guice:4.1.0'
@@ -62,9 +62,9 @@ project(':dyno-contrib') {
         compile 'com.netflix.servo:servo-core:0.12.17'
         compile 'com.netflix.eureka:eureka-client:1.8.6'
         compile 'org.apache.commons:commons-lang3:3.5'
-        compile ('com.ecwid.consul:consul-api:1.2.1') {
+        compile('com.ecwid.consul:consul-api:1.2.1') {
             exclude group: 'org.apache.httpcomponents'
-        }       
+        }
         testCompile 'com.pszymczyk.consul:embedded-consul:0.3.3'
     }
 }

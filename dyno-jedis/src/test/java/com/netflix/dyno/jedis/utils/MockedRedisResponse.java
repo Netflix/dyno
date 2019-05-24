@@ -20,7 +20,7 @@ import static com.netflix.dyno.jedis.utils.SSLContextUtil.createAndInitSSLContex
  * $4\r\n
  * test\r\n
  * </pre>
- *
+ * <p>
  * It allows us to test SSL/TLS end to end scenario, assuming that after connection
  * to redis(here, to MockedRedisResponse server) by Jedis client, only simple GET will be invoked.
  */
@@ -37,14 +37,12 @@ public class MockedRedisResponse {
 
     private EventLoopGroup workerGroup;
 
-    public MockedRedisResponse(final String response, final boolean useSsl)
-    {
+    public MockedRedisResponse(final String response, final boolean useSsl) {
         this.response = response;
         this.useSsl = useSsl;
     }
 
-    public void start() throws Exception
-    {
+    public void start() throws Exception {
         final SSLContext sslContext = createAndInitSSLContext("server.jks");
 
         bossGroup = new NioEventLoopGroup(1);
@@ -54,7 +52,7 @@ public class MockedRedisResponse {
         serverBootstrap.group(bossGroup, workerGroup)//
                 .channel(NioServerSocketChannel.class) //
                 .handler(new LoggingHandler(LogLevel.INFO)) //
-                .childHandler(new EmbeddedRedisInitializer(sslContext,useSsl,response));
+                .childHandler(new EmbeddedRedisInitializer(sslContext, useSsl, response));
 
         serverChannel = serverBootstrap.bind(8998).sync().channel();
     }

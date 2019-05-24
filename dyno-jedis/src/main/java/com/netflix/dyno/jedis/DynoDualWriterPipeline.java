@@ -108,19 +108,28 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
      */
     @Override
     public void sync() {
-        scheduleAsync(() -> { shadowPipeline.sync(); return null; });
+        scheduleAsync(() -> {
+            shadowPipeline.sync();
+            return null;
+        });
         super.sync();
     }
 
     @Override
     public List<Object> syncAndReturnAll() {
-        scheduleAsync(() -> { this.shadowPipeline.sync(); return null; });
+        scheduleAsync(() -> {
+            this.shadowPipeline.sync();
+            return null;
+        });
         return super.syncAndReturnAll();
     }
 
     @Override
     public void discardPipelineAndReleaseConnection() {
-        scheduleAsync(() -> { this.shadowPipeline.discardPipelineAndReleaseConnection(); return null; });
+        scheduleAsync(() -> {
+            this.shadowPipeline.discardPipelineAndReleaseConnection();
+            return null;
+        });
         super.discardPipelineAndReleaseConnection();
     }
 
@@ -137,7 +146,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<Long> append(final String key, final String value) {
         writeAsync(key, () -> shadowPipeline.append(key, value));
 
-        return DynoDualWriterPipeline.super.append(key,value);
+        return DynoDualWriterPipeline.super.append(key, value);
     }
 
     @Override
@@ -165,7 +174,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<Long> decrBy(final String key, final long integer) {
         writeAsync(key, () -> shadowPipeline.decrBy(key, integer));
 
-        return DynoDualWriterPipeline.super.decrBy(key,integer);
+        return DynoDualWriterPipeline.super.decrBy(key, integer);
     }
 
     @Override
@@ -179,7 +188,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<Long> expire(final String key, final int seconds) {
         writeAsync(key, () -> shadowPipeline.expire(key, seconds));
 
-        return DynoDualWriterPipeline.super.expire(key,seconds);
+        return DynoDualWriterPipeline.super.expire(key, seconds);
     }
 
     @Override
@@ -191,7 +200,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<Long> expireAt(final String key, final long unixTime) {
         writeAsync(key, () -> shadowPipeline.expireAt(key, unixTime));
 
-        return DynoDualWriterPipeline.super.expireAt(key,unixTime);
+        return DynoDualWriterPipeline.super.expireAt(key, unixTime);
     }
 
     @Override
@@ -204,21 +213,21 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<Long> hdel(final String key, final String... field) {
         writeAsync(key, () -> shadowPipeline.hdel(key, field));
 
-        return DynoDualWriterPipeline.super.hdel(key,field);
+        return DynoDualWriterPipeline.super.hdel(key, field);
     }
 
     @Override
     public Response<Long> hincrBy(final String key, final String field, final long value) {
         writeAsync(key, () -> shadowPipeline.hincrBy(key, field, value));
 
-        return DynoDualWriterPipeline.super.hincrBy(key,field, value);
+        return DynoDualWriterPipeline.super.hincrBy(key, field, value);
     }
 
     /* not supported by RedisPipeline 2.7.3 */
     public Response<Double> hincrByFloat(final String key, final String field, final double value) {
         writeAsync(key, () -> shadowPipeline.hincrByFloat(key, field, value));
 
-        return DynoDualWriterPipeline.super.hincrByFloat(key,field, value);
+        return DynoDualWriterPipeline.super.hincrByFloat(key, field, value);
     }
 
     /**
@@ -229,14 +238,14 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<String> hmset(final byte[] key, final Map<byte[], byte[]> hash) {
         writeAsync(key, () -> shadowPipeline.hmset(key, hash));
 
-        return DynoDualWriterPipeline.super.hmset(key,hash);
+        return DynoDualWriterPipeline.super.hmset(key, hash);
     }
 
     @Override
     public Response<String> hmset(final String key, final Map<String, String> hash) {
         writeAsync(key, () -> shadowPipeline.hmset(key, hash));
 
-        return DynoDualWriterPipeline.super.hmset(key,hash);
+        return DynoDualWriterPipeline.super.hmset(key, hash);
     }
 
     @Override
@@ -253,14 +262,14 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<Long> hset(final byte[] key, final byte[] field, final byte[] value) {
         writeAsync(key, () -> shadowPipeline.hset(key, field, value));
 
-        return DynoDualWriterPipeline.super.hset(key,field, value);
+        return DynoDualWriterPipeline.super.hset(key, field, value);
     }
 
     @Override
     public Response<Long> hsetnx(final String key, final String field, final String value) {
         writeAsync(key, () -> shadowPipeline.hsetnx(key, field, value));
 
-        return DynoDualWriterPipeline.super.hsetnx(key,field, value);
+        return DynoDualWriterPipeline.super.hsetnx(key, field, value);
     }
 
     @Override
@@ -274,21 +283,21 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<Long> incrBy(final String key, final long integer) {
         writeAsync(key, () -> shadowPipeline.incrBy(key, integer));
 
-        return DynoDualWriterPipeline.super.incrBy(key,integer);
+        return DynoDualWriterPipeline.super.incrBy(key, integer);
     }
 
     /* not supported by RedisPipeline 2.7.3 */
     public Response<Double> incrByFloat(final String key, final double increment) {
         writeAsync(key, () -> shadowPipeline.incrByFloat(key, increment));
 
-        return DynoDualWriterPipeline.super.incrByFloat(key,increment);
+        return DynoDualWriterPipeline.super.incrByFloat(key, increment);
     }
 
     @Override
     public Response<Long> linsert(final String key, final BinaryClient.LIST_POSITION where, final String pivot, final String value) {
         writeAsync(key, () -> shadowPipeline.linsert(key, where, pivot, value));
 
-        return DynoDualWriterPipeline.super.linsert(key,where, pivot, value);
+        return DynoDualWriterPipeline.super.linsert(key, where, pivot, value);
     }
 
     @Override
@@ -302,42 +311,42 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<Long> lpush(final String key, final String... string) {
         writeAsync(key, () -> shadowPipeline.lpush(key, string));
 
-        return DynoDualWriterPipeline.super.lpush(key,string);
+        return DynoDualWriterPipeline.super.lpush(key, string);
     }
 
     @Override
     public Response<Long> lpushx(final String key, final String... string) {
         writeAsync(key, () -> shadowPipeline.lpushx(key, string));
 
-        return DynoDualWriterPipeline.super.lpushx(key,string);
+        return DynoDualWriterPipeline.super.lpushx(key, string);
     }
 
     @Override
     public Response<Long> lrem(final String key, final long count, final String value) {
         writeAsync(key, () -> shadowPipeline.lrem(key, count, value));
 
-        return DynoDualWriterPipeline.super.lrem(key,count, value);
+        return DynoDualWriterPipeline.super.lrem(key, count, value);
     }
 
     @Override
     public Response<String> lset(final String key, final long index, final String value) {
         writeAsync(key, () -> shadowPipeline.lset(key, index, value));
 
-        return DynoDualWriterPipeline.super.lset(key,index, value);
+        return DynoDualWriterPipeline.super.lset(key, index, value);
     }
 
     @Override
     public Response<String> ltrim(final String key, final long start, final long end) {
         writeAsync(key, () -> shadowPipeline.ltrim(key, start, end));
 
-        return DynoDualWriterPipeline.super.ltrim(key,start, end);
+        return DynoDualWriterPipeline.super.ltrim(key, start, end);
     }
 
     @Override
     public Response<Long> move(final String key, final int dbIndex) {
         writeAsync(key, () -> shadowPipeline.move(key, dbIndex));
 
-        return DynoDualWriterPipeline.super.move(key,dbIndex);
+        return DynoDualWriterPipeline.super.move(key, dbIndex);
     }
 
     @Override
@@ -351,14 +360,14 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<String> rename(final String oldkey, final String newkey) {
         writeAsync(newkey, () -> shadowPipeline.rename(oldkey, newkey));
 
-        return DynoDualWriterPipeline.super.rename(oldkey,newkey);
+        return DynoDualWriterPipeline.super.rename(oldkey, newkey);
     }
 
     /* not supported by RedisPipeline 2.7.3 */
     public Response<Long> renamenx(final String oldkey, final String newkey) {
         writeAsync(newkey, () -> shadowPipeline.renamenx(oldkey, newkey));
 
-        return DynoDualWriterPipeline.super.renamenx(oldkey,newkey);
+        return DynoDualWriterPipeline.super.renamenx(oldkey, newkey);
     }
 
     @Override
@@ -372,56 +381,56 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<Long> rpush(final String key, final String... string) {
         writeAsync(key, () -> shadowPipeline.rpush(key, string));
 
-        return DynoDualWriterPipeline.super.rpush(key,string);
+        return DynoDualWriterPipeline.super.rpush(key, string);
     }
 
     @Override
     public Response<Long> rpushx(final String key, final String... string) {
         writeAsync(key, () -> shadowPipeline.rpushx(key, string));
 
-        return DynoDualWriterPipeline.super.rpushx(key,string);
+        return DynoDualWriterPipeline.super.rpushx(key, string);
     }
 
     @Override
     public Response<Long> sadd(final String key, final String... member) {
         writeAsync(key, () -> shadowPipeline.sadd(key, member));
 
-        return DynoDualWriterPipeline.super.sadd(key,member);
+        return DynoDualWriterPipeline.super.sadd(key, member);
     }
 
     @Override
     public Response<String> set(final String key, final String value) {
         writeAsync(key, () -> shadowPipeline.set(key, value));
 
-        return DynoDualWriterPipeline.super.set(key,value);
+        return DynoDualWriterPipeline.super.set(key, value);
     }
 
     @Override
     public Response<Boolean> setbit(final String key, final long offset, final boolean value) {
         writeAsync(key, () -> shadowPipeline.setbit(key, offset, value));
 
-        return DynoDualWriterPipeline.super.setbit(key,offset, value);
+        return DynoDualWriterPipeline.super.setbit(key, offset, value);
     }
 
     @Override
     public Response<String> setex(final String key, final int seconds, final String value) {
         writeAsync(key, () -> shadowPipeline.setex(key, seconds, value));
 
-        return DynoDualWriterPipeline.super.setex(key,seconds, value);
+        return DynoDualWriterPipeline.super.setex(key, seconds, value);
     }
 
     @Override
     public Response<Long> setnx(final String key, final String value) {
         writeAsync(key, () -> shadowPipeline.setnx(key, value));
 
-        return DynoDualWriterPipeline.super.setnx(key,value);
+        return DynoDualWriterPipeline.super.setnx(key, value);
     }
 
     @Override
     public Response<Long> setrange(final String key, final long offset, final String value) {
         writeAsync(key, () -> shadowPipeline.setrange(key, offset, value));
 
-        return DynoDualWriterPipeline.super.setrange(key,offset, value);
+        return DynoDualWriterPipeline.super.setrange(key, offset, value);
     }
 
     @Override
@@ -435,7 +444,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<List<String>> sort(final String key, final SortingParams sortingParameters) {
         writeAsync(key, () -> shadowPipeline.sort(key, sortingParameters));
 
-        return DynoDualWriterPipeline.super.sort(key,sortingParameters);
+        return DynoDualWriterPipeline.super.sort(key, sortingParameters);
     }
 
     @Override
@@ -449,14 +458,14 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<Set<String>> spop(final String key, final long count) {
         writeAsync(key, () -> shadowPipeline.spop(key, count));
 
-        return DynoDualWriterPipeline.super.spop(key,count);
+        return DynoDualWriterPipeline.super.spop(key, count);
     }
 
     @Override
     public Response<Long> srem(final String key, final String... member) {
         writeAsync(key, () -> shadowPipeline.srem(key, member));
 
-        return DynoDualWriterPipeline.super.srem(key,member);
+        return DynoDualWriterPipeline.super.srem(key, member);
     }
 
     /**
@@ -477,42 +486,42 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<Long> zadd(final String key, final double score, final String member) {
         writeAsync(key, () -> shadowPipeline.zadd(key, score, member));
 
-        return DynoDualWriterPipeline.super.zadd(key,score, member);
+        return DynoDualWriterPipeline.super.zadd(key, score, member);
     }
 
     @Override
     public Response<Long> zadd(final String key, final Map<String, Double> scoreMembers) {
         writeAsync(key, () -> shadowPipeline.zadd(key, scoreMembers));
 
-        return DynoDualWriterPipeline.super.zadd(key,scoreMembers);
+        return DynoDualWriterPipeline.super.zadd(key, scoreMembers);
     }
 
     @Override
     public Response<Double> zincrby(final String key, final double score, final String member) {
         writeAsync(key, () -> shadowPipeline.zincrby(key, score, member));
 
-        return DynoDualWriterPipeline.super.zincrby(key,score, member);
+        return DynoDualWriterPipeline.super.zincrby(key, score, member);
     }
 
     @Override
     public Response<Long> zrem(final String key, final String... member) {
         writeAsync(key, () -> shadowPipeline.zrem(key, member));
 
-        return DynoDualWriterPipeline.super.zrem(key,member);
+        return DynoDualWriterPipeline.super.zrem(key, member);
     }
 
     @Override
     public Response<Long> zremrangeByRank(final String key, final long start, final long end) {
         writeAsync(key, () -> shadowPipeline.zremrangeByRank(key, start, end));
 
-        return DynoDualWriterPipeline.super.zremrangeByRank(key,start, end);
+        return DynoDualWriterPipeline.super.zremrangeByRank(key, start, end);
     }
 
     @Override
     public Response<Long> zremrangeByScore(final String key, final double start, final double end) {
         writeAsync(key, () -> shadowPipeline.zremrangeByScore(key, start, end));
 
-        return DynoDualWriterPipeline.super.zremrangeByScore(key,start, end);
+        return DynoDualWriterPipeline.super.zremrangeByScore(key, start, end);
     }
 
     /**
@@ -547,7 +556,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<String> set(final byte[] key, final byte[] value) {
         writeAsync(key, () -> shadowPipeline.set(key, value));
 
-        return DynoDualWriterPipeline.super.set(key,value);
+        return DynoDualWriterPipeline.super.set(key, value);
     }
 
     @Override
@@ -637,7 +646,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<Long> zadd(final String key, final double score, final String member, final ZAddParams params) {
         writeAsync(key, () -> shadowPipeline.zadd(key, score, member, params));
 
-        return DynoDualWriterPipeline.super.zadd(key,score, member, params);
+        return DynoDualWriterPipeline.super.zadd(key, score, member, params);
     }
 
 
@@ -670,7 +679,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<Long> decrBy(final byte[] key, final long integer) {
         writeAsync(key, () -> shadowPipeline.decrBy(key, integer));
 
-        return DynoDualWriterPipeline.super.decrBy(key,integer);
+        return DynoDualWriterPipeline.super.decrBy(key, integer);
     }
 
     @Override
@@ -714,7 +723,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<byte[]> getSet(final byte[] key, final byte[] value) {
         writeAsync(key, () -> shadowPipeline.getSet(key, value));
 
-        return DynoDualWriterPipeline.super.getSet(key,value);
+        return DynoDualWriterPipeline.super.getSet(key, value);
     }
 
     @Override
@@ -866,7 +875,7 @@ public class DynoDualWriterPipeline extends DynoJedisPipeline {
     public Response<String> setex(final byte[] key, final int seconds, final byte[] value) {
         writeAsync(key, () -> shadowPipeline.setex(key, seconds, value));
 
-        return DynoDualWriterPipeline.super.setex(key,seconds, value);
+        return DynoDualWriterPipeline.super.setex(key, seconds, value);
     }
 
     @Override

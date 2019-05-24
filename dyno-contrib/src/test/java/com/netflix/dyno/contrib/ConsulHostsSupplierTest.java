@@ -1,12 +1,12 @@
 /**
  * Copyright 2016 Netflix, Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -43,10 +43,10 @@ public class ConsulHostsSupplierTest {
     @Before
     public void beforeEach() {
         String config = "{" +
-            "\"datacenter\": \"test-dc\"," +
-            "\"log_level\": \"INFO\"," +
-            "\"node_name\": \"foobar\"" +
-            "}";
+                "\"datacenter\": \"test-dc\"," +
+                "\"log_level\": \"INFO\"," +
+                "\"node_name\": \"foobar\"" +
+                "}";
         consulServer = ConsulStarterBuilder.consulStarter().withCustomConfig(config).build().start();
         consulClient = new ConsulClient("127.0.0.1", consulServer.getHttpPort());
     }

@@ -1,12 +1,12 @@
 /**
  * Copyright 2017 Netflix, Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -35,7 +35,7 @@ import com.netflix.dyno.connectionpool.impl.hash.Murmur1HashPartitioner;
 
 /**
  * Test cases to cover the hashtag APIs.
- * 
+ *
  * @author ipapapa
  *
  */
@@ -162,16 +162,16 @@ public class TokenAwareSelectionHastagTest {
                 return n + "-{" + hashValue + "}";
             }
 
-			@Override
-			public byte[] getBinaryKey() {
-				return null;
-			}
+            @Override
+            public byte[] getBinaryKey() {
+                return null;
+            }
 
         };
     }
 
     private void runTest(long start, long end, Map<String, Integer> result,
-            TokenAwareSelection<Integer> tokenAwareSelector, String hashtag, int testSelector) {
+                         TokenAwareSelection<Integer> tokenAwareSelector, String hashtag, int testSelector) {
 
         for (long i = start; i <= end; i++) {
 

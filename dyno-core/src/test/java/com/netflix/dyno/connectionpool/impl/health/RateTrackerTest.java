@@ -1,12 +1,12 @@
 /**
  * Copyright 2016 Netflix, Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -32,105 +32,105 @@ import com.netflix.dyno.connectionpool.impl.health.RateTracker.Bucket;
 import com.netflix.dyno.connectionpool.impl.utils.RateLimitUtil;
 
 public class RateTrackerTest {
-		
-	@Test
-	public void testProcess() throws Exception {
 
-		final RateTracker tracker = new RateTracker(20);
+    @Test
+    public void testProcess() throws Exception {
 
-		int numThreads = 5; 
-		ExecutorService threadPool = Executors.newFixedThreadPool(numThreads);
+        final RateTracker tracker = new RateTracker(20);
 
-		final AtomicReference<RateLimitUtil> limiter = new AtomicReference<RateLimitUtil>(RateLimitUtil.create(100));
+        int numThreads = 5;
+        ExecutorService threadPool = Executors.newFixedThreadPool(numThreads);
 
-		final AtomicBoolean stop = new AtomicBoolean(false);
+        final AtomicReference<RateLimitUtil> limiter = new AtomicReference<RateLimitUtil>(RateLimitUtil.create(100));
 
-		// stats
-		final AtomicInteger totalOps = new AtomicInteger(0);
+        final AtomicBoolean stop = new AtomicBoolean(false);
 
-		final CyclicBarrier barrier = new CyclicBarrier(numThreads+1);
-		final CountDownLatch latch = new CountDownLatch(numThreads);
+        // stats
+        final AtomicInteger totalOps = new AtomicInteger(0);
 
-		for (int i=0; i<numThreads; i++) {
+        final CyclicBarrier barrier = new CyclicBarrier(numThreads + 1);
+        final CountDownLatch latch = new CountDownLatch(numThreads);
 
-			threadPool.submit(new Callable<Void>() {
+        for (int i = 0; i < numThreads; i++) {
 
-				@Override
-				public Void call() throws Exception {
+            threadPool.submit(new Callable<Void>() {
 
-					barrier.await();
-					while (!stop.get() && !Thread.currentThread().isInterrupted()) {
-						if (limiter.get().acquire()){
-							tracker.trackRate(1);
-							totalOps.incrementAndGet();
-						}
-					}
-					latch.countDown();
-					return null;
-				}
-			});
-		}
+                @Override
+                public Void call() throws Exception {
 
-		barrier.await();
+                    barrier.await();
+                    while (!stop.get() && !Thread.currentThread().isInterrupted()) {
+                        if (limiter.get().acquire()) {
+                            tracker.trackRate(1);
+                            totalOps.incrementAndGet();
+                        }
+                    }
+                    latch.countDown();
+                    return null;
+                }
+            });
+        }
 
-		Thread.sleep(4000);
-		System.out.println("Changing rate to 120");
-		limiter.set(RateLimitUtil.create(120));
+        barrier.await();
 
-		Thread.sleep(4000);
-		System.out.println("Changing rate to 80");
-		limiter.set(RateLimitUtil.create(80));
+        Thread.sleep(4000);
+        System.out.println("Changing rate to 120");
+        limiter.set(RateLimitUtil.create(120));
 
-		Thread.sleep(4000);
-		System.out.println("Changing rate to 200");
-		limiter.set(RateLimitUtil.create(200));
+        Thread.sleep(4000);
+        System.out.println("Changing rate to 80");
+        limiter.set(RateLimitUtil.create(80));
 
-		Thread.sleep(4000);
-		System.out.println("Changing rate to 100");
-		limiter.set(RateLimitUtil.create(100));
+        Thread.sleep(4000);
+        System.out.println("Changing rate to 200");
+        limiter.set(RateLimitUtil.create(200));
 
-		stop.set(true);
-		threadPool.shutdownNow();
+        Thread.sleep(4000);
+        System.out.println("Changing rate to 100");
+        limiter.set(RateLimitUtil.create(100));
 
-		//Thread.sleep(100);
-		latch.await();
-		
-		System.out.println("=======================");
-		System.out.println("Won lock: " + tracker.getWonLockCount());
-		System.out.println("Total ops: " + totalOps.get());
+        stop.set(true);
+        threadPool.shutdownNow();
 
-		Assert.assertEquals(20, tracker.rWindow.getQueueSize());
-		Assert.assertTrue(16 >= tracker.rWindow.getBucketCreateCount());
+        //Thread.sleep(100);
+        latch.await();
 
-		List<Bucket> allBuckets = tracker.getAllBuckets();
+        System.out.println("=======================");
+        System.out.println("Won lock: " + tracker.getWonLockCount());
+        System.out.println("Total ops: " + totalOps.get());
 
-		// Remove the first bucket since it's essentially unreliable since that is when the test had stopped.
-		allBuckets.remove(0);
+        Assert.assertEquals(20, tracker.rWindow.getQueueSize());
+        Assert.assertTrue(16 >= tracker.rWindow.getBucketCreateCount());
 
-		for (Bucket b : allBuckets) {
-			System.out.print(" " + b.count());
-		}
-		System.out.println("");
-		Assert.assertTrue("P diff failed",  10 >= percentageDiff(200, allBuckets.get(0).count()));
-		Assert.assertTrue("P diff failed",  10 >= percentageDiff(200, allBuckets.get(1).count()));
-		Assert.assertTrue("P diff failed",  10 >= percentageDiff(200, allBuckets.get(2).count()));
+        List<Bucket> allBuckets = tracker.getAllBuckets();
 
-		Assert.assertTrue("P diff failed",  10 >= percentageDiff(80, allBuckets.get(4).count()));
-		Assert.assertTrue("P diff failed",  10 >= percentageDiff(80, allBuckets.get(5).count()));
-		Assert.assertTrue("P diff failed",  10 >= percentageDiff(80, allBuckets.get(6).count()));
+        // Remove the first bucket since it's essentially unreliable since that is when the test had stopped.
+        allBuckets.remove(0);
 
-		Assert.assertTrue("P diff failed",  10 >= percentageDiff(120, allBuckets.get(8).count()));
-		Assert.assertTrue("P diff failed",  10 >= percentageDiff(120, allBuckets.get(9).count()));
-		Assert.assertTrue("P diff failed",  10 >= percentageDiff(120, allBuckets.get(10).count()));
+        for (Bucket b : allBuckets) {
+            System.out.print(" " + b.count());
+        }
+        System.out.println("");
+        Assert.assertTrue("P diff failed", 10 >= percentageDiff(200, allBuckets.get(0).count()));
+        Assert.assertTrue("P diff failed", 10 >= percentageDiff(200, allBuckets.get(1).count()));
+        Assert.assertTrue("P diff failed", 10 >= percentageDiff(200, allBuckets.get(2).count()));
 
-		Assert.assertTrue("P diff failed",  10 >= percentageDiff(100, allBuckets.get(12).count()));
-		Assert.assertTrue("P diff failed",  10 >= percentageDiff(100, allBuckets.get(13).count()));
-		Assert.assertTrue("P diff failed",  10 >= percentageDiff(100, allBuckets.get(14).count()));
-	}
+        Assert.assertTrue("P diff failed", 10 >= percentageDiff(80, allBuckets.get(4).count()));
+        Assert.assertTrue("P diff failed", 10 >= percentageDiff(80, allBuckets.get(5).count()));
+        Assert.assertTrue("P diff failed", 10 >= percentageDiff(80, allBuckets.get(6).count()));
 
-	private int percentageDiff(int expected, int result) {
-		int pDiff =   expected == 0 ? 0 : Math.abs(expected-result)*100/expected;
-		System.out.println("Expected: " + expected  + " pDiff: " + pDiff);  
-		return pDiff;
-	}
+        Assert.assertTrue("P diff failed", 10 >= percentageDiff(120, allBuckets.get(8).count()));
+        Assert.assertTrue("P diff failed", 10 >= percentageDiff(120, allBuckets.get(9).count()));
+        Assert.assertTrue("P diff failed", 10 >= percentageDiff(120, allBuckets.get(10).count()));
+
+        Assert.assertTrue("P diff failed", 10 >= percentageDiff(100, allBuckets.get(12).count()));
+        Assert.assertTrue("P diff failed", 10 >= percentageDiff(100, allBuckets.get(13).count()));
+        Assert.assertTrue("P diff failed", 10 >= percentageDiff(100, allBuckets.get(14).count()));
+    }
+
+    private int percentageDiff(int expected, int result) {
+        int pDiff = expected == 0 ? 0 : Math.abs(expected - result) * 100 / expected;
+        System.out.println("Expected: " + expected + " pDiff: " + pDiff);
+        return pDiff;
+    }
 }

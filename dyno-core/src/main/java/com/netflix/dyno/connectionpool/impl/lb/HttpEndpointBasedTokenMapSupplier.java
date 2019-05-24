@@ -1,12 +1,12 @@
 /**
  * Copyright 2016 Netflix, Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -51,29 +51,29 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
     public HttpEndpointBasedTokenMapSupplier() {
         this(DefaultServerUrl, defaultPort);
     }
-    
+
     public HttpEndpointBasedTokenMapSupplier(int port) {
-	this(DefaultServerUrl, port);
+        this(DefaultServerUrl, port);
     }
 
     public HttpEndpointBasedTokenMapSupplier(String url, int port) {
-	super(port);
+        super(port);
 
-	/**
-	 * If no port is passed means -1 then we will substitute to defaultPort
-	 * else the passed one.
-	 */
-	url = url.replace("{port}", (port > -1) ? Integer.toString(port) : Integer.toString(defaultPort));
-	serverUrl = url;
+        /**
+         * If no port is passed means -1 then we will substitute to defaultPort
+         * else the passed one.
+         */
+        url = url.replace("{port}", (port > -1) ? Integer.toString(port) : Integer.toString(defaultPort));
+        serverUrl = url;
     }
 
     @Override
     public String getTopologyJsonPayload(String hostname) {
-	try {
-	    return getResponseViaHttp(hostname);
-	} catch (Exception e) {
-	    throw new RuntimeException(e);
-	}
+        try {
+            return getResponseViaHttp(hostname);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     /**
@@ -81,130 +81,130 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
      */
     @Override
     public String getTopologyJsonPayload(Set<Host> activeHosts) {
-		int count = NUM_RETRIER_ACROSS_NODES;
-		String response;
-		Exception lastEx = null;
+        int count = NUM_RETRIER_ACROSS_NODES;
+        String response;
+        Exception lastEx = null;
 
-		do {
-			try {
-				response = getTopologyFromRandomNodeWithRetry(activeHosts);
-				if (response != null) {
-					return response;
-				}
-			} catch (Exception e) {
-				lastEx = e;
-			} finally {
-				count--;
-			}
-		} while ((count > 0));
+        do {
+            try {
+                response = getTopologyFromRandomNodeWithRetry(activeHosts);
+                if (response != null) {
+                    return response;
+                }
+            } catch (Exception e) {
+                lastEx = e;
+            } finally {
+                count--;
+            }
+        } while ((count > 0));
 
-		if (lastEx != null) {
-			if (lastEx instanceof ConnectTimeoutException) {
-				throw new TimeoutException("Unable to obtain topology", lastEx);
-			}
-			throw new DynoException(lastEx);
-		} else {
-			throw new DynoException("Could not contact dynomite for token map");
-		}
+        if (lastEx != null) {
+            if (lastEx instanceof ConnectTimeoutException) {
+                throw new TimeoutException("Unable to obtain topology", lastEx);
+            }
+            throw new DynoException(lastEx);
+        } else {
+            throw new DynoException("Could not contact dynomite for token map");
+        }
 
     }
 
     private String getResponseViaHttp(String hostname) throws Exception {
 
-	String url = serverUrl;
-	url = url.replace("{hostname}", hostname);
+        String url = serverUrl;
+        url = url.replace("{hostname}", hostname);
 
-	if (Logger.isDebugEnabled()) {
-	    Logger.debug("Making http call to url: " + url);
-	}
+        if (Logger.isDebugEnabled()) {
+            Logger.debug("Making http call to url: " + url);
+        }
 
-	DefaultHttpClient client = new DefaultHttpClient();
-	client.getParams().setParameter(HttpConnectionParams.CONNECTION_TIMEOUT, 2000);
-	client.getParams().setParameter(HttpConnectionParams.SO_TIMEOUT, 5000);
+        DefaultHttpClient client = new DefaultHttpClient();
+        client.getParams().setParameter(HttpConnectionParams.CONNECTION_TIMEOUT, 2000);
+        client.getParams().setParameter(HttpConnectionParams.SO_TIMEOUT, 5000);
 
-	DefaultHttpRequestRetryHandler retryhandler = new DefaultHttpRequestRetryHandler(NUM_RETRIER_ACROSS_NODES,
-		true);
-	client.setHttpRequestRetryHandler(retryhandler);
+        DefaultHttpRequestRetryHandler retryhandler = new DefaultHttpRequestRetryHandler(NUM_RETRIER_ACROSS_NODES,
+                true);
+        client.setHttpRequestRetryHandler(retryhandler);
 
-	HttpGet get = new HttpGet(url);
+        HttpGet get = new HttpGet(url);
 
-	HttpResponse response = client.execute(get);
-	int statusCode = response.getStatusLine().getStatusCode();
-	if (!(statusCode == 200)) {
-	    Logger.error("Got non 200 status code from " + url);
-	    return null;
-	}
+        HttpResponse response = client.execute(get);
+        int statusCode = response.getStatusLine().getStatusCode();
+        if (!(statusCode == 200)) {
+            Logger.error("Got non 200 status code from " + url);
+            return null;
+        }
 
-	InputStream in = null;
-	try {
-	    in = response.getEntity().getContent();
-	    return IOUtilities.toString(in);
-	} finally {
-	    if (in != null) {
-		in.close();
-	    }
-	}
+        InputStream in = null;
+        try {
+            in = response.getEntity().getContent();
+            return IOUtilities.toString(in);
+        } finally {
+            if (in != null) {
+                in.close();
+            }
+        }
     }
 
     /**
      * Finds a random host from the set of active hosts to perform
      * cluster_describe
-     * 
+     *
      * @param activeHosts
      * @return a random host
      */
     public Host getRandomHost(Set<Host> activeHosts) {
-	Random random = new Random();
+        Random random = new Random();
 
-	List<Host> hostsUp = new ArrayList<Host>(CollectionUtils.filter(activeHosts, new Predicate<Host>() {
+        List<Host> hostsUp = new ArrayList<Host>(CollectionUtils.filter(activeHosts, new Predicate<Host>() {
 
-	    @Override
-	    public boolean apply(Host x) {
-		return x.isUp();
-	    }
-	}));
+            @Override
+            public boolean apply(Host x) {
+                return x.isUp();
+            }
+        }));
 
-	return hostsUp.get(random.nextInt(hostsUp.size()));
+        return hostsUp.get(random.nextInt(hostsUp.size()));
     }
 
     /**
      * Tries multiple nodes, and it only bubbles up the last node's exception.
      * We want to bubble up the exception in order for the last node to be
      * removed from the connection pool.
-     * 
+     *
      * @param activeHosts
      * @return the topology from cluster_describe
      */
     private String getTopologyFromRandomNodeWithRetry(Set<Host> activeHosts) {
-		int count = NUM_RETRIES_PER_NODE;
-		String nodeResponse;
-		Exception lastEx;
-		final Host randomHost = getRandomHost(activeHosts);
-		do {
-			try {
-				lastEx = null;
-				nodeResponse = getResponseViaHttp(randomHost.getHostName());
-				if (nodeResponse != null) {
-					Logger.info("Received topology from " + randomHost);
-					return nodeResponse;
-				}
-			} catch (Exception e) {
-				Logger.info("cannot get topology from : " + randomHost);
-				lastEx = e;
-			} finally {
-				count--;
-			}
+        int count = NUM_RETRIES_PER_NODE;
+        String nodeResponse;
+        Exception lastEx;
+        final Host randomHost = getRandomHost(activeHosts);
+        do {
+            try {
+                lastEx = null;
+                nodeResponse = getResponseViaHttp(randomHost.getHostName());
+                if (nodeResponse != null) {
+                    Logger.info("Received topology from " + randomHost);
+                    return nodeResponse;
+                }
+            } catch (Exception e) {
+                Logger.info("cannot get topology from : " + randomHost);
+                lastEx = e;
+            } finally {
+                count--;
+            }
 
-		} while ((count > 0));
+        } while ((count > 0));
 
-		if (lastEx != null) {
-			if (lastEx instanceof ConnectTimeoutException) {
-				throw new TimeoutException("Unable to obtain topology", lastEx).setHost(randomHost);
-			}
-			throw new DynoException(String.format("Unable to obtain topology from %s", randomHost), lastEx);
-		} else {
-			throw new DynoException(String.format("Could not contact dynomite manager for token map on %s", randomHost));
-		}
+        if (lastEx != null) {
+            if (lastEx instanceof ConnectTimeoutException) {
+                throw new TimeoutException("Unable to obtain topology", lastEx).setHost(randomHost);
+            }
+            throw new DynoException(String.format("Unable to obtain topology from %s", randomHost), lastEx);
+        } else {
+            throw new DynoException(String.format("Could not contact dynomite manager for token map on %s", randomHost));
+        }
 
     }
 

@@ -1,12 +1,12 @@
 /**
  * Copyright 2016 Netflix, Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -69,10 +69,10 @@ public class DynoRedissonClient {
                 return new DecoratingListenableFuture<String>((client.get(key)));
             }
 
-			@Override
-			public byte[] getBinaryKey() {
-				return null;
-			}
+            @Override
+            public byte[] getBinaryKey() {
+                return null;
+            }
         });
     }
 
@@ -96,10 +96,10 @@ public class DynoRedissonClient {
                 return new DecoratingListenableFuture<String>((client.get(key)));
             }
 
-			@Override
-			public byte[] getBinaryKey() {
-				return null;
-			}
+            @Override
+            public byte[] getBinaryKey() {
+                return null;
+            }
         });
     }
 
@@ -123,13 +123,13 @@ public class DynoRedissonClient {
                 return new DecoratingListenableFuture<String>((client.set(key, value)));
             }
 
-			@Override
-			public byte[] getBinaryKey() {
-				return null;
-			}
+            @Override
+            public byte[] getBinaryKey() {
+                return null;
+            }
         });
     }
-    
+
     // TODO: hashtag has support for this Redisson API is not complete
     public Future<OperationResult<String>> set(final String key, final String value, final String hashtag) throws DynoException {
 
@@ -144,17 +144,17 @@ public class DynoRedissonClient {
             public String getStringKey() {
                 return key;
             }
-            
+
             @Override
             public ListenableFuture<String> executeAsync(RedisAsyncConnection<String, String> client)
                     throws DynoException {
                 return new DecoratingListenableFuture<String>((client.set(key, value)));
             }
 
-			@Override
-			public byte[] getBinaryKey() {
-				return null;
-			}
+            @Override
+            public byte[] getBinaryKey() {
+                return null;
+            }
         });
     }
 
