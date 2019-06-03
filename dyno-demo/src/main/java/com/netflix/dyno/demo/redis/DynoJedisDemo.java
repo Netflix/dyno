@@ -1214,7 +1214,7 @@ public class DynoJedisDemo {
                     "MUST set local for load balancing OR set the load balancing strategy to round robin");
         }
 
-        String rack = props.getProperty("EC2_AVAILABILITY_ZONE", null);
+        String rack = props.getProperty("EC2_AVAILABILITY_ZONE", "us-east-1c");
         String hostsFile = props.getProperty("dyno.demo.hostsFile");
         String shadowHostsFile = props.getProperty("dyno.demo.shadowHostsFile");
         int port = Integer.valueOf(props.getProperty("dyno.demo.port", "8102"));
