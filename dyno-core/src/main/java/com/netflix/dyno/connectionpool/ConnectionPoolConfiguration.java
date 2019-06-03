@@ -40,6 +40,20 @@ public interface ConnectionPoolConfiguration {
     }
 
     /**
+     * Should connections in this pool connect to the datastore directly?
+     * @return
+     */
+    boolean isConnectToDatastore();
+
+    boolean isFallbackEnabled();
+
+    /**
+     * Returns the voting size for dyno lock
+     * @return
+     */
+    int getLockVotingSize();
+
+    /**
      * Returns the unique name assigned to this connection pool.
      */
     String getName();
@@ -224,4 +238,5 @@ public interface ConnectionPoolConfiguration {
 
     String getHashtag();
 
+    ConnectionPoolConfiguration setLocalZoneAffinity(boolean condition);
 }

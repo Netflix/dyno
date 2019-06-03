@@ -18,6 +18,7 @@ package com.netflix.dyno.connectionpool.impl.lb;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.netflix.dyno.connectionpool.HostBuilder;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -40,14 +41,14 @@ public class TokenMapSupplierTest {
 
         List<Host> hostList = new ArrayList<Host>();
 
-        hostList.add(new Host("ec2-54-237-143-4.compute-1.amazonaws.com", 11211, "us-east-1d", Status.Up));
-        hostList.add(new Host("ec2-50-17-65-2.compute-1.amazonaws.com", 11211, "us-east-1d", Status.Up));
-        hostList.add(new Host("ec2-54-83-87-174.compute-1.amazonaws.com", 11211, "us-east-1c", Status.Up));
-        hostList.add(new Host("ec2-54-81-138-73.compute-1.amazonaws.com", 11211, "us-east-1c", Status.Up));
-        hostList.add(new Host("ec2-54-82-176-215.compute-1.amazonaws.com", 11211, "us-east-1c", Status.Up));
-        hostList.add(new Host("ec2-54-82-83-115.compute-1.amazonaws.com", 11211, "us-east-1e", Status.Up));
-        hostList.add(new Host("ec2-54-211-220-55.compute-1.amazonaws.com", 11211, "us-east-1e", Status.Up));
-        hostList.add(new Host("ec2-54-80-65-203.compute-1.amazonaws.com", 11211, "us-east-1e", Status.Up));
+        hostList.add(new HostBuilder().setHostname("ec2-54-237-143-4.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1d").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-50-17-65-2.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1d").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-83-87-174.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1c").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-81-138-73.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1c").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-82-176-215.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1c").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-82-83-115.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1e").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-211-220-55.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1e").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-80-65-203.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1e").setStatus(Status.Up).createHost());
 
         HttpEndpointBasedTokenMapSupplier tokenSupplier = new HttpEndpointBasedTokenMapSupplier("us-east-1d", 11211);
 
@@ -85,14 +86,14 @@ public class TokenMapSupplierTest {
 
         List<Host> hostList = new ArrayList<Host>();
 
-        hostList.add(new Host("ec2-54-237-143-4.compute-1.amazonaws.com", 11211, "us-east-1d", Status.Up));
-        hostList.add(new Host("ec2-54-237-143-4.compute-1.amazonaws.com", 11212, "us-east-1d", Status.Up));
-        hostList.add(new Host("ec2-54-237-143-4.compute-1.amazonaws.com", 11213, "us-east-1c", Status.Up));
-        hostList.add(new Host("ec2-54-237-143-4.compute-1.amazonaws.com", 11214, "us-east-1c", Status.Up));
-        hostList.add(new Host("ec2-54-82-176-215.compute-1.amazonaws.com", 11215, "us-east-1c", Status.Up));
-        hostList.add(new Host("ec2-54-82-83-115.compute-1.amazonaws.com", 11216, "us-east-1e", Status.Up));
-        hostList.add(new Host("ec2-54-211-220-55.compute-1.amazonaws.com", 11217, "us-east-1e", Status.Up));
-        hostList.add(new Host("ec2-54-80-65-203.compute-1.amazonaws.com", 11218, "us-east-1e", Status.Up));
+        hostList.add(new HostBuilder().setHostname("ec2-54-237-143-4.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1d").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-237-143-4.compute-1.amazonaws.com").setPort(11212).setRack("us-east-1d").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-237-143-4.compute-1.amazonaws.com").setPort(11213).setRack("us-east-1c").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-237-143-4.compute-1.amazonaws.com").setPort(11214).setRack("us-east-1c").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-82-176-215.compute-1.amazonaws.com").setPort(11215).setRack("us-east-1c").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-82-83-115.compute-1.amazonaws.com").setPort(11216).setRack("us-east-1e").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-211-220-55.compute-1.amazonaws.com").setPort(11217).setRack("us-east-1e").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-80-65-203.compute-1.amazonaws.com").setPort(11218).setRack("us-east-1e").setStatus(Status.Up).createHost());
 
         HttpEndpointBasedTokenMapSupplier tokenSupplier = new HttpEndpointBasedTokenMapSupplier("us-east-1d", 11211);
 
@@ -145,14 +146,14 @@ public class TokenMapSupplierTest {
 
         List<Host> hostList = new ArrayList<Host>();
 
-        hostList.add(new Host("ec2-54-237-143-4.compute-1.amazonaws.com", 11211, "us-east-1d", Status.Up));
-        hostList.add(new Host("ec2-50-17-65-2.compute-1.amazonaws.com", 11211, "us-east-1d", Status.Up));
-        hostList.add(new Host("ec2-54-83-87-174.compute-1.amazonaws.com", 11211, "us-east-1c", Status.Up));
-        hostList.add(new Host("ec2-54-81-138-73.compute-1.amazonaws.com", 11211, "us-east-1c", Status.Up));
-        hostList.add(new Host("ec2-54-82-176-215.compute-1.amazonaws.com", 11211, "us-east-1c", Status.Up));
-        hostList.add(new Host("ec2-54-82-83-115.compute-1.amazonaws.com", 11211, "us-east-1e", Status.Up));
-        hostList.add(new Host("ec2-54-211-220-55.compute-1.amazonaws.com", 11211, "us-east-1e", Status.Up));
-        hostList.add(new Host("ec2-54-80-65-203.compute-1.amazonaws.com", 11211, "us-east-1e", Status.Up));
+        hostList.add(new HostBuilder().setHostname("ec2-54-237-143-4.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1d").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-50-17-65-2.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1d").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-83-87-174.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1c").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-81-138-73.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1c").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-82-176-215.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1c").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-82-83-115.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1e").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-211-220-55.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1e").setStatus(Status.Up).createHost());
+        hostList.add(new HostBuilder().setHostname("ec2-54-80-65-203.compute-1.amazonaws.com").setPort(11211).setRack("us-east-1e").setStatus(Status.Up).createHost());
 
         HttpEndpointBasedTokenMapSupplier tokenSupplier = new HttpEndpointBasedTokenMapSupplier("us-east-1d", 11211);
 

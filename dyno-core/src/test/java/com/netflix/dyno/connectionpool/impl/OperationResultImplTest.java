@@ -17,6 +17,7 @@ package com.netflix.dyno.connectionpool.impl;
 
 import java.util.concurrent.TimeUnit;
 
+import com.netflix.dyno.connectionpool.HostBuilder;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -30,7 +31,7 @@ public class OperationResultImplTest {
 
         OperationMonitor monitor = new LastOperationMonitor();
         OperationResultImpl<Integer> opResult = new OperationResultImpl<Integer>("test", 11, monitor);
-        Host host = new Host("testHost", "rand_ip", 1234, "rand_rack");
+        Host host = new HostBuilder().setHostname("testHost").setIpAddress("rand_ip").setPort(1234).setRack("rand_rack").createHost();
 
         opResult.attempts(2)
                 .addMetadata("foo", "f1").addMetadata("bar", "b1")

@@ -15,19 +15,12 @@
  */
 package com.netflix.dyno.redisson;
 
-import io.netty.channel.EventLoopGroup;
-
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicReference;
-
 import com.lambdaworks.redis.RedisAsyncConnection;
 import com.lambdaworks.redis.RedisClient;
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionFactory;
-import com.netflix.dyno.connectionpool.ConnectionObservor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.ListenableFuture;
@@ -36,10 +29,14 @@ import com.netflix.dyno.connectionpool.OperationMonitor;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
-import com.netflix.dyno.connectionpool.exception.ThrottledException;
 import com.netflix.dyno.connectionpool.impl.ConnectionContextImpl;
 import com.netflix.dyno.connectionpool.impl.FutureOperationalResultImpl;
 import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
+import io.netty.channel.EventLoopGroup;
+
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class RedissonConnectionFactory implements ConnectionFactory<RedisAsyncConnection<String, String>> {
 
@@ -52,8 +49,13 @@ public class RedissonConnectionFactory implements ConnectionFactory<RedisAsyncCo
     }
 
     @Override
-    public Connection<RedisAsyncConnection<String, String>> createConnection(HostConnectionPool<RedisAsyncConnection<String, String>> pool, ConnectionObservor connectionObservor) throws DynoConnectException, ThrottledException {
+    public Connection<RedisAsyncConnection<String, String>> createConnection(HostConnectionPool<RedisAsyncConnection<String, String>> pool) throws DynoConnectException {
         return new RedissonConnection(pool, eventGroupLoop, opMonitor);
+    }
+
+    @Override
+    public Connection<RedisAsyncConnection<String, String>> createConnectionWithDataStore(HostConnectionPool<RedisAsyncConnection<String, String>> pool) throws DynoConnectException {
+        throw new UnsupportedOperationException("");
     }
 
     public static class RedissonConnection implements Connection<RedisAsyncConnection<String, String>> {

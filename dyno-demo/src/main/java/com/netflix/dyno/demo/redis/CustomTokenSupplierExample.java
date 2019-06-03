@@ -16,6 +16,7 @@
 package com.netflix.dyno.demo.redis;
 
 import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.HostBuilder;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
@@ -24,7 +25,6 @@ import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.jedis.DynoJedisClient;
 import org.apache.log4j.BasicConfigurator;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -49,7 +49,7 @@ public class CustomTokenSupplierExample {
 
         final int port = 6379;
 
-        final Host localHost = new Host("localhost", port, "localrack", Host.Status.Up);
+        final Host localHost = new HostBuilder().setHostname("localhost").setPort(port).setRack("localrack").setStatus(Host.Status.Up).createHost();
 
         final HostSupplier localHostSupplier = new HostSupplier() {
 

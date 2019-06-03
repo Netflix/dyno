@@ -23,11 +23,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
+import com.netflix.dyno.connectionpool.HostBuilder;
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.netflix.dyno.connectionpool.BaseOperation;
-import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 
@@ -51,10 +51,10 @@ public class RoundRobinSelectionTest {
      * cqlsh:dyno_bootstrap>
      */
 
-    private final HostToken h1 = new HostToken(309687905L, new Host("h1", -1, "r1", Status.Up));
-    private final HostToken h2 = new HostToken(1383429731L, new Host("h2", -1, "r1", Status.Up));
-    private final HostToken h3 = new HostToken(2457171554L, new Host("h3", -1, "r1", Status.Up));
-    private final HostToken h4 = new HostToken(3530913377L, new Host("h4", -1, "r1", Status.Up));
+    private final HostToken h1 = new HostToken(309687905L, new HostBuilder().setHostname("h1").setPort(-1).setRack("r1").setStatus(Status.Up).createHost());
+    private final HostToken h2 = new HostToken(1383429731L, new HostBuilder().setHostname("h2").setPort(-1).setRack("r1").setStatus(Status.Up).createHost());
+    private final HostToken h3 = new HostToken(2457171554L, new HostBuilder().setHostname("h3").setPort(-1).setRack("r1").setStatus(Status.Up).createHost());
+    private final HostToken h4 = new HostToken(3530913377L, new HostBuilder().setHostname("h4").setPort(-1).setRack("r1").setStatus(Status.Up).createHost());
 
     private final BaseOperation<Integer, Integer> testOperation = new BaseOperation<Integer, Integer>() {
 

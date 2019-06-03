@@ -15,7 +15,20 @@
  */
 package com.netflix.dyno.connectionpool.impl;
 
-import static org.mockito.Mockito.mock;
+import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.ConnectionFactory;
+import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.HostBuilder;
+import com.netflix.dyno.connectionpool.HostConnectionPool;
+import com.netflix.dyno.connectionpool.exception.DynoConnectException;
+import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
+import com.netflix.dyno.connectionpool.exception.ThrottledException;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -25,26 +38,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-
-import com.netflix.dyno.connectionpool.Connection;
-import com.netflix.dyno.connectionpool.ConnectionFactory;
-import com.netflix.dyno.connectionpool.ConnectionObservor;
-import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.HostConnectionPool;
-import com.netflix.dyno.connectionpool.exception.DynoConnectException;
-import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
-import com.netflix.dyno.connectionpool.exception.ThrottledException;
+import static org.mockito.Mockito.mock;
 
 public class SimpleAsyncConnectionPoolImplTest {
 
     // TEST UTILS SETUP
-    private static final Host TestHost = new Host("TestHost", "TestIp", 1234, "TestRack");
+    private static final Host TestHost = new HostBuilder().setHostname("TestHost").setIpAddress("TestIp").setPort(1234).setRack("TestRack").createHost();
 
     private class TestClient {
     }
@@ -55,8 +54,13 @@ public class SimpleAsyncConnectionPoolImplTest {
     private static ConnectionFactory<TestClient> connFactory = new ConnectionFactory<TestClient>() {
         @SuppressWarnings("unchecked")
         @Override
-        public Connection<TestClient> createConnection(HostConnectionPool<TestClient> pool, ConnectionObservor cObservor) throws DynoConnectException, ThrottledException {
+        public Connection<TestClient> createConnection(HostConnectionPool<TestClient> pool) throws DynoConnectException, ThrottledException {
             return mock(Connection.class);
+        }
+
+        @Override
+        public Connection<TestClient> createConnectionWithDataStore(HostConnectionPool<TestClient> pool) throws DynoConnectException {
+            return null;
         }
     };
 

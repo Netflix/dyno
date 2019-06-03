@@ -24,11 +24,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 
+import com.netflix.dyno.connectionpool.HostBuilder;
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.netflix.dyno.connectionpool.BaseOperation;
-import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.impl.hash.Murmur1HashPartitioner;
@@ -41,20 +41,20 @@ import com.netflix.dyno.connectionpool.impl.hash.Murmur1HashPartitioner;
  */
 public class TokenAwareSelectionHastagTest {
 
-    private final HostToken host1 = new HostToken(309687905L, new Host("host1", -1, "r1", Status.Up, "{}"));
-    private final HostToken host2 = new HostToken(1383429731L, new Host("host2", -1, "r1", Status.Up, "{}"));
-    private final HostToken host3 = new HostToken(2457171554L, new Host("host3", -1, "r1", Status.Up, "{}"));
-    private final HostToken host4 = new HostToken(3530913377L, new Host("host4", -1, "r1", Status.Up, "{}"));
+    private final HostToken host1 = new HostToken(309687905L, new HostBuilder().setHostname("host1").setPort(-1).setRack("r1").setStatus(Status.Up).setHashtag("{}").createHost());
+    private final HostToken host2 = new HostToken(1383429731L, new HostBuilder().setHostname("host2").setPort(-1).setRack("r1").setStatus(Status.Up).setHashtag("{}").createHost());
+    private final HostToken host3 = new HostToken(2457171554L, new HostBuilder().setHostname("host3").setPort(-1).setRack("r1").setStatus(Status.Up).setHashtag("{}").createHost());
+    private final HostToken host4 = new HostToken(3530913377L, new HostBuilder().setHostname("host4").setPort(-1).setRack("r1").setStatus(Status.Up).setHashtag("{}").createHost());
 
-    private final HostToken host5 = new HostToken(309687905L, new Host("host5", -1, "r1", Status.Up, ""));
-    private final HostToken host6 = new HostToken(1383429731L, new Host("host6", -1, "r1", Status.Up, ""));
-    private final HostToken host7 = new HostToken(2457171554L, new Host("host7", -1, "r1", Status.Up, ""));
-    private final HostToken host8 = new HostToken(3530913377L, new Host("host8", -1, "r1", Status.Up, ""));
+    private final HostToken host5 = new HostToken(309687905L, new HostBuilder().setHostname("host5").setPort(-1).setRack("r1").setStatus(Status.Up).setHashtag("").createHost());
+    private final HostToken host6 = new HostToken(1383429731L, new HostBuilder().setHostname("host6").setPort(-1).setRack("r1").setStatus(Status.Up).setHashtag("").createHost());
+    private final HostToken host7 = new HostToken(2457171554L, new HostBuilder().setHostname("host7").setPort(-1).setRack("r1").setStatus(Status.Up).setHashtag("").createHost());
+    private final HostToken host8 = new HostToken(3530913377L, new HostBuilder().setHostname("host8").setPort(-1).setRack("r1").setStatus(Status.Up).setHashtag("").createHost());
 
-    private final HostToken host9 = new HostToken(309687905L, new Host("host9", -1, "r1", Status.Up, "[]"));
-    private final HostToken host10 = new HostToken(1383429731L, new Host("host10", -1, "r1", Status.Up, "{}"));
-    private final HostToken host11 = new HostToken(2457171554L, new Host("host11", -1, "r1", Status.Up, "//"));
-    private final HostToken host12 = new HostToken(3530913377L, new Host("host12", -1, "r1", Status.Up, "--"));
+    private final HostToken host9 = new HostToken(309687905L, new HostBuilder().setHostname("host9").setPort(-1).setRack("r1").setStatus(Status.Up).setHashtag("[]").createHost());
+    private final HostToken host10 = new HostToken(1383429731L, new HostBuilder().setHostname("host10").setPort(-1).setRack("r1").setStatus(Status.Up).setHashtag("{}").createHost());
+    private final HostToken host11 = new HostToken(2457171554L, new HostBuilder().setHostname("host11").setPort(-1).setRack("r1").setStatus(Status.Up).setHashtag("//").createHost());
+    private final HostToken host12 = new HostToken(3530913377L, new HostBuilder().setHostname("host12").setPort(-1).setRack("r1").setStatus(Status.Up).setHashtag("--").createHost());
 
     private final Murmur1HashPartitioner m1Hash = new Murmur1HashPartitioner();
     String hashValue = "bar";

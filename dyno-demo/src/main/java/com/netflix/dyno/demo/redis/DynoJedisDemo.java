@@ -19,6 +19,7 @@ import com.google.common.collect.Lists;
 import com.netflix.dyno.connectionpool.CursorBasedResult;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
+import com.netflix.dyno.connectionpool.HostBuilder;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
@@ -29,6 +30,7 @@ import com.netflix.dyno.contrib.ArchaiusConnectionPoolConfiguration;
 import com.netflix.dyno.jedis.DynoJedisClient;
 import com.netflix.dyno.jedis.DynoJedisPipeline;
 import org.apache.commons.cli.*;
+import com.netflix.dyno.recipes.lock.DynoLockClient;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
@@ -75,6 +77,7 @@ public class DynoJedisDemo {
 
     protected DynoJedisClient client;
     protected DynoJedisClient shadowClusterClient;
+    private DynoLockClient dynoLockClient;
 
     protected int numKeys;
 
@@ -92,13 +95,13 @@ public class DynoJedisDemo {
         this.localRack = localRack;
     }
 
-    public void initWithLocalHost() throws Exception {
+    public void initWithLocalHost(boolean initLock) throws Exception {
 
         final int port = 6379;
 
 
         final HostSupplier localHostSupplier = new HostSupplier() {
-            final Host hostSupplierHost = new Host("localhost", localRack, Status.Up);
+            final Host hostSupplierHost = new HostBuilder().setHostname("localhost").setRack(localRack).setDatastorePort(6379).setStatus(Status.Up).createHost();
 
             @Override
             public List<Host> getHosts() {
@@ -108,7 +111,7 @@ public class DynoJedisDemo {
 
         final TokenMapSupplier tokenSupplier = new TokenMapSupplier() {
 
-            final Host tokenHost = new Host("localhost", port, localRack, Status.Up);
+            final Host tokenHost = new HostBuilder().setHostname("localhost").setPort(port).setDatastorePort(6379).setRack(localRack).setStatus(Status.Up).createHost();
             final HostToken localHostToken = new HostToken(100000L, tokenHost);
 
             @Override
@@ -122,21 +125,27 @@ public class DynoJedisDemo {
             }
         };
 
-        init(localHostSupplier, port, tokenSupplier);
+        if (initLock)
+            initDynoLockClient(localHostSupplier, tokenSupplier, "test", "test");
+        else
+            init(localHostSupplier, port, tokenSupplier);
     }
 
-    private void initWithRemoteCluster(final List<Host> hosts, final int port) throws Exception {
+    private void initWithRemoteCluster(String clusterName, final List<Host> hosts, final int port, boolean lock) throws Exception {
         final HostSupplier clusterHostSupplier = () -> hosts;
 
-        init(clusterHostSupplier, port, null);
+        if (lock)
+            initDynoLockClient(clusterHostSupplier, null, "test", clusterName);
+        else
+            init(clusterHostSupplier, port, null);
     }
 
-    public void initWithRemoteClusterFromFile(final String filename, final int port) throws Exception {
-        initWithRemoteCluster(readHostsFromFile(filename, port), port);
+    public void initWithRemoteClusterFromFile(final String filename, final int port, boolean lock) throws Exception {
+        initWithRemoteCluster(null, readHostsFromFile(filename, port), port, lock);
     }
 
-    public void initWithRemoteClusterFromEurekaUrl(final String clusterName, final int port) throws Exception {
-        initWithRemoteCluster(getHostsFromDiscovery(clusterName), port);
+    public void initWithRemoteClusterFromEurekaUrl(final String clusterName, final int port, boolean lock) throws Exception {
+        initWithRemoteCluster(clusterName, getHostsFromDiscovery(clusterName), port, lock);
     }
 
     public void initDualClientWithRemoteClustersFromFile(final String primaryHostsFile, final String shadowHostsFile,
@@ -187,8 +196,8 @@ public class DynoJedisDemo {
         this.shadowClusterClient = new DynoJedisClient.Builder()
                 .withApplicationName("demo")
                 .withDynomiteClusterName("dyno-dev")
-                .withHostSupplier(primaryClusterHostSupplier)
-                .withTokenMapSupplier(primaryTokenSupplier)
+                .withHostSupplier(shadowClusterHostSupplier)
+                .withTokenMapSupplier(shadowTokenSupplier)
                 .withCPConfig(shadowCPConfig)
                 .build();
 
@@ -205,6 +214,16 @@ public class DynoJedisDemo {
                 // .setLocalRack(this.localRack)
                 // )
                 .build();
+    }
+
+    public void initDynoLockClient(HostSupplier hostSupplier, TokenMapSupplier tokenMapSupplier, String appName,
+                                   String clusterName) {
+        dynoLockClient = new DynoLockClient.Builder().withApplicationName(appName)
+                .withDynomiteClusterName(clusterName)
+                .withTimeoutUnit(TimeUnit.MILLISECONDS)
+                .withTimeout(10000)
+                .withHostSupplier(hostSupplier)
+                .withTokenMapSupplier(tokenMapSupplier).build();
     }
 
     public void runSimpleTest() throws Exception {
@@ -641,7 +660,7 @@ public class DynoJedisDemo {
                 if (parts.length != 2) {
                     throw new RuntimeException("Bad data format in file:" + line);
                 }
-                Host host = new Host(parts[0].trim(), port, parts[1].trim(), Status.Up);
+                Host host = new HostBuilder().setHostname(parts[0].trim()).setPort(port).setRack(parts[1].trim()).setStatus(Status.Up).createHost();
                 hosts.add(host);
             }
         } finally {
@@ -919,7 +938,7 @@ public class DynoJedisDemo {
             for (Map<String, String> map : handler.getList()) {
                 String rack = map.get("availability-zone");
                 Status status = map.get("status").equalsIgnoreCase("UP") ? Status.Up : Status.Down;
-                Host host = new Host(map.get("public-hostname"), map.get("local-ipv4"), rack, status);
+                Host host = new HostBuilder().setHostname(map.get("public-hostname")).setIpAddress(map.get("local-ipv4")).setRack(rack).setStatus(status).createHost();
                 hosts.add(host);
                 System.out.println("Host: " + host);
             }
@@ -1090,6 +1109,8 @@ public class DynoJedisDemo {
      *             </ol>
      */
     public static void main(String args[]) throws IOException {
+        Option lock = new Option("k", "lock", false, "Dyno Lock");
+        lock.setArgName("lock");
         Option primaryCluster = new Option("p", "primaryCluster", true, "Primary cluster");
         primaryCluster.setArgName("clusterName");
 
@@ -1109,6 +1130,7 @@ public class DynoJedisDemo {
         Options options = new Options();
         options.addOptionGroup(cluster)
                 .addOption(secondaryCluster)
+                .addOption(lock)
                 .addOption(test);
 
         Properties props = new Properties();
@@ -1133,16 +1155,20 @@ public class DynoJedisDemo {
             CommandLine cli = parser.parse(options, args);
 
             int testNumber = Integer.parseInt(cli.getOptionValue("t"));
+            boolean isLock = cli.hasOption("k");
             if (cli.hasOption("l")) {
                 demo = new DynoJedisDemo("dyno-localhost", rack);
-                demo.initWithLocalHost();
+                demo.initWithLocalHost(isLock);
+            } else if (cli.hasOption("l")) {
+                demo = new DynoJedisDemo("dyno-localhost", rack);
+                demo.initWithLocalHost(false);
             } else {
                 if (!cli.hasOption("s")) {
                     demo = new DynoJedisDemo(cli.getOptionValue("p"), rack);
                     if (hostsFile != null) {
-                        demo.initWithRemoteClusterFromFile(hostsFile, port);
+                        demo.initWithRemoteClusterFromFile(hostsFile, port, isLock);
                     } else {
-                        demo.initWithRemoteClusterFromEurekaUrl(cli.getOptionValue("p"), port);
+                        demo.initWithRemoteClusterFromEurekaUrl(cli.getOptionValue("p"), port, isLock);
                     }
                 } else {
                     demo = new DynoJedisDemo(cli.getOptionValue("p"), cli.getOptionValue("s"), rack);
@@ -1205,6 +1231,10 @@ public class DynoJedisDemo {
                     break;
                 }
 
+                case 14: {
+                    demo.runLockTest();
+                    break;
+                }
             }
 
             // demo.runSinglePipeline();
@@ -1236,4 +1266,15 @@ public class DynoJedisDemo {
         }
     }
 
+    private void runLockTest() throws InterruptedException {
+        String resourceName = "testResource";
+        long ttl = 5_000;
+        boolean value = dynoLockClient.acquireLock(resourceName, ttl, (resource) -> logger.info("Extension failed"));
+        if (value) {
+            logger.info("Acquired lock on resource {} for {} ms ", resourceName, value);
+        }
+        dynoLockClient.logLocks();
+        Thread.sleep(100_000);
+        dynoLockClient.releaseLock(resourceName);
+    }
 }

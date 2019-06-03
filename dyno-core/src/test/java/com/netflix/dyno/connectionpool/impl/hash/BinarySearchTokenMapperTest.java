@@ -15,17 +15,16 @@
  */
 package com.netflix.dyno.connectionpool.impl.hash;
 
+import com.netflix.dyno.connectionpool.Host.Status;
+import com.netflix.dyno.connectionpool.HostBuilder;
+import com.netflix.dyno.connectionpool.impl.lb.HostToken;
+import org.junit.Assert;
+import org.junit.Test;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
-
-import org.junit.Assert;
-import org.junit.Test;
-
-import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.Host.Status;
-import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 
 public class BinarySearchTokenMapperTest {
 
@@ -69,7 +68,7 @@ public class BinarySearchTokenMapperTest {
 
         // Now construct the midpoint token between 'h2' and 'h3'
         Long midpoint = 309687905L + (1383429731L - 309687905L) / 2;
-        tokenMapper.addHostToken(new HostToken(midpoint, new Host("h23", -1, "r1", Status.Up)));
+        tokenMapper.addHostToken(new HostToken(midpoint, new HostBuilder().setHostname("h23").setPort(-1).setRack("r1").setStatus(Status.Up).createHost()));
 
         failures += runTest(309687905L + 1L, 309687905L + 10L, "h23", tokenMapper);
         Assert.assertTrue("Failures: " + failures, failures == 0);
@@ -93,7 +92,7 @@ public class BinarySearchTokenMapperTest {
         Assert.assertTrue("Failures: " + failures, failures == 0);
 
         // Now remove token 'h3'
-        tokenMapper.remoteHostToken(new HostToken(1383429731L, new Host("h2", -1, "r1", Status.Up)));
+        tokenMapper.remoteHostToken(new HostToken(1383429731L, new HostBuilder().setHostname("h2").setPort(-1).setRack("r1").setStatus(Status.Up).createHost()));
 
         failures += runTest(309687905L + 1L, 309687905L + 10L, "h3", tokenMapper);
         Assert.assertTrue("Failures: " + failures, failures == 0);
@@ -137,10 +136,10 @@ public class BinarySearchTokenMapperTest {
 
         List<HostToken> tokens = new ArrayList<HostToken>();
 
-        tokens.add(new HostToken(309687905L, new Host("h1", -1, "r1", Status.Up)));
-        tokens.add(new HostToken(1383429731L, new Host("h2", -1, "r1", Status.Up)));
-        tokens.add(new HostToken(2457171554L, new Host("h3", -1, "r1", Status.Up)));
-        tokens.add(new HostToken(3530913377L, new Host("h4", -1, "r1", Status.Up)));
+        tokens.add(new HostToken(309687905L, new HostBuilder().setHostname("h1").setPort(-1).setRack("r1").setStatus(Status.Up).createHost()));
+        tokens.add(new HostToken(1383429731L, new HostBuilder().setHostname("h2").setPort(-1).setRack("r1").setStatus(Status.Up).createHost()));
+        tokens.add(new HostToken(2457171554L, new HostBuilder().setHostname("h3").setPort(-1).setRack("r1").setStatus(Status.Up).createHost()));
+        tokens.add(new HostToken(3530913377L, new HostBuilder().setHostname("h4").setPort(-1).setRack("r1").setStatus(Status.Up).createHost()));
 
         return tokens;
     }

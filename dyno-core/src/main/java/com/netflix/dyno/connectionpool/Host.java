@@ -15,11 +15,10 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.net.InetSocketAddress;
 import java.util.Objects;
-
-import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
-import org.apache.commons.lang3.StringUtils;
 
 /**
  * Class encapsulating information about a host.
@@ -35,12 +34,15 @@ import org.apache.commons.lang3.StringUtils;
 public class Host implements Comparable<Host> {
 
     public static final int DEFAULT_PORT = 8102;
-    public static final Host NO_HOST = new Host("UNKNOWN", "UNKNOWN", 0, "UNKNOWN");
+    public static final int DEFAULT_DATASTORE_PORT = 22122;
+    public static final Host NO_HOST = new HostBuilder().setHostname("UNKNOWN").setIpAddress("UNKNOWN").setPort(0)
+            .setRack("UNKNOWN").createHost();
 
     private final String hostname;
     private final String ipAddress;
     private final int port;
     private final int securePort;
+    private final int datastorePort;
     private final InetSocketAddress socketAddress;
     private final String rack;
     private final String datacenter;
@@ -52,56 +54,12 @@ public class Host implements Comparable<Host> {
         Up, Down;
     }
 
-    public Host(String hostname, int port, String rack) {
-        this(hostname, null, port, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down, null);
-    }
-
-    public Host(String hostname, String rack, Status status) {
-        this(hostname, null, DEFAULT_PORT, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
-    }
-
-    public Host(String hostname, int port, String rack, Status status) {
-        this(hostname, null, port, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
-    }
-
-    public Host(String hostname, int port, String rack, Status status, String hashtag) {
-        this(hostname, null, port, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
-    }
-
-    public Host(String hostname, int port, String rack, Status status, String hashtag, String password) {
-        this(hostname, null, port, port, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag, password);
-    }
-
-    public Host(String hostname, String ipAddress, int port, String rack) {
-        this(hostname, ipAddress, port, port, rack, ConfigUtils.getDataCenterFromRack(rack), Status.Down, null);
-    }
-
-    public Host(String hostname, String ipAddress, String rack, Status status) {
-        this(hostname, ipAddress, DEFAULT_PORT, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, null);
-    }
-
-    public Host(String hostname, String ipAddress, String rack, Status status, String hashtag) {
-        this(hostname, ipAddress, DEFAULT_PORT, DEFAULT_PORT, rack, ConfigUtils.getDataCenterFromRack(rack), status, hashtag);
-    }
-
-    public Host(String hostname, String ipAddress, int port, String rack, String datacenter, Status status) {
-        this(hostname, ipAddress, port, port, rack, datacenter, status, null);
-    }
-
-    public Host(String name, String ipAddress, int port, String rack, String datacenter, Status status,
-                String hashtag) {
-        this(name, ipAddress, port, port, rack, datacenter, status, hashtag);
-    }
-
-    public Host(String name, String ipAddress, int port, int securePort, String rack, String datacenter, Status status, String hashtag) {
-        this(name, ipAddress, port, port, rack, datacenter, status, hashtag, null);
-    }
-
-    public Host(String name, String ipAddress, int port, int securePort, String rack, String datacenter, Status status, String hashtag, String password) {
-        this.hostname = name;
+    public Host(String hostname, String ipAddress, int port, int securePort, int datastorePort, String rack, String datacenter, Status status, String hashtag, String password) {
+        this.hostname = hostname;
         this.ipAddress = ipAddress;
         this.port = port;
         this.securePort = securePort;
+        this.datastorePort = datastorePort;
         this.rack = rack;
         this.status = status;
         this.datacenter = datacenter;
@@ -110,7 +68,7 @@ public class Host implements Comparable<Host> {
 
         // Used for the unit tests to prevent host name resolution
         if (port != -1) {
-            this.socketAddress = new InetSocketAddress(name, port);
+            this.socketAddress = new InetSocketAddress(hostname, port);
         } else {
             this.socketAddress = null;
         }
@@ -137,6 +95,10 @@ public class Host implements Comparable<Host> {
 
     public int getSecurePort() {
         return securePort;
+    }
+
+    public int getDatastorePort() {
+        return datastorePort;
     }
 
     public String getDatacenter() {
@@ -166,6 +128,10 @@ public class Host implements Comparable<Host> {
 
     public String getPassword() {
         return password;
+    }
+
+    public Status getStatus() {
+        return status;
     }
 
     public InetSocketAddress getSocketAddress() {
@@ -222,5 +188,16 @@ public class Host implements Comparable<Host> {
         return "Host [hostname=" + hostname + ", ipAddress=" + ipAddress + ", port=" + port + ", rack: "
                 + rack + ", datacenter: " + datacenter + ", status: " + status.name() + ", hashtag="
                 + hashtag + ", password=" + (Objects.nonNull(password) ? "masked" : "null") + "]";
+    }
+
+    public static Host clone(Host host) {
+        return new HostBuilder().setHostname(host.getHostName())
+                        .setIpAddress(host.getIpAddress()).setPort(host.getPort())
+                        .setSecurePort(host.getSecurePort())
+                        .setRack(host.getRack())
+                        .setDatastorePort(host.getDatastorePort())
+                        .setDatacenter(host.getDatacenter()).setStatus(host.getStatus())
+                        .setHashtag(host.getHashtag())
+                        .setPassword(host.getPassword()).createHost();
     }
 }

@@ -52,6 +52,7 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
     private final ErrorRateMonitorConfig errorRateConfig;
     private final RetryPolicyFactory retryPolicyFactory;
     private final DynamicBooleanProperty failOnStartupIfNoHosts;
+    private final DynamicIntProperty lockVotingSize;
 
     private DynamicBooleanProperty isDualWriteEnabled;
     private DynamicStringProperty dualWriteClusterName;
@@ -72,6 +73,7 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
         configPublisherConfig = DynamicPropertyFactory.getInstance().getStringProperty(propertyPrefix + ".config.publisher.address", super.getConfigurationPublisherConfig());
         failOnStartupIfNoHosts = DynamicPropertyFactory.getInstance().getBooleanProperty(propertyPrefix + ".config.startup.failIfNoHosts", super.getFailOnStartupIfNoHosts());
         compressionThreshold = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".config.compressionThreshold", super.getValueCompressionThreshold());
+        lockVotingSize = DynamicPropertyFactory.getInstance().getIntProperty(propertyPrefix + ".config.lock.votingSize", super.getLockVotingSize());
 
         loadBalanceStrategy = parseLBStrategy(propertyPrefix);
         errorRateConfig = parseErrorRateMonitorConfig(propertyPrefix);
@@ -169,6 +171,11 @@ public class ArchaiusConnectionPoolConfiguration extends ConnectionPoolConfigura
     @Override
     public int getDualWritePercentage() {
         return dualWritePercentage.get();
+    }
+
+    @Override
+    public int getLockVotingSize() {
+        return lockVotingSize.get();
     }
 
     public void setIsDualWriteEnabled(DynamicBooleanProperty booleanProperty) {

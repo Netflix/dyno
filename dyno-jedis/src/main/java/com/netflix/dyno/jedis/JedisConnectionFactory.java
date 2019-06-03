@@ -15,16 +15,10 @@
  ******************************************************************************/
 package com.netflix.dyno.jedis;
 
-import java.util.concurrent.TimeUnit;
-
-import org.apache.commons.lang.NotImplementedException;
-import org.slf4j.LoggerFactory;
-
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionFactory;
-import com.netflix.dyno.connectionpool.ConnectionObservor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.ListenableFuture;
@@ -34,10 +28,10 @@ import com.netflix.dyno.connectionpool.OperationResult;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
-import com.netflix.dyno.connectionpool.exception.ThrottledException;
 import com.netflix.dyno.connectionpool.impl.ConnectionContextImpl;
 import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
-
+import org.apache.commons.lang.NotImplementedException;
+import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisShardInfo;
 import redis.clients.jedis.exceptions.JedisConnectionException;
@@ -45,6 +39,7 @@ import redis.clients.util.Sharded;
 
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.SSLSocketFactory;
+import java.util.concurrent.TimeUnit;
 
 public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 
@@ -59,12 +54,18 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
     }
 
     @Override
-    public Connection<Jedis> createConnection(HostConnectionPool<Jedis> pool, ConnectionObservor connectionObservor)
-            throws DynoConnectException, ThrottledException {
-
+    public Connection<Jedis> createConnection(HostConnectionPool<Jedis> pool)
+            throws DynoConnectException {
         return new JedisConnection(pool);
     }
 
+    @Override
+    public Connection<Jedis> createConnectionWithDataStore(HostConnectionPool<Jedis> pool)
+            throws DynoConnectException {
+        return new JedisConnection(pool, true);
+    }
+
+    // TODO: raghu compose redisconnection with jedisconnection in it
     public class JedisConnection implements Connection<Jedis> {
 
         private final HostConnectionPool<Jedis> hostPool;
@@ -74,17 +75,23 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
         private DynoConnectException lastDynoException;
 
         public JedisConnection(HostConnectionPool<Jedis> hostPool) {
+            this(hostPool, false);
+        }
+
+        public JedisConnection(HostConnectionPool<Jedis> hostPool, boolean connectDataStore) {
             this.hostPool = hostPool;
             Host host = hostPool.getHost();
 
+            int port = connectDataStore ? host.getDatastorePort() : host.getPort();
+
             if (sslSocketFactory == null) {
-                JedisShardInfo shardInfo = new JedisShardInfo(host.getHostAddress(), host.getPort(),
+                JedisShardInfo shardInfo = new JedisShardInfo(host.getHostAddress(), port,
                         hostPool.getConnectionTimeout(), hostPool.getSocketTimeout(), Sharded.DEFAULT_WEIGHT);
                 shardInfo.setPassword(host.getPassword());
 
                 jedisClient = new Jedis(shardInfo);
             } else {
-                JedisShardInfo shardInfo = new JedisShardInfo(host.getHostAddress(), host.getPort(),
+                JedisShardInfo shardInfo = new JedisShardInfo(host.getHostAddress(), port,
                         hostPool.getConnectionTimeout(), hostPool.getSocketTimeout(), Sharded.DEFAULT_WEIGHT,
                         true, sslSocketFactory, new SSLParameters(), null);
                 shardInfo.setPassword(host.getPassword());

@@ -26,11 +26,11 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.TreeMap;
 
+import com.netflix.dyno.connectionpool.HostBuilder;
 import org.junit.Assert;
 import org.junit.Test;
 
 import com.netflix.dyno.connectionpool.BaseOperation;
-import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.Host.Status;
 import com.netflix.dyno.connectionpool.impl.hash.Murmur1HashPartitioner;
@@ -59,15 +59,15 @@ public class TokenAwareSelectionBinaryTest {
     private static final String UTF_8 = "UTF-8";
     private static final Charset charset = Charset.forName(UTF_8);
 
-    private final HostToken h1 = new HostToken(309687905L, new Host("h1", -1, "r1", Status.Up));
-    private final HostToken h2 = new HostToken(1383429731L, new Host("h2", -1, "r1", Status.Up));
-    private final HostToken h3 = new HostToken(2457171554L, new Host("h3", -1, "r1", Status.Up));
-    private final HostToken h4 = new HostToken(3530913377L, new Host("h4", -1, "r1", Status.Up));
+    private final HostToken h1 = new HostToken(309687905L, new HostBuilder().setHostname("h1").setPort(-1).setRack("r1").setStatus(Status.Up).createHost());
+    private final HostToken h2 = new HostToken(1383429731L, new HostBuilder().setHostname("h2").setPort(-1).setRack("r1").setStatus(Status.Up).createHost());
+    private final HostToken h3 = new HostToken(2457171554L, new HostBuilder().setHostname("h3").setPort(-1).setRack("r1").setStatus(Status.Up).createHost());
+    private final HostToken h4 = new HostToken(3530913377L, new HostBuilder().setHostname("h4").setPort(-1).setRack("r1").setStatus(Status.Up).createHost());
 
-    private final HostToken h1p8100 = new HostToken(309687905L, new Host("h1", 8100, "r1", Status.Up));
-    private final HostToken h1p8101 = new HostToken(1383429731L, new Host("h1", 8101, "r1", Status.Up));
-    private final HostToken h1p8102 = new HostToken(2457171554L, new Host("h1", 8102, "r1", Status.Up));
-    private final HostToken h1p8103 = new HostToken(3530913377L, new Host("h1", 8103, "r1", Status.Up));
+    private final HostToken h1p8100 = new HostToken(309687905L, new HostBuilder().setHostname("h1").setPort(8100).setRack("r1").setStatus(Status.Up).createHost());
+    private final HostToken h1p8101 = new HostToken(1383429731L, new HostBuilder().setHostname("h1").setPort(8101).setRack("r1").setStatus(Status.Up).createHost());
+    private final HostToken h1p8102 = new HostToken(2457171554L, new HostBuilder().setHostname("h1").setPort(8102).setRack("r1").setStatus(Status.Up).createHost());
+    private final HostToken h1p8103 = new HostToken(3530913377L, new HostBuilder().setHostname("h1").setPort(8103).setRack("r1").setStatus(Status.Up).createHost());
 
     private final Murmur1HashPartitioner m1Hash = new Murmur1HashPartitioner();
 

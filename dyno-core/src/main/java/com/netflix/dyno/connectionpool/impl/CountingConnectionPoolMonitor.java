@@ -15,18 +15,22 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
-
 import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostConnectionStats;
-import com.netflix.dyno.connectionpool.HostGroup;
-import com.netflix.dyno.connectionpool.exception.*;
+import com.netflix.dyno.connectionpool.exception.BadRequestException;
+import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
+import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
+import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
+import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
+import com.netflix.dyno.connectionpool.exception.TimeoutException;
 import com.netflix.dyno.connectionpool.impl.utils.EstimatedHistogram;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Impl of {@link ConnectionPoolMonitor} using thread safe AtomicLongs
@@ -155,7 +159,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     public void incConnectionBorrowed(Host host, long delay) {
         this.connectionBorrowCount.incrementAndGet();
         this.borrowedConnHistogram.add(delay);
-        if (host == null || (host instanceof HostGroup)) {
+        if (host == null) {
             return;
         }
         getOrCreateHostStats(host).borrowed.incrementAndGet();
@@ -190,7 +194,7 @@ public class CountingConnectionPoolMonitor implements ConnectionPoolMonitor {
     @Override
     public void incConnectionReturned(Host host) {
         this.connectionReturnCount.incrementAndGet();
-        if (host == null || (host instanceof HostGroup)) {
+        if (host == null) {
             return;
         }
         getOrCreateHostStats(host).returned.incrementAndGet();

@@ -34,17 +34,16 @@ import com.netflix.dyno.connectionpool.TokenRackMapper;
 import com.netflix.dyno.connectionpool.TopologyView;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
-import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
-import com.netflix.dyno.connectionpool.impl.lb.HostToken;
-import com.netflix.dyno.connectionpool.impl.lb.HttpEndpointBasedTokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
 import com.netflix.dyno.contrib.ArchaiusConnectionPoolConfiguration;
 import com.netflix.dyno.contrib.DynoCPMonitor;
 import com.netflix.dyno.contrib.DynoOPMonitor;
 import com.netflix.dyno.contrib.EurekaHostsSupplier;
+import com.netflix.dyno.jedis.operation.BaseKeyOperation;
+import com.netflix.dyno.jedis.operation.MultiKeyOperation;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
@@ -53,7 +52,6 @@ import redis.clients.jedis.BinaryClient.LIST_POSITION;
 import redis.clients.jedis.params.geo.GeoRadiusParam;
 import redis.clients.jedis.params.sortedset.ZAddParams;
 import redis.clients.jedis.params.sortedset.ZIncrByParams;
-
 import javax.net.ssl.SSLSocketFactory;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -105,90 +103,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     public String getClusterName() {
         return clusterName;
-    }
-
-    private abstract class BaseKeyOperation<T> implements Operation<Jedis, T> {
-
-        private final String key;
-        private final byte[] binaryKey;
-        private final OpName op;
-
-        private BaseKeyOperation(final String k, final OpName o) {
-            this.key = k;
-            this.binaryKey = null;
-            this.op = o;
-        }
-
-        private BaseKeyOperation(final byte[] k, final OpName o) {
-            this.key = null;
-            this.binaryKey = k;
-            this.op = o;
-        }
-
-        @Override
-        public String getName() {
-            return op.name();
-        }
-
-        @Override
-        public String getStringKey() {
-            return this.key;
-        }
-
-        public byte[] getBinaryKey() {
-            return this.binaryKey;
-        }
-
-    }
-
-    /**
-     * A poor man's solution for multikey operation. This is similar to
-     * basekeyoperation just that it takes a list of keys as arguments. For
-     * token aware, we just use the first key in the list. Ideally we should be
-     * doing a scatter gather
-     */
-    private abstract class MultiKeyOperation<T> implements Operation<Jedis, T> {
-
-        private final List<String> keys;
-        private final List<byte[]> binaryKeys;
-        private final OpName op;
-
-        private MultiKeyOperation(final List keys, final OpName o) {
-            Object firstKey = (keys != null && keys.size() > 0) ? keys.get(0) : null;
-
-            if (firstKey != null) {
-                if (firstKey instanceof String) {//string key
-                    this.keys = keys;
-                    this.binaryKeys = null;
-                } else if (firstKey instanceof byte[]) {//binary key
-                    this.keys = null;
-                    this.binaryKeys = keys;
-                } else {//something went wrong here
-                    this.keys = null;
-                    this.binaryKeys = null;
-                }
-            } else {
-                this.keys = null;
-                this.binaryKeys = null;
-            }
-
-            this.op = o;
-        }
-
-        @Override
-        public String getName() {
-            return op.name();
-        }
-
-        @Override
-        public String getStringKey() {
-            return (this.keys != null) ? this.keys.get(0) : null;
-        }
-
-        public byte[] getBinaryKey() {
-            return (binaryKeys != null) ? binaryKeys.get(0) : null;
-        }
-
     }
 
     /**
@@ -4177,6 +4091,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         private SSLSocketFactory sslSocketFactory;
         private TokenMapSupplier tokenMapSupplier;
         private TokenMapSupplier dualWriteTokenMapSupplier;
+        private boolean isDatastoreClient;
 
         public Builder() {
         }
@@ -4247,6 +4162,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
+        public Builder isDatastoreClient(boolean isDatastoreClient) {
+            this.isDatastoreClient = isDatastoreClient;
+            return this;
+        }
+
         public DynoJedisClient build() {
             assert (appName != null);
             assert (clusterName != null);
@@ -4255,6 +4175,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 cpConfig = new ArchaiusConnectionPoolConfiguration(appName);
                 Logger.info("Dyno Client runtime properties: " + cpConfig.toString());
             }
+            cpConfig.setConnectToDatastore(isDatastoreClient);
 
             if (cpConfig.isDualWriteEnabled()) {
                 return buildDynoDualWriterClient();
@@ -4297,9 +4218,9 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             DynoCPMonitor shadowCPMonitor = new DynoCPMonitor(shadowAppName);
             DynoOPMonitor shadowOPMonitor = new DynoOPMonitor(shadowAppName);
 
-            JedisConnectionFactory connFactory = new JedisConnectionFactory(shadowOPMonitor, sslSocketFactory);
-            final ConnectionPoolImpl<Jedis> shadowPool = startConnectionPool(shadowAppName, connFactory, shadowConfig,
-                    shadowCPMonitor);
+            DynoJedisUtils.updateConnectionPoolConfig(shadowConfig, shadowSupplier, dualWriteTokenMapSupplier, discoveryClient, clusterName);
+            final ConnectionPool<Jedis> shadowPool = DynoJedisUtils.createConnectionPool(shadowAppName, shadowOPMonitor, shadowCPMonitor, shadowConfig,
+                    sslSocketFactory);
 
             // Construct a connection pool with the shadow cluster settings
             DynoJedisClient shadowClient = new DynoJedisClient(shadowAppName, dualWriteClusterName, shadowPool,
@@ -4309,7 +4230,10 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
             ConnectionPoolMonitor cpMonitor = (this.cpMonitor == null) ? new DynoCPMonitor(appName) : this.cpMonitor;
 
-            final ConnectionPoolImpl<Jedis> pool = createConnectionPool(appName, opMonitor, cpMonitor);
+            DynoJedisUtils.updateConnectionPoolConfig(cpConfig, hostSupplier, tokenMapSupplier, discoveryClient,
+                    clusterName);
+            final ConnectionPool<Jedis> pool = DynoJedisUtils.createConnectionPool(appName, opMonitor, cpMonitor,
+                    cpConfig, sslSocketFactory);
 
             if (dualWriteDial != null) {
                 if (shadowConfig.getDualWritePercentage() > 0) {
@@ -4327,143 +4251,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             DynoOPMonitor opMonitor = new DynoOPMonitor(appName);
             ConnectionPoolMonitor cpMonitor = (this.cpMonitor == null) ? new DynoCPMonitor(appName) : this.cpMonitor;
 
-            final ConnectionPoolImpl<Jedis> pool = createConnectionPool(appName, opMonitor, cpMonitor);
+            DynoJedisUtils.updateConnectionPoolConfig(cpConfig, hostSupplier, tokenMapSupplier, discoveryClient,
+                    clusterName);
+            final ConnectionPool<Jedis> pool = DynoJedisUtils.createConnectionPool(appName, opMonitor, cpMonitor,
+                    cpConfig, sslSocketFactory);
 
             return new DynoJedisClient(appName, clusterName, pool, opMonitor, cpMonitor);
-        }
-
-        private ConnectionPoolImpl<Jedis> createConnectionPool(String appName, DynoOPMonitor opMonitor,
-                                                               ConnectionPoolMonitor cpMonitor) {
-
-            if (hostSupplier == null) {
-                if (discoveryClient == null) {
-                    throw new DynoConnectException("HostSupplier not provided. Cannot initialize EurekaHostsSupplier "
-                            + "which requires a DiscoveryClient");
-                } else {
-                    hostSupplier = new EurekaHostsSupplier(clusterName, discoveryClient);
-                }
-            }
-
-            cpConfig.withHostSupplier(hostSupplier);
-            if (tokenMapSupplier != null)
-                cpConfig.withTokenSupplier(tokenMapSupplier);
-            setLoadBalancingStrategy(cpConfig);
-            setHashtagConnectionPool(hostSupplier, cpConfig);
-            JedisConnectionFactory connFactory = new JedisConnectionFactory(opMonitor, sslSocketFactory);
-
-            return startConnectionPool(appName, connFactory, cpConfig, cpMonitor);
-        }
-
-        private ConnectionPoolImpl<Jedis> startConnectionPool(String appName, JedisConnectionFactory connFactory,
-                                                              ConnectionPoolConfigurationImpl cpConfig, ConnectionPoolMonitor cpMonitor) {
-
-            final ConnectionPoolImpl<Jedis> pool = new ConnectionPoolImpl<Jedis>(connFactory, cpConfig, cpMonitor);
-
-            try {
-                Logger.info("Starting connection pool for app " + appName);
-
-                pool.start().get();
-
-                Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        pool.shutdown();
-                    }
-                }));
-            } catch (NoAvailableHostsException e) {
-                if (cpConfig.getFailOnStartupIfNoHosts()) {
-                    throw new RuntimeException(e);
-                }
-
-                Logger.warn("UNABLE TO START CONNECTION POOL -- IDLING");
-
-                pool.idle();
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-
-            return pool;
-        }
-
-        private void setLoadBalancingStrategy(ConnectionPoolConfigurationImpl config) {
-            if (ConnectionPoolConfiguration.LoadBalancingStrategy.TokenAware == config.getLoadBalancingStrategy()) {
-                if (config.getTokenSupplier() == null) {
-                    Logger.warn(
-                            "TOKEN AWARE selected and no token supplier found, using default HttpEndpointBasedTokenMapSupplier()");
-                    config.withTokenSupplier(new HttpEndpointBasedTokenMapSupplier());
-                }
-
-                if (config.getLocalRack() == null && config.localZoneAffinity()) {
-                    String warningMessage = "DynoJedisClient for app=[" + config.getName()
-                            + "] is configured for local rack affinity "
-                            + "but cannot determine the local rack! DISABLING rack affinity for this instance. "
-                            + "To make the client aware of the local rack either use "
-                            + "ConnectionPoolConfigurationImpl.setLocalRack() when constructing the client "
-                            + "instance or ensure EC2_AVAILABILTY_ZONE is set as an environment variable, e.g. "
-                            + "run with -DLOCAL_RACK=us-east-1c";
-                    config.setLocalZoneAffinity(false);
-                    Logger.warn(warningMessage);
-                }
-            }
-        }
-
-        /**
-         * Set the hash to the connection pool if is provided by Dynomite
-         *
-         * @param hostSupplier
-         * @param config
-         */
-        private void setHashtagConnectionPool(HostSupplier hostSupplier, ConnectionPoolConfigurationImpl config) {
-            // Find the hosts from host supplier
-            List<Host> hosts = (List<Host>) hostSupplier.getHosts();
-            Collections.sort(hosts);
-            // Convert the arraylist to set
-
-            // Take the token map supplier (aka the token topology from
-            // Dynomite)
-            TokenMapSupplier tokenMapSupplier = config.getTokenSupplier();
-
-            // Create a list of host/Tokens
-            List<HostToken> hostTokens;
-            if (tokenMapSupplier != null) {
-                Set<Host> hostSet = new HashSet<Host>(hosts);
-                hostTokens = tokenMapSupplier.getTokens(hostSet);
-                /* Dyno cannot reach the TokenMapSupplier endpoint,
-                 * therefore no nodes can be retrieved.
-                 */
-                if (hostTokens.isEmpty()) {
-                    throw new DynoConnectException("No hosts in the TokenMapSupplier");
-                }
-            } else {
-                throw new DynoConnectException("TokenMapSupplier not provided");
-            }
-
-            String hashtag = hostTokens.get(0).getHost().getHashtag();
-            short numHosts = 0;
-            // Update inner state with the host tokens.
-            for (HostToken hToken : hostTokens) {
-                /**
-                 * Checking hashtag consistency from all Dynomite hosts. If
-                 * hashtags are not consistent, we need to throw an exception.
-                 */
-                String hashtagNew = hToken.getHost().getHashtag();
-
-                if (hashtag != null && !hashtag.equals(hashtagNew)) {
-                    Logger.error("Hashtag mismatch across hosts");
-                    throw new RuntimeException("Hashtags are different across hosts");
-                } // addressing case hashtag = null, hashtag = {} ...
-                else if (numHosts > 0 && hashtag == null && hashtagNew != null) {
-                    Logger.error("Hashtag mismatch across hosts");
-                    throw new RuntimeException("Hashtags are different across hosts");
-
-                }
-                hashtag = hashtagNew;
-                numHosts++;
-            }
-
-            if (hashtag != null) {
-                config.withHashtag(hashtag);
-            }
         }
 
     }
