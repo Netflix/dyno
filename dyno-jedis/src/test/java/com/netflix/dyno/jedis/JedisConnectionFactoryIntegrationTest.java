@@ -16,6 +16,7 @@
 package com.netflix.dyno.jedis;
 
 import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.HostBuilder;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl;
@@ -41,7 +42,7 @@ public class JedisConnectionFactoryIntegrationTest {
 
     private final String datacenter = "rack";
 
-    private final Host localHost = new Host("localhost", port, rack, Host.Status.Up);
+    private final Host localHost = new HostBuilder().setHostname("localhost").setPort(port).setRack(rack).setStatus(Host.Status.Up).createHost();
 
     private final HostSupplier localHostSupplier = new HostSupplier() {
 

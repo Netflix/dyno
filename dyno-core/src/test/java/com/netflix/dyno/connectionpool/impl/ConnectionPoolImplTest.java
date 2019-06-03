@@ -15,29 +15,14 @@
  */
 package com.netflix.dyno.connectionpool.impl;
 
-import java.util.*;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-
-import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
-import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-
 import com.netflix.dyno.connectionpool.AsyncOperation;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionContext;
 import com.netflix.dyno.connectionpool.ConnectionFactory;
-import com.netflix.dyno.connectionpool.ConnectionObservor;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancingStrategy;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
+import com.netflix.dyno.connectionpool.HostBuilder;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostConnectionStats;
 import com.netflix.dyno.connectionpool.HostSupplier;
@@ -51,10 +36,29 @@ import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
+import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
+import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
 import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
 import com.netflix.dyno.connectionpool.exception.ThrottledException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolConfigurationImpl.ErrorRateMonitorConfigImpl;
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class ConnectionPoolImplTest {
 
@@ -137,19 +141,24 @@ public class ConnectionPoolImplTest {
     private static ConnectionFactory<TestClient> connFactory = new ConnectionFactory<TestClient>() {
 
         @Override
-        public Connection<TestClient> createConnection(HostConnectionPool<TestClient> pool, ConnectionObservor observor) throws DynoConnectException, ThrottledException {
+        public Connection<TestClient> createConnection(HostConnectionPool<TestClient> pool) throws DynoConnectException, ThrottledException {
             return new TestConnection(pool);
+        }
+
+        @Override
+        public Connection<TestClient> createConnectionWithDataStore(HostConnectionPool<TestClient> pool) throws DynoConnectException {
+            return null;
         }
     };
 
-    private Host host1 = new Host("host1", 8080, "localRack", Status.Up);
-    private Host host2 = new Host("host2", 8080, "localRack", Status.Up);
-    private Host host3 = new Host("host3", 8080, "localRack", Status.Up);
+    private Host host1 = new HostBuilder().setHostname("host1").setPort(8080).setRack("localRack").setStatus(Status.Up).createHost();
+    private Host host2 = new HostBuilder().setHostname("host2").setPort(8080).setRack("localRack").setStatus(Status.Up).createHost();
+    private Host host3 = new HostBuilder().setHostname("host3").setPort(8080).setRack("localRack").setStatus(Status.Up).createHost();
 
     // Used for Cross Rack fallback testing
-    private Host host4 = new Host("host4", 8080, "remoteRack", Status.Up);
-    private Host host5 = new Host("host5", 8080, "remoteRack", Status.Up);
-    private Host host6 = new Host("host6", 8080, "remoteRack", Status.Up);
+    private Host host4 = new HostBuilder().setHostname("host4").setPort(8080).setRack("remoteRack").setStatus(Status.Up).createHost();
+    private Host host5 = new HostBuilder().setHostname("host5").setPort(8080).setRack("remoteRack").setStatus(Status.Up).createHost();
+    private Host host6 = new HostBuilder().setHostname("host6").setPort(8080).setRack("remoteRack").setStatus(Status.Up).createHost();
 
     private final List<Host> hostSupplierHosts = new ArrayList<Host>();
 
@@ -486,7 +495,7 @@ public class ConnectionPoolImplTest {
         final ConnectionFactory<TestClient> badConnectionFactory = new ConnectionFactory<TestClient>() {
 
             @Override
-            public Connection<TestClient> createConnection(final HostConnectionPool<TestClient> pool, ConnectionObservor cObservor) throws DynoConnectException, ThrottledException {
+            public Connection<TestClient> createConnection(final HostConnectionPool<TestClient> pool) throws DynoConnectException {
 
                 return new TestConnection(pool) {
 
@@ -498,6 +507,11 @@ public class ConnectionPoolImplTest {
                         return super.execute(op);
                     }
                 };
+            }
+
+            @Override
+            public Connection<TestClient> createConnectionWithDataStore(HostConnectionPool<TestClient> pool) throws DynoConnectException {
+                return null;
             }
         };
 
@@ -598,17 +612,22 @@ public class ConnectionPoolImplTest {
     }
 
     @Test
-    public void testWithRetries() throws Exception {
+    public void testWithRetries() {
 
         final ConnectionFactory<TestClient> badConnectionFactory = new ConnectionFactory<TestClient>() {
             @Override
-            public Connection<TestClient> createConnection(final HostConnectionPool<TestClient> pool, ConnectionObservor cObservor) throws DynoConnectException, ThrottledException {
+            public Connection<TestClient> createConnection(final HostConnectionPool<TestClient> pool) throws DynoConnectException {
                 return new TestConnection(pool) {
                     @Override
                     public <R> OperationResult<R> execute(Operation<TestClient, R> op) throws DynoException {
                         throw new DynoException("Fail for bad host");
                     }
                 };
+            }
+
+            @Override
+            public Connection<TestClient> createConnectionWithDataStore(HostConnectionPool<TestClient> pool) throws DynoConnectException {
+                return null;
             }
         };
 
@@ -642,9 +661,9 @@ public class ConnectionPoolImplTest {
 
         final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(connFactory, cpConfig, cpMonitor);
 
-        hostSupplierHosts.add(new Host("host1_down", 8080, "localRack", Status.Down));
-        hostSupplierHosts.add(new Host("host2_down", 8080, "localRack", Status.Down));
-        hostSupplierHosts.add(new Host("host3_down", 8080, "localRack", Status.Down));
+        hostSupplierHosts.add(new HostBuilder().setHostname("host1_down").setPort(8080).setRack("localRack").setStatus(Status.Down).createHost());
+        hostSupplierHosts.add(new HostBuilder().setHostname("host2_down").setPort(8080).setRack("localRack").setStatus(Status.Down).createHost());
+        hostSupplierHosts.add(new HostBuilder().setHostname("host3_down").setPort(8080).setRack("localRack").setStatus(Status.Down).createHost());
 
         pool.start();
 

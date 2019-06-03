@@ -15,9 +15,6 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
 import com.netflix.dyno.connectionpool.ErrorRateMonitorConfig;
 import com.netflix.dyno.connectionpool.HashPartitioner;
@@ -28,6 +25,9 @@ import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.health.ErrorMonitor.ErrorMonitorFactory;
 import com.netflix.dyno.connectionpool.impl.health.SimpleErrorMonitorImpl.SimpleErrorMonitorFactory;
 import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfiguration {
 
@@ -51,6 +51,9 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     private static final int DEFAULT_DUAL_WRITE_PERCENTAGE = 0;
     private static final int DEFAULT_HEALTH_TRACKER_DELAY_MILLIS = 10 * 1000;
     private static final int DEFAULT_POOL_RECONNECT_WAIT_MILLIS = 5 * 1000;
+    private static final boolean DEFAULT_FALLBACK_POLICY = true;
+    private static final boolean DEFAULT_CONNECT_TO_DATASTORE = false;
+    private static final int DEFAULT_LOCK_VOTING_SIZE = -1;
 
     private HostSupplier hostSupplier;
     private TokenMapSupplier tokenSupplier;
@@ -81,6 +84,9 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     private int dualWritePercentage = DEFAULT_DUAL_WRITE_PERCENTAGE;
     private int healthTrackerDelayMillis = DEFAULT_HEALTH_TRACKER_DELAY_MILLIS;
     private int poolReconnectWaitMillis = DEFAULT_POOL_RECONNECT_WAIT_MILLIS;
+    private int lockVotingSize = DEFAULT_LOCK_VOTING_SIZE;
+    private boolean fallbackEnabled = DEFAULT_FALLBACK_POLICY;
+    private boolean connectToDatastore = DEFAULT_CONNECT_TO_DATASTORE;
 
 
     private RetryPolicyFactory retryFactory = new RetryPolicyFactory() {
@@ -132,13 +138,28 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         this.hashtag = config.getHashtag();
         this.healthTrackerDelayMillis = config.getHealthTrackerDelayMillis();
         this.poolReconnectWaitMillis = config.getPoolReconnectWaitMillis();
+        this.lockVotingSize = config.getLockVotingSize();
+    }
+
+    @Override
+    public boolean isConnectToDatastore() {
+        return connectToDatastore;
+    }
+
+    @Override
+    public boolean isFallbackEnabled() {
+        return fallbackEnabled;
+    }
+
+    @Override
+    public int getLockVotingSize() {
+        return lockVotingSize;
     }
 
     @Override
     public String getName() {
         return name;
     }
-
 
     @Override
     public int getMaxConnsPerHost() {
@@ -288,10 +309,20 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
                 ", hashtag=" + hashtag +
                 ", healthTrackerDelayMillis=" + healthTrackerDelayMillis +
                 ", poolReconnectWaitMillis=" + poolReconnectWaitMillis +
+                ", lockVotingSize =" + lockVotingSize +
                 '}';
     }
 
     // ALL SETTERS
+    public void setConnectToDatastore(boolean connectToDatastore) {
+        this.connectToDatastore = connectToDatastore;
+    }
+
+    public ConnectionPoolConfigurationImpl setFallbackEnabled(boolean fallbackEnabled) {
+        this.fallbackEnabled = fallbackEnabled;
+        return this;
+    }
+
     public ConnectionPoolConfigurationImpl setMaxConnsPerHost(int maxConnsPerHost) {
         this.maxConnsPerHost = maxConnsPerHost;
         return this;

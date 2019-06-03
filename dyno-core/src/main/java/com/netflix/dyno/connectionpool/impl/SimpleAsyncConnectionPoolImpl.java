@@ -15,15 +15,6 @@
  */
 package com.netflix.dyno.connectionpool.impl;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionFactory;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
@@ -33,6 +24,14 @@ import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.impl.lb.CircularList;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
 
@@ -209,7 +208,7 @@ public class SimpleAsyncConnectionPoolImpl<CL> implements HostConnectionPool<CL>
 
     private Connection<CL> createConnection() throws DynoException {
 
-        Connection<CL> connection = connFactory.createConnection((HostConnectionPool<CL>) this, null);
+        Connection<CL> connection = connFactory.createConnection(this);
         connMap.put(connection, connection);
         connection.open();
         rrSelector.addElement(connection);

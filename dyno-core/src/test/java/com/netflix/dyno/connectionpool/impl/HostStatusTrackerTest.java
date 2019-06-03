@@ -19,6 +19,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
+import com.netflix.dyno.connectionpool.HostBuilder;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -135,7 +136,7 @@ public class HostStatusTrackerTest {
         if (names != null && names.length > 0) {
             for (String name : names) {
                 if (!name.isEmpty()) {
-                    set.add(new Host(name, 1234, "r1"));
+                    set.add(new HostBuilder().setHostname(name).setPort(1234).setRack("r1").createHost());
                 }
             }
         }

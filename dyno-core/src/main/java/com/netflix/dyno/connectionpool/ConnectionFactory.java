@@ -31,10 +31,12 @@ public interface ConnectionFactory<CL> {
      * Create a connection for this {@link HostConnectionPool}
      *
      * @param pool
-     * @param observor
      * @return
      * @throws DynoConnectException
      * @throws ThrottledException
      */
-    public Connection<CL> createConnection(HostConnectionPool<CL> pool, ConnectionObservor observor) throws DynoConnectException, ThrottledException;
+    Connection<CL> createConnection(HostConnectionPool<CL> pool) throws DynoConnectException;
+
+    Connection<CL> createConnectionWithDataStore(HostConnectionPool<CL> pool)
+            throws DynoConnectException;
 }

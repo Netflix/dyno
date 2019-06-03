@@ -249,7 +249,7 @@ public class DynoDistributedCounterDemo extends DynoJedisDemo {
         }
 
         try {
-            demo.initWithRemoteClusterFromEurekaUrl(args[0], 8102);
+            demo.initWithRemoteClusterFromEurekaUrl(args[0], 8102, false);
 
             //demo.runMultiThreadedCounter(numCounters);
             //demo.runMultiThreadedPipelineCounter(numCounters);

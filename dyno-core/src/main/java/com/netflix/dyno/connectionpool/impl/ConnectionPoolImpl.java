@@ -15,30 +15,43 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
+import com.netflix.dyno.connectionpool.*;
+import com.netflix.dyno.connectionpool.exception.DynoException;
+import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
+import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
+import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
+import com.netflix.dyno.connectionpool.impl.HostConnectionPoolFactory.Type;
+import com.netflix.dyno.connectionpool.impl.health.ConnectionPoolHealthTracker;
+import com.netflix.dyno.connectionpool.impl.lb.HostSelectionWithFallback;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
+import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.management.InstanceAlreadyExistsException;
+import javax.management.InstanceNotFoundException;
+import javax.management.MBeanRegistrationException;
+import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
+import javax.management.NotCompliantMBeanException;
+import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import com.netflix.dyno.connectionpool.*;
-import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
-import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.netflix.dyno.connectionpool.exception.DynoException;
-import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
-import com.netflix.dyno.connectionpool.impl.HostConnectionPoolFactory.Type;
-import com.netflix.dyno.connectionpool.impl.health.ConnectionPoolHealthTracker;
-import com.netflix.dyno.connectionpool.impl.lb.HostSelectionWithFallback;
-import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
-import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Predicate;
-
-import javax.management.*;
 
 /**
  * Main implementation class for {@link ConnectionPool} The pool deals with a
@@ -292,8 +305,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
                 connection = selectionStrategy.getConnectionUsingRetryPolicy(op,
                         cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS, retry);
 
-                connection.getContext().setMetadata("host", connection.getHost().getHostAddress());
-                connection.getContext().setMetadata("port", connection.getHost().getPort());
+                updateConnectionContext(connection.getContext(), connection.getHost());
 
                 OperationResult<R> result = connection.execute(op);
 
@@ -381,7 +393,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
 
                 do {
                     try {
-                        connection.getContext().setMetadata("host", connection.getHost().getHostAddress());
+                        updateConnectionContext(connection.getContext(), connection.getHost());
                         OperationResult<R> result = connection.execute(op);
 
                         // Add context to the result from the successful
@@ -440,6 +452,12 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
         } else {
             return results;
         }
+    }
+
+    private void updateConnectionContext(ConnectionContext context, Host host) {
+        context.setMetadata("host", host.getHostAddress());
+        context.setMetadata("port", host.getPort());
+        context.setMetadata("datastorePort", host.getDatastorePort());
     }
 
     /**

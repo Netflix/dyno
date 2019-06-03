@@ -5,6 +5,7 @@ import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
 import com.netflix.dyno.connectionpool.Host;
 import com.netflix.dyno.connectionpool.Host.Status;
+import com.netflix.dyno.connectionpool.HostBuilder;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
@@ -14,12 +15,6 @@ import com.netflix.dyno.connectionpool.impl.CountingConnectionPoolMonitor;
 import com.netflix.dyno.connectionpool.impl.HostConnectionPoolImpl;
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
 import com.netflix.dyno.contrib.DynoOPMonitor;
-
-import java.net.ConnectException;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -29,6 +24,11 @@ import redis.clients.jedis.Jedis;
 import redis.clients.jedis.exceptions.JedisDataException;
 import redis.embedded.RedisServer;
 import redis.embedded.RedisServerBuilder;
+
+import java.net.ConnectException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
 public class RedisAuthenticationIntegrationTest {
 
@@ -56,7 +56,7 @@ public class RedisAuthenticationIntegrationTest {
         redisServer = new RedisServer(REDIS_PORT);
         redisServer.start();
 
-        Host noAuthHost = new Host("localhost", REDIS_PORT, REDIS_RACK, Host.Status.Up);
+        Host noAuthHost = new HostBuilder().setHostname("localhost").setPort(REDIS_PORT).setRack(REDIS_RACK).setStatus(Status.Up).createHost();
         TokenMapSupplierImpl tokenMapSupplier = new TokenMapSupplierImpl(noAuthHost);
         DynoJedisClient dynoClient = constructJedisClient(tokenMapSupplier,
                 () -> Collections.singletonList(noAuthHost));
@@ -76,7 +76,7 @@ public class RedisAuthenticationIntegrationTest {
                 .build();
         redisServer.start();
 
-        Host authHost = new Host("localhost", REDIS_PORT, REDIS_RACK, Status.Up, null, "password");
+        Host authHost = new HostBuilder().setHostname("localhost").setPort(REDIS_PORT).setRack(REDIS_RACK).setStatus(Status.Up).setHashtag(null).setPassword("password").createHost();
 
         TokenMapSupplierImpl tokenMapSupplier = new TokenMapSupplierImpl(authHost);
         DynoJedisClient dynoClient = constructJedisClient(tokenMapSupplier,
@@ -94,7 +94,7 @@ public class RedisAuthenticationIntegrationTest {
         redisServer = new RedisServer(REDIS_PORT);
         redisServer.start();
 
-        Host noAuthHost = new Host("localhost", REDIS_PORT, REDIS_RACK, Host.Status.Up);
+        Host noAuthHost = new HostBuilder().setHostname("localhost").setPort(REDIS_PORT).setRack(REDIS_RACK).setStatus(Status.Up).createHost();
 
         JedisConnectionFactory conFactory =
                 new JedisConnectionFactory(new DynoOPMonitor("some-application-name"), null);
@@ -103,7 +103,7 @@ public class RedisAuthenticationIntegrationTest {
         HostConnectionPool<Jedis> hostConnectionPool =
                 new HostConnectionPoolImpl<>(noAuthHost, conFactory, cpConfig, poolMonitor);
         Connection<Jedis> connection = conFactory
-                .createConnection(hostConnectionPool, null);
+                .createConnection(hostConnectionPool);
 
         connection.execPing();
     }
@@ -116,7 +116,7 @@ public class RedisAuthenticationIntegrationTest {
                 .build();
         redisServer.start();
 
-        Host authHost = new Host("localhost", REDIS_PORT, REDIS_RACK, Status.Up, null, "password");
+        Host authHost = new HostBuilder().setHostname("localhost").setPort(REDIS_PORT).setRack(REDIS_RACK).setStatus(Status.Up).setHashtag(null).setPassword("password").createHost();
 
         JedisConnectionFactory conFactory =
                 new JedisConnectionFactory(new DynoOPMonitor("some-application-name"), null);
@@ -125,14 +125,14 @@ public class RedisAuthenticationIntegrationTest {
         HostConnectionPool<Jedis> hostConnectionPool =
                 new HostConnectionPoolImpl<>(authHost, conFactory, cpConfig, poolMonitor);
         Connection<Jedis> connection = conFactory
-                .createConnection(hostConnectionPool, null);
+                .createConnection(hostConnectionPool);
 
         connection.execPing();
     }
 
     @Test
     public void testJedisConnFactory_connectionFailed() throws Exception {
-        Host noAuthHost = new Host("localhost", REDIS_PORT, REDIS_RACK, Host.Status.Up);
+        Host noAuthHost = new HostBuilder().setHostname("localhost").setPort(REDIS_PORT).setRack(REDIS_RACK).setStatus(Status.Up).createHost();
 
         JedisConnectionFactory conFactory =
                 new JedisConnectionFactory(new DynoOPMonitor("some-application-name"), null);
@@ -141,7 +141,7 @@ public class RedisAuthenticationIntegrationTest {
         HostConnectionPool<Jedis> hostConnectionPool =
                 new HostConnectionPoolImpl<>(noAuthHost, conFactory, cpConfig, poolMonitor);
         Connection<Jedis> connection = conFactory
-                .createConnection(hostConnectionPool, null);
+                .createConnection(hostConnectionPool);
 
         try {
             connection.execPing();
@@ -160,7 +160,7 @@ public class RedisAuthenticationIntegrationTest {
                 .build();
         redisServer.start();
 
-        Host noAuthHost = new Host("localhost", REDIS_PORT, REDIS_RACK, Host.Status.Up);
+        Host noAuthHost = new HostBuilder().setHostname("localhost").setPort(REDIS_PORT).setRack(REDIS_RACK).setStatus(Status.Up).createHost();
 
         JedisConnectionFactory conFactory =
                 new JedisConnectionFactory(new DynoOPMonitor("some-application-name"), null);
@@ -169,7 +169,7 @@ public class RedisAuthenticationIntegrationTest {
         HostConnectionPool<Jedis> hostConnectionPool =
                 new HostConnectionPoolImpl<>(noAuthHost, conFactory, cpConfig, poolMonitor);
         Connection<Jedis> connection = conFactory
-                .createConnection(hostConnectionPool, null);
+                .createConnection(hostConnectionPool);
 
         try {
             connection.execPing();
@@ -187,8 +187,7 @@ public class RedisAuthenticationIntegrationTest {
                 .build();
         redisServer.start();
 
-        Host authHost = new Host("localhost", REDIS_PORT, REDIS_RACK, Status.Up, null,
-                "invalid-password");
+        Host authHost = new HostBuilder().setHostname("localhost").setPort(REDIS_PORT).setRack(REDIS_RACK).setStatus(Status.Up).setHashtag(null).setPassword("invalid-password").createHost();
 
         JedisConnectionFactory jedisConnectionFactory =
                 new JedisConnectionFactory(new DynoOPMonitor("some-application-name"), null);
@@ -198,7 +197,7 @@ public class RedisAuthenticationIntegrationTest {
         HostConnectionPool<Jedis> hostConnectionPool = new HostConnectionPoolImpl<>(authHost,
                 jedisConnectionFactory, connectionPoolConfiguration, new CountingConnectionPoolMonitor());
         Connection<Jedis> connection = jedisConnectionFactory
-                .createConnection(hostConnectionPool, null);
+                .createConnection(hostConnectionPool);
 
         try {
             connection.execPing();
