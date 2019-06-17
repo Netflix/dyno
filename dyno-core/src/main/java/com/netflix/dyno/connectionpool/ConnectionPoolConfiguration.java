@@ -1,12 +1,12 @@
 /*******************************************************************************
  * Copyright 2011 Netflix
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -22,16 +22,20 @@ import com.netflix.dyno.connectionpool.impl.health.ErrorMonitor.ErrorMonitorFact
  * Specifies configuration settings for an instance of a dyno connection pool.
  */
 public interface ConnectionPoolConfiguration {
-    
-	enum LoadBalancingStrategy {
-		RoundRobin, TokenAware;
-	}
+
+    enum LoadBalancingStrategy {
+        RoundRobin, TokenAware;
+    }
 
     enum CompressionStrategy {
-        /** Disables compression */
+        /**
+         * Disables compression
+         */
         NONE,
 
-        /** Compresses values that exceed {@link #getValueCompressionThreshold()} */
+        /**
+         * Compresses values that exceed {@link #getValueCompressionThreshold()}
+         */
         THRESHOLD
     }
 
@@ -68,7 +72,7 @@ public interface ConnectionPoolConfiguration {
      * Returns the {@link LoadBalancingStrategy} for this connection pool.
      */
     LoadBalancingStrategy getLoadBalancingStrategy();
-    
+
     /**
      * Specifies the socket connection timeout
      */
@@ -83,33 +87,34 @@ public interface ConnectionPoolConfiguration {
      * </p>
      */
     boolean localZoneAffinity();
-    
+
     /**
      * Returns the {@link ErrorMonitorFactory} to use for this connection pool.
      */
     ErrorMonitorFactory getErrorMonitorFactory();
-    
+
     /**
      * Returns the {@link RetryPolicyFactory} to use for this connection pool.
      */
     RetryPolicyFactory getRetryPolicyFactory();
-    
+
     /**
      * Returns the {@link HostSupplier} to use for this connection pool.
      */
     HostSupplier getHostSupplier();
-    
+
     /**
      * Returns the {@link TokenMapSupplier} to use for this connection pool.
      */
     TokenMapSupplier getTokenSupplier();
-            
+
     /**
      * Returns the {@link HashPartitioner} for this connection pool.
-     * @return 
+     *
+     * @return
      */
     HashPartitioner getHashPartitioner();
-    
+
     /**
      * Returns the interval for which pings are issued on connections.
      *
@@ -118,7 +123,7 @@ public interface ConnectionPoolConfiguration {
      * </p>
      */
     int getPingFrequencySeconds();
-    
+
     /**
      * Returns the local rack name for this connection pool. In AWS terminology this is a zone, e.g. us-east-1c.
      */
@@ -150,7 +155,7 @@ public interface ConnectionPoolConfiguration {
      * log configuration settings to a central system such as elastic search or cassandra.
      * </p>
      */
-     String getConfigurationPublisherConfig();
+    String getConfigurationPublisherConfig();
 
     /**
      * If there are no hosts marked as 'Up' in the {@link HostSupplier} when starting the connection pool
@@ -209,8 +214,10 @@ public interface ConnectionPoolConfiguration {
      * Returns the schedule time delay in milliseconds for the connection pool health tracker
      */
     int getHealthTrackerDelayMillis();
+
     /**
      * Returns the amount of time pool reconnect has to wait before establishing new connections.
+     *
      * @return
      */
     int getPoolReconnectWaitMillis();

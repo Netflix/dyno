@@ -1,12 +1,12 @@
 /**
  * Copyright 2016 Netflix, Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -120,7 +120,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return null;
     }
-    
+
     /**
      *  writeAsync() for binary commands
      */
@@ -138,7 +138,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return null;
     }
-    
+
 
     /**
      * Returns true if the connection pool
@@ -150,14 +150,14 @@ public class DynoDualWriterClient extends DynoJedisClient {
      * connect to them, for example, if security groups are not configured properly.
      */
     private boolean sendShadowRequest(String key) {
-        return  this.getConnPool().getConfiguration().isDualWriteEnabled() &&
+        return this.getConnPool().getConfiguration().isDualWriteEnabled() &&
                 !this.getConnPool().isIdle() &&
                 this.getConnPool().getActivePools().size() > 0 &&
                 dial.isInRange(key);
     }
-    
+
     private boolean sendShadowRequest(byte[] key) {
-        return  this.getConnPool().getConfiguration().isDualWriteEnabled() &&
+        return this.getConnPool().getConfiguration().isDualWriteEnabled() &&
                 !this.getConnPool().isIdle() &&
                 this.getConnPool().getActivePools().size() > 0 &&
                 dial.isInRange(key);
@@ -188,20 +188,20 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         @Override
         public boolean isInRange(String key) {
-            return range.get() >  (System.currentTimeMillis() % 100);
+            return range.get() > (System.currentTimeMillis() % 100);
         }
-        
+
         @Override
         public boolean isInRange(byte[] key) {
-            return range.get() >  (System.currentTimeMillis() % 100);
+            return range.get() > (System.currentTimeMillis() % 100);
         }
 
         @Override
         public void setRange(int range) {
             this.range.set(range);
         }
-    }   
-    
+    }
+
 
     //----------------------------- JEDIS COMMANDS --------------------------------------
 
@@ -225,7 +225,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public OperationResult<String> d_hmset(final String key, final Map<String, String> hash) {
-        writeAsync(key, new Callable<OperationResult<String>>(){
+        writeAsync(key, new Callable<OperationResult<String>>() {
             @Override
             public OperationResult<String> call() throws Exception {
                 return shadowClient.d_hmset(key, hash);
@@ -294,7 +294,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public OperationResult<String> d_setex(final String key, final Integer seconds, final String value) {
-        writeAsync(key, new Callable<OperationResult<String>>(){
+        writeAsync(key, new Callable<OperationResult<String>>() {
             @Override
             public OperationResult<String> call() throws Exception {
                 return shadowClient.d_setex(key, seconds, value);
@@ -307,7 +307,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Long del(final String key) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_del(key);
@@ -316,10 +316,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.del(key);
     }
-    
+
     @Override
     public Long expire(final String key, final int seconds) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_expire(key, seconds);
@@ -328,10 +328,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.expire(key, seconds);
     }
-    
+
     @Override
     public Long expireAt(final String key, final long unixTime) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_expireAt(key, unixTime);
@@ -340,10 +340,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.expireAt(key, unixTime);
     }
-    
+
     @Override
     public String getSet(final String key, final String value) {
-        writeAsync(key, new Callable<OperationResult<String>>(){
+        writeAsync(key, new Callable<OperationResult<String>>() {
             @Override
             public OperationResult<String> call() throws Exception {
                 return shadowClient.d_getSet(key, value);
@@ -352,10 +352,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.getSet(key, value);
     }
-    
+
     @Override
     public Long hdel(final String key, final String... fields) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_hdel(key, fields);
@@ -364,10 +364,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.hdel(key);
     }
-    
+
     @Override
-    public  Long hincrBy(final String key, final String field, final long value) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+    public Long hincrBy(final String key, final String field, final long value) {
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_hincrBy(key, field, value);
@@ -376,10 +376,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.hincrBy(key, field, value);
     }
-    
+
     @Override
-    public  Double hincrByFloat(final String key, final String field, final double value)  {
-        writeAsync(key, new Callable<OperationResult<Double>>(){
+    public Double hincrByFloat(final String key, final String field, final double value) {
+        writeAsync(key, new Callable<OperationResult<Double>>() {
             @Override
             public OperationResult<Double> call() throws Exception {
                 return shadowClient.d_hincrByFloat(key, field, value);
@@ -388,10 +388,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.hincrByFloat(key, field, value);
     }
-    
+
     @Override
-    public  Long hsetnx(final String key, final String field, final String value) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+    public Long hsetnx(final String key, final String field, final String value) {
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_hsetnx(key, field, value);
@@ -400,10 +400,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.hsetnx(key, field, value);
     }
-    
+
     @Override
     public Long incr(final String key) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_incr(key);
@@ -412,10 +412,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.incr(key);
     }
-    
+
     @Override
     public Long incrBy(final String key, final long delta) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_incrBy(key, delta);
@@ -424,10 +424,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.incrBy(key, delta);
     }
-    
+
     @Override
     public Double incrByFloat(final String key, final double increment) {
-        writeAsync(key, new Callable<OperationResult<Double>>(){
+        writeAsync(key, new Callable<OperationResult<Double>>() {
             @Override
             public OperationResult<Double> call() throws Exception {
                 return shadowClient.d_incrByFloat(key, increment);
@@ -436,10 +436,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.incrByFloat(key, increment);
     }
-    
+
     @Override
     public String lpop(final String key) {
-        writeAsync(key, new Callable<OperationResult<String>>(){
+        writeAsync(key, new Callable<OperationResult<String>>() {
             @Override
             public OperationResult<String> call() throws Exception {
                 return shadowClient.d_lpop(key);
@@ -448,10 +448,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.lpop(key);
     }
-    
+
     @Override
     public Long lpush(final String key, final String... values) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_lpush(key, values);
@@ -460,10 +460,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.lpush(key, values);
     }
-     
+
     @Override
     public Long lrem(final String key, final long count, final String value) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_lrem(key, count, value);
@@ -472,10 +472,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.lrem(key, count, value);
     }
-    
+
     @Override
     public String lset(final String key, final long count, final String value) {
-        writeAsync(key, new Callable<OperationResult<String>>(){
+        writeAsync(key, new Callable<OperationResult<String>>() {
             @Override
             public OperationResult<String> call() throws Exception {
                 return shadowClient.d_lset(key, count, value);
@@ -484,10 +484,10 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
         return DynoDualWriterClient.super.lset(key, count, value);
     }
-    
+
     @Override
     public String ltrim(final String key, final long start, final long end) {
-        writeAsync(key, new Callable<OperationResult<String>>(){
+        writeAsync(key, new Callable<OperationResult<String>>() {
             @Override
             public OperationResult<String> call() throws Exception {
                 return shadowClient.d_ltrim(key, start, end);
@@ -499,7 +499,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Long persist(final String key) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_persist(key);
@@ -511,7 +511,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Long pexpireAt(final String key, final long millisecondsTimestamp) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_pexpireAt(key, millisecondsTimestamp);
@@ -523,7 +523,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Long pttl(final String key) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_pttl(key);
@@ -535,7 +535,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public String rename(final String oldkey, final String newkey) {
-        writeAsync(oldkey, new Callable<OperationResult<String>>(){
+        writeAsync(oldkey, new Callable<OperationResult<String>>() {
             @Override
             public OperationResult<String> call() throws Exception {
                 return shadowClient.d_rename(oldkey, oldkey);
@@ -547,7 +547,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public String rpop(final String key) {
-        writeAsync(key, new Callable<OperationResult<String>>(){
+        writeAsync(key, new Callable<OperationResult<String>>() {
             @Override
             public OperationResult<String> call() throws Exception {
                 return shadowClient.d_rpop(key);
@@ -559,7 +559,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Long scard(final String key) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_scard(key);
@@ -571,7 +571,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Boolean setbit(final String key, final long offset, final boolean value) {
-        writeAsync(key, new Callable<OperationResult<Boolean>>(){
+        writeAsync(key, new Callable<OperationResult<Boolean>>() {
             @Override
             public OperationResult<Boolean> call() throws Exception {
                 return shadowClient.d_setbit(key, offset, value);
@@ -583,7 +583,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Boolean setbit(final String key, final long offset, final String value) {
-        writeAsync(key, new Callable<OperationResult<Boolean>>(){
+        writeAsync(key, new Callable<OperationResult<Boolean>>() {
             @Override
             public OperationResult<Boolean> call() throws Exception {
                 return shadowClient.d_setbit(key, offset, value);
@@ -595,7 +595,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Long setnx(final String key, final String value) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_setnx(key, value);
@@ -607,7 +607,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Long setrange(final String key, final long offset, final String value) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_setrange(key, offset, value);
@@ -619,7 +619,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Set<String> smembers(final String key) {
-        writeAsync(key, new Callable<OperationResult<Set<String>>>(){
+        writeAsync(key, new Callable<OperationResult<Set<String>>>() {
             @Override
             public OperationResult<Set<String>> call() throws Exception {
                 return shadowClient.d_smembers(key);
@@ -631,19 +631,19 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Long smove(final String srckey, final String dstkey, final String member) {
-        writeAsync(srckey, new Callable<OperationResult<Long>>(){
+        writeAsync(srckey, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
-                return shadowClient.d_smove(srckey,dstkey,member);
+                return shadowClient.d_smove(srckey, dstkey, member);
             }
         });
 
-        return DynoDualWriterClient.super.smove(srckey,dstkey,member);
+        return DynoDualWriterClient.super.smove(srckey, dstkey, member);
     }
 
     @Override
     public List<String> sort(final String key) {
-        writeAsync(key, new Callable<OperationResult<List<String>>>(){
+        writeAsync(key, new Callable<OperationResult<List<String>>>() {
             @Override
             public OperationResult<List<String>> call() throws Exception {
                 return shadowClient.d_sort(key);
@@ -655,7 +655,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public String spop(final String key) {
-        writeAsync(key, new Callable<OperationResult<String>>(){
+        writeAsync(key, new Callable<OperationResult<String>>() {
             @Override
             public OperationResult<String> call() throws Exception {
                 return shadowClient.d_spop(key);
@@ -667,43 +667,43 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Long srem(final String key, final String... members) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
-                return shadowClient.d_srem(key,members);
+                return shadowClient.d_srem(key, members);
             }
         });
 
-        return DynoDualWriterClient.super.srem(key,members);
+        return DynoDualWriterClient.super.srem(key, members);
     }
 
     @Override
     public ScanResult<String> sscan(final String key, final String cursor) {
-        writeAsync(key, new Callable<OperationResult<ScanResult<String>>>(){
+        writeAsync(key, new Callable<OperationResult<ScanResult<String>>>() {
             @Override
             public OperationResult<ScanResult<String>> call() throws Exception {
-                return shadowClient.d_sscan(key,cursor);
+                return shadowClient.d_sscan(key, cursor);
             }
         });
 
-        return DynoDualWriterClient.super.sscan(key,cursor);
+        return DynoDualWriterClient.super.sscan(key, cursor);
     }
 
     @Override
     public ScanResult<String> sscan(final String key, final String cursor, final ScanParams params) {
-        writeAsync(key, new Callable<OperationResult<ScanResult<String>>>(){
+        writeAsync(key, new Callable<OperationResult<ScanResult<String>>>() {
             @Override
             public OperationResult<ScanResult<String>> call() throws Exception {
-                return shadowClient.d_sscan(key,cursor,params);
+                return shadowClient.d_sscan(key, cursor, params);
             }
         });
 
-        return DynoDualWriterClient.super.sscan(key,cursor,params);
+        return DynoDualWriterClient.super.sscan(key, cursor, params);
     }
 
     @Override
     public Long ttl(final String key) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_ttl(key);
@@ -715,7 +715,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Long zadd(final String key, final double score, final String member) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_zadd(key, score, member);
@@ -727,7 +727,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Long zadd(final String key, final Map<String, Double> scoreMembers) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_zadd(key, scoreMembers);
@@ -739,7 +739,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Double zincrby(final String key, final double score, final String member) {
-        writeAsync(key, new Callable<OperationResult<Double>>(){
+        writeAsync(key, new Callable<OperationResult<Double>>() {
             @Override
             public OperationResult<Double> call() throws Exception {
                 return shadowClient.d_zincrby(key, score, member);
@@ -751,7 +751,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public Long zrem(final String key, final String... member) {
-        writeAsync(key, new Callable<OperationResult<Long>>(){
+        writeAsync(key, new Callable<OperationResult<Long>>() {
             @Override
             public OperationResult<Long> call() throws Exception {
                 return shadowClient.d_zrem(key, member);
@@ -763,7 +763,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public List<String> blpop(final int timeout, final String key) {
-        writeAsync(key, new Callable<OperationResult<List<String>>>(){
+        writeAsync(key, new Callable<OperationResult<List<String>>>() {
             @Override
             public OperationResult<List<String>> call() throws Exception {
                 return shadowClient.d_blpop(timeout, key);
@@ -775,7 +775,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public List<String> brpop(final int timeout, final String key) {
-        writeAsync(key, new Callable<OperationResult<List<String>>>(){
+        writeAsync(key, new Callable<OperationResult<List<String>>>() {
             @Override
             public OperationResult<List<String>> call() throws Exception {
                 return shadowClient.d_brpop(timeout, key);
@@ -790,7 +790,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public String set(final byte[] key, final byte[] value) {
-        writeAsync(key, new Callable<OperationResult<String>>(){
+        writeAsync(key, new Callable<OperationResult<String>>() {
             @Override
             public OperationResult<String> call() throws Exception {
                 return shadowClient.d_set(key, value);
@@ -802,7 +802,7 @@ public class DynoDualWriterClient extends DynoJedisClient {
 
     @Override
     public String setex(final byte[] key, final int seconds, final byte[] value) {
-        writeAsync(key, new Callable<OperationResult<String>>(){
+        writeAsync(key, new Callable<OperationResult<String>>() {
             @Override
             public OperationResult<String> call() throws Exception {
                 return shadowClient.d_setex(key, seconds, value);

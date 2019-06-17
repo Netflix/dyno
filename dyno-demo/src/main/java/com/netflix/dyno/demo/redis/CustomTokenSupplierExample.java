@@ -1,12 +1,12 @@
 /**
  * Copyright 2016 Netflix, Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -33,9 +33,9 @@ import java.util.Set;
  * Simple example that illustrates using a custom token map supplier. This example works with a local redis
  * installation on the default port. To setup and run:
  * <ol>
- *     <li>brew install redis</li>
- *     <li>redis-server /usr/local/etc/redis.conf</li>
- *     <li>java -classpath &lt;...classpath...&gt; com.netflix.dyno.demo.redis.CustomTokenSupplierExample</li>
+ * <li>brew install redis</li>
+ * <li>redis-server /usr/local/etc/redis.conf</li>
+ * <li>java -classpath &lt;...classpath...&gt; com.netflix.dyno.demo.redis.CustomTokenSupplierExample</li>
  * </ol>
  */
 public class CustomTokenSupplierExample {
@@ -88,12 +88,12 @@ public class CustomTokenSupplierExample {
     public void runSimpleTest() throws Exception {
 
         // write
-        for (int i=0; i<10; i++) {
+        for (int i = 0; i < 10; i++) {
             client.set("" + i, "" + i);
         }
         // read
-        for (int i=0; i<10; i++) {
-            OperationResult<String> result = client.d_get(""+i);
+        for (int i = 0; i < 10; i++) {
+            OperationResult<String> result = client.d_get("" + i);
             System.out.println("Key: " + i + ", Value: " + result.getResult() + " " + result.getNode());
         }
     }

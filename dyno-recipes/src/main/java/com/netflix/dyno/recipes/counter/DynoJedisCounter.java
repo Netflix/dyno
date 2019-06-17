@@ -37,9 +37,8 @@ import java.util.Set;
  * Redis's atomic increment functionality.
  * </p>
  *
- * @see {@INCR http://redis.io/commands/INCR}
- *
  * @author jcacciatore
+ * @see {@INCR http://redis.io/commands/INCR}
  */
 @ThreadSafe
 public class DynoJedisCounter implements DynoCounter {
@@ -74,7 +73,7 @@ public class DynoJedisCounter implements DynoCounter {
     public Long get() {
         Long result = 0L;
         ArrayList<String> values = new ArrayList<String>(generatedKeys.size());
-        for (String key: generatedKeys) {
+        for (String key : generatedKeys) {
             String val = client.get(key);
             if (val != null) {
                 result += Long.valueOf(val);

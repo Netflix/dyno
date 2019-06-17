@@ -1,2 +1,2 @@
-rootProject.name='dyno'
+rootProject.name = 'dyno'
 include 'dyno-core', 'dyno-contrib', 'dyno-memcache', 'dyno-jedis', 'dyno-client', 'dyno-redisson', 'dyno-demo', 'dyno-recipes'

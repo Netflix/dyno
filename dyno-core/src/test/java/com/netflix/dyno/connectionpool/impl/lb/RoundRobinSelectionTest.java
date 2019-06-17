@@ -1,12 +1,12 @@
 /**
  * Copyright 2016 Netflix, Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -36,7 +36,7 @@ public class RoundRobinSelectionTest {
     /**
      * cqlsh:dyno_bootstrap> select "availabilityZone","hostname","token" from
      * tokens where "appId" = 'dynomite_redis_puneet';
-     * 
+     *
      * availabilityZone | hostname | token
      * ------------------+--------------------------------------------+------------
      * us-east-1c | ec2-54-83-179-213.compute-1.amazonaws.com | 1383429731
@@ -47,7 +47,7 @@ public class RoundRobinSelectionTest {
      * us-east-1e | ec2-54-198-239-231.compute-1.amazonaws.com | 2457171554
      * us-east-1e | ec2-54-226-212-40.compute-1.amazonaws.com | 1383429731
      * us-east-1e | ec2-54-197-178-229.compute-1.amazonaws.com | 3530913377
-     * 
+     *
      * cqlsh:dyno_bootstrap>
      */
 
@@ -68,10 +68,10 @@ public class RoundRobinSelectionTest {
             return null;
         }
 
-		@Override
-		public byte[] getBinaryKey() {
-			return null;
-		}
+        @Override
+        public byte[] getBinaryKey() {
+            return null;
+        }
     };
 
     @Test

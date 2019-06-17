@@ -1,12 +1,12 @@
 /*******************************************************************************
  * Copyright 2011 Netflix
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -23,37 +23,36 @@ import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 
 /**
  * Console that gives the admin insight into the current status of the Dyno {@link ConnectionPool}
- * 
- * @author poberai
  *
+ * @author poberai
  */
 public class MonitorConsole implements MonitorConsoleMBean {
 
-	private static final MonitorConsole Instance = new MonitorConsole();
+    private static final MonitorConsole Instance = new MonitorConsole();
 
     /*package*/ static final String OBJECT_NAME = "com.netflix.dyno.connectionpool.impl:type=MonitorConsole";
 
     public static MonitorConsole getInstance() {
-		return Instance;
-	}
+        return Instance;
+    }
 
-	private final ConcurrentHashMap<String, ConnectionPoolMonitor> cpMonitors = new ConcurrentHashMap<String, ConnectionPoolMonitor>();
-	private final ConcurrentHashMap<String, ConnectionPoolImpl<?>> connectionPools = new ConcurrentHashMap<String, ConnectionPoolImpl<?>>();
-	
-	private MonitorConsole() {
-		
-	}
+    private final ConcurrentHashMap<String, ConnectionPoolMonitor> cpMonitors = new ConcurrentHashMap<String, ConnectionPoolMonitor>();
+    private final ConcurrentHashMap<String, ConnectionPoolImpl<?>> connectionPools = new ConcurrentHashMap<String, ConnectionPoolImpl<?>>();
+
+    private MonitorConsole() {
+
+    }
 
     @Override
-	public String getMonitorNames() {
-		return cpMonitors.keySet().toString();
-	}
-	
-	public void addMonitorConsole(String name, ConnectionPoolMonitor monitor) {
-		cpMonitors.put(name, monitor);
-	}
-	
-	public void registerConnectionPool(ConnectionPoolImpl<?> cp) {
+    public String getMonitorNames() {
+        return cpMonitors.keySet().toString();
+    }
+
+    public void addMonitorConsole(String name, ConnectionPoolMonitor monitor) {
+        cpMonitors.put(name, monitor);
+    }
+
+    public void registerConnectionPool(ConnectionPoolImpl<?> cp) {
         ConnectionPoolImpl<?> cpImpl = connectionPools.putIfAbsent(cp.getName(), cp);
 
         if (cpImpl != null) {
@@ -65,65 +64,65 @@ public class MonitorConsole implements MonitorConsoleMBean {
             addMonitorConsole(cp.getName(), cp.getMonitor());
         }
 
-	}
+    }
 
     @Override
-	public String getMonitorStats(String name) {
-		
-		ConnectionPoolMonitor cpMonitor = cpMonitors.get(name);
-		if (cpMonitor == null) {
-			return name + " NOT FOUND";
-		}
-		
-		StringBuilder sb = new StringBuilder();
-		
-		 sb
-		 .append("ConnectionPoolMonitor(")
-         .append("\nConnections[" )
-             .append("   created: " ).append(cpMonitor.getConnectionCreatedCount())
-             .append(",  closed: "  ).append(cpMonitor.getConnectionClosedCount())
-             .append(",  recycled: ").append(cpMonitor.getConnectionRecycledCount())
-             .append(",  createFailed: "  ).append(cpMonitor.getConnectionCreateFailedCount())
-             .append(",  borrowed: ").append(cpMonitor.getConnectionBorrowedCount())
-             .append(",  returned: ").append(cpMonitor.getConnectionReturnedCount())
-             .append(",  borrowedLatMean: ").append(cpMonitor.getConnectionBorrowedLatMean())
-             .append(",  borrowedLatP99: ").append(cpMonitor.getConnectionBorrowedLatP99())
-             
-         .append("]\nOperations[")
-             .append("   success=" ).append(cpMonitor.getOperationSuccessCount())
-             .append(",  failure=" ).append(cpMonitor.getOperationFailureCount())
-             .append(",  failover=").append(cpMonitor.getFailoverCount())
-         .append("]\nHosts[")
-             .append("   add="        ).append(cpMonitor.getHostUpCount())
-             .append(",  down="       ).append(cpMonitor.getHostDownCount())
-         .append("])");
-		 
-		 Map<Host, HostConnectionStats> hostStats = cpMonitor.getHostStats();
-		 for (Host host : hostStats.keySet()) {
-			 
-			 if (host.getHostAddress().contains("AllHosts")) {
-				 continue;
-			 }
-			 
-			 HostConnectionStats hStats = hostStats.get(host);
-			 sb.append("\nHost: " + host.getHostAddress() + ":" + host.getPort() + ":" + host.getRack() + "\t");
-			 sb.append(" borrowed: " + hStats.getConnectionsBorrowed());
-			 sb.append(" returned: " + hStats.getConnectionsReturned());
-			 sb.append(" created: " + hStats.getConnectionsCreated());
-			 sb.append(" closed: " + hStats.getConnectionsClosed());
-			 sb.append(" createFailed: " + hStats.getConnectionsCreateFailed());
-			 sb.append(" errors: " + hStats.getOperationErrorCount());
-			 sb.append(" success: " + hStats.getOperationSuccessCount());
-		 }
-		 sb.append("\n");
-		 
-		 return sb.toString();
-	}
+    public String getMonitorStats(String name) {
 
-	public TokenPoolTopology getTopology(String cpName) {
-		ConnectionPoolImpl<?> pool = connectionPools.get(cpName);
-		return (pool != null) ? pool.getTopology() : null;
-	}
+        ConnectionPoolMonitor cpMonitor = cpMonitors.get(name);
+        if (cpMonitor == null) {
+            return name + " NOT FOUND";
+        }
+
+        StringBuilder sb = new StringBuilder();
+
+        sb
+                .append("ConnectionPoolMonitor(")
+                .append("\nConnections[")
+                .append("   created: ").append(cpMonitor.getConnectionCreatedCount())
+                .append(",  closed: ").append(cpMonitor.getConnectionClosedCount())
+                .append(",  recycled: ").append(cpMonitor.getConnectionRecycledCount())
+                .append(",  createFailed: ").append(cpMonitor.getConnectionCreateFailedCount())
+                .append(",  borrowed: ").append(cpMonitor.getConnectionBorrowedCount())
+                .append(",  returned: ").append(cpMonitor.getConnectionReturnedCount())
+                .append(",  borrowedLatMean: ").append(cpMonitor.getConnectionBorrowedLatMean())
+                .append(",  borrowedLatP99: ").append(cpMonitor.getConnectionBorrowedLatP99())
+
+                .append("]\nOperations[")
+                .append("   success=").append(cpMonitor.getOperationSuccessCount())
+                .append(",  failure=").append(cpMonitor.getOperationFailureCount())
+                .append(",  failover=").append(cpMonitor.getFailoverCount())
+                .append("]\nHosts[")
+                .append("   add=").append(cpMonitor.getHostUpCount())
+                .append(",  down=").append(cpMonitor.getHostDownCount())
+                .append("])");
+
+        Map<Host, HostConnectionStats> hostStats = cpMonitor.getHostStats();
+        for (Host host : hostStats.keySet()) {
+
+            if (host.getHostAddress().contains("AllHosts")) {
+                continue;
+            }
+
+            HostConnectionStats hStats = hostStats.get(host);
+            sb.append("\nHost: " + host.getHostAddress() + ":" + host.getPort() + ":" + host.getRack() + "\t");
+            sb.append(" borrowed: " + hStats.getConnectionsBorrowed());
+            sb.append(" returned: " + hStats.getConnectionsReturned());
+            sb.append(" created: " + hStats.getConnectionsCreated());
+            sb.append(" closed: " + hStats.getConnectionsClosed());
+            sb.append(" createFailed: " + hStats.getConnectionsCreateFailed());
+            sb.append(" errors: " + hStats.getOperationErrorCount());
+            sb.append(" success: " + hStats.getOperationSuccessCount());
+        }
+        sb.append("\n");
+
+        return sb.toString();
+    }
+
+    public TokenPoolTopology getTopology(String cpName) {
+        ConnectionPoolImpl<?> pool = connectionPools.get(cpName);
+        return (pool != null) ? pool.getTopology() : null;
+    }
 
     @Override
     public Map<String, Map<String, List<String>>> getTopologySnapshot(String cpName) {

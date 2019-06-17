@@ -1,12 +1,12 @@
 /**
  * Copyright 2016 Netflix, Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -36,133 +36,135 @@ import com.netflix.dyno.connectionpool.impl.utils.RateLimitUtil;
 
 public class ErrorRateMonitorTest {
 
-	@Test 
-	public void testSimpleErrorCheckPolicy() throws Exception {
+    @Test
+    public void testSimpleErrorCheckPolicy() throws Exception {
 
-		List<Bucket> buckets = getBuckets(116, 120, 121, 120, 130, 125, 130, 120, 120, 120);
+        List<Bucket> buckets = getBuckets(116, 120, 121, 120, 130, 125, 130, 120, 120, 120);
 
-		SimpleErrorCheckPolicy policy = new SimpleErrorCheckPolicy(120, 10, 80);
-		Assert.assertTrue(policy.checkErrorRate(buckets));
+        SimpleErrorCheckPolicy policy = new SimpleErrorCheckPolicy(120, 10, 80);
+        Assert.assertTrue(policy.checkErrorRate(buckets));
 
-		policy = new SimpleErrorCheckPolicy(121, 10, 80);
-		Assert.assertFalse(policy.checkErrorRate(buckets));
+        policy = new SimpleErrorCheckPolicy(121, 10, 80);
+        Assert.assertFalse(policy.checkErrorRate(buckets));
 
-		policy = new SimpleErrorCheckPolicy(130, 10, 20);
-		Assert.assertTrue(policy.checkErrorRate(buckets));
+        policy = new SimpleErrorCheckPolicy(130, 10, 20);
+        Assert.assertTrue(policy.checkErrorRate(buckets));
 
-	}
+    }
 
-	private List<Bucket> getBuckets(Integer ... values) {
-		List<Bucket> buckets = new ArrayList<Bucket>();
+    private List<Bucket> getBuckets(Integer... values) {
+        List<Bucket> buckets = new ArrayList<Bucket>();
 
-		for (Integer i : values) {
-			Bucket b = new Bucket();
-			b.track(i);
-			buckets.add(b);
-		}
+        for (Integer i : values) {
+            Bucket b = new Bucket();
+            b.track(i);
+            buckets.add(b);
+        }
 
-		return buckets;
-	}
+        return buckets;
+    }
 
-	@Test
-	public void testNoErrorCheckTriggers() throws Exception {
+    @Test
+    public void testNoErrorCheckTriggers() throws Exception {
 
-		final ErrorRateMonitor errorMonitor = new ErrorRateMonitor(20, 1, 10);
-		errorMonitor.addPolicy(new SimpleErrorCheckPolicy(130, 8, 80));   // 80% of 10 seconds, if error rate > 120 then alert 
-		errorMonitor.addPolicy(new SimpleErrorCheckPolicy(200, 4, 80));  // 80% of 5 seconds, if error rate > 200 then alert 
+        final ErrorRateMonitor errorMonitor = new ErrorRateMonitor(20, 1, 10);
+        errorMonitor.addPolicy(new SimpleErrorCheckPolicy(130, 8, 80));   // 80% of 10 seconds, if error rate > 120 then alert
+        errorMonitor.addPolicy(new SimpleErrorCheckPolicy(200, 4, 80));  // 80% of 5 seconds, if error rate > 200 then alert
 
-		List<Integer> rates = CollectionUtils.newArrayList(90, 120, 180);
-		int errorCount = runTest(9, errorMonitor, rates);
+        List<Integer> rates = CollectionUtils.newArrayList(90, 120, 180);
+        int errorCount = runTest(9, errorMonitor, rates);
 
-		Assert.assertEquals(0, errorCount);
-	}
+        Assert.assertEquals(0, errorCount);
+    }
 
-	@Test
-	public void testSustainedErrorTriggers() throws Exception {
+    @Test
+    public void testSustainedErrorTriggers() throws Exception {
 
-		final ErrorRateMonitor errorMonitor = new ErrorRateMonitor(20, 1, 10);
-		errorMonitor.addPolicy(new SimpleErrorCheckPolicy(130, 8, 80));   // 80% of 10 seconds, if error rate > 120 then alert 
-		errorMonitor.addPolicy(new SimpleErrorCheckPolicy(200, 4, 80));  // 80% of 5 seconds, if error rate > 200 then alert 
+        final ErrorRateMonitor errorMonitor = new ErrorRateMonitor(20, 1, 10);
+        errorMonitor.addPolicy(new SimpleErrorCheckPolicy(130, 8, 80));   // 80% of 10 seconds, if error rate > 120 then alert
+        errorMonitor.addPolicy(new SimpleErrorCheckPolicy(200, 4, 80));  // 80% of 5 seconds, if error rate > 200 then alert
 
-		List<Integer> rates = CollectionUtils.newArrayList(130, 140, 180);
-		int errorCount = runTest(9, errorMonitor, rates);
+        List<Integer> rates = CollectionUtils.newArrayList(130, 140, 180);
+        int errorCount = runTest(9, errorMonitor, rates);
 
-		Assert.assertEquals(1, errorCount);
-	}
+        Assert.assertEquals(1, errorCount);
+    }
 
-	@Test
-	public void testOnlyLargeSpikeTriggers() throws Exception {
+    @Test
+    public void testOnlyLargeSpikeTriggers() throws Exception {
 
-		final ErrorRateMonitor errorMonitor = new ErrorRateMonitor(20, 1, 10);
-		errorMonitor.addPolicy(new SimpleErrorCheckPolicy(130, 10, 80));   // 80% of 10 seconds, if error rate > 120 then alert 
-		errorMonitor.addPolicy(new SimpleErrorCheckPolicy(200, 4, 80));  // 80% of 5 seconds, if error rate > 200 then alert 
+        final ErrorRateMonitor errorMonitor = new ErrorRateMonitor(20, 1, 10);
+        errorMonitor.addPolicy(new SimpleErrorCheckPolicy(130, 10, 80));   // 80% of 10 seconds, if error rate > 120 then alert
+        errorMonitor.addPolicy(new SimpleErrorCheckPolicy(200, 4, 80));  // 80% of 5 seconds, if error rate > 200 then alert
 
-		List<Integer> rates = new ArrayList<Integer>(); rates.add(110); rates.add(250);
-		int errorCount = runTest(10, errorMonitor, rates);
+        List<Integer> rates = new ArrayList<Integer>();
+        rates.add(110);
+        rates.add(250);
+        int errorCount = runTest(10, errorMonitor, rates);
 
-		Assert.assertEquals(1, errorCount);
-	}
+        Assert.assertEquals(1, errorCount);
+    }
 
-	private int runTest(int totalTestRunTimeSeconds, final ErrorRateMonitor errorMonitor, final List<Integer> rates) throws Exception {
+    private int runTest(int totalTestRunTimeSeconds, final ErrorRateMonitor errorMonitor, final List<Integer> rates) throws Exception {
 
-		int numThreads = 5; 
-		ExecutorService threadPool = Executors.newFixedThreadPool(numThreads);
+        int numThreads = 5;
+        ExecutorService threadPool = Executors.newFixedThreadPool(numThreads);
 
-		final AtomicReference<RateLimitUtil> limiter = new AtomicReference<RateLimitUtil>(RateLimitUtil.create(rates.get(0)));
-		final AtomicBoolean stop = new AtomicBoolean(false);
+        final AtomicReference<RateLimitUtil> limiter = new AtomicReference<RateLimitUtil>(RateLimitUtil.create(rates.get(0)));
+        final AtomicBoolean stop = new AtomicBoolean(false);
 
-		final CyclicBarrier barrier = new CyclicBarrier(numThreads+1);
-		final CountDownLatch latch = new CountDownLatch(numThreads);
+        final CyclicBarrier barrier = new CyclicBarrier(numThreads + 1);
+        final CountDownLatch latch = new CountDownLatch(numThreads);
 
-		final AtomicInteger errorCount = new AtomicInteger(0);
+        final AtomicInteger errorCount = new AtomicInteger(0);
 
-		for (int i=0; i<numThreads; i++) {
+        for (int i = 0; i < numThreads; i++) {
 
-			threadPool.submit(new Callable<Void>() {
+            threadPool.submit(new Callable<Void>() {
 
-				@Override
-				public Void call() throws Exception {
+                @Override
+                public Void call() throws Exception {
 
-					barrier.await();
-					while (!stop.get() && !Thread.currentThread().isInterrupted()) {
-						if (limiter.get().acquire()) {
-							boolean success = errorMonitor.trackErrorRate(1);
-							if (!success) {
-								errorCount.incrementAndGet();
-							}
-						}
-					}
-					latch.countDown();
-					return null;
-				}
-			});
-		}
+                    barrier.await();
+                    while (!stop.get() && !Thread.currentThread().isInterrupted()) {
+                        if (limiter.get().acquire()) {
+                            boolean success = errorMonitor.trackErrorRate(1);
+                            if (!success) {
+                                errorCount.incrementAndGet();
+                            }
+                        }
+                    }
+                    latch.countDown();
+                    return null;
+                }
+            });
+        }
 
-		barrier.await();
+        barrier.await();
 
-		int numIterations = rates.size();
-		int sleepPerIteration = totalTestRunTimeSeconds/numIterations;
+        int numIterations = rates.size();
+        int sleepPerIteration = totalTestRunTimeSeconds / numIterations;
 
-		int round = 1; 
-		do {
-			Thread.sleep(sleepPerIteration*1000);
-			if (round < rates.size()) {
-				System.out.println("Changing rate to " + rates.get(round));
-				limiter.set(RateLimitUtil.create(rates.get(round)));
-			}
-			round++;
-		} while (round <= numIterations);
+        int round = 1;
+        do {
+            Thread.sleep(sleepPerIteration * 1000);
+            if (round < rates.size()) {
+                System.out.println("Changing rate to " + rates.get(round));
+                limiter.set(RateLimitUtil.create(rates.get(round)));
+            }
+            round++;
+        } while (round <= numIterations);
 
-		stop.set(true);
-		latch.await();
-		threadPool.shutdownNow();
+        stop.set(true);
+        latch.await();
+        threadPool.shutdownNow();
 
-		List<Bucket> buckets = errorMonitor.getRateTracker().getAllBuckets();
-		for (Bucket b : buckets) {
-			System.out.print("  " + b.count());
-		}
-		System.out.println("\n=========TEST DONE==============");
+        List<Bucket> buckets = errorMonitor.getRateTracker().getAllBuckets();
+        for (Bucket b : buckets) {
+            System.out.print("  " + b.count());
+        }
+        System.out.println("\n=========TEST DONE==============");
 
-		return errorCount.get();
-	}
+        return errorCount.get();
+    }
 }

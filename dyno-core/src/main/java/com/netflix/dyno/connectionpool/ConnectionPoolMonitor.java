@@ -1,12 +1,12 @@
 /*******************************************************************************
  * Copyright 2011 Netflix
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,41 +21,41 @@ import java.util.Map;
  * Monitoring interface to receive notification of pool events. A concrete
  * monitor will make event stats available to a monitoring application and may
  * also log events to a log file.
- * 
+ *
  * @author poberai
  */
 public interface ConnectionPoolMonitor {
-	
+
     /**
      * Succeeded in executing an operation
-     * 
+     *
      * @param host
      * @param latency
      */
-	public void incOperationSuccess(Host host, long latency);
+    public void incOperationSuccess(Host host, long latency);
 
-	public long getOperationSuccessCount();
-    
+    public long getOperationSuccessCount();
+
     /**
      * Errors trying to execute an operation.
-     * 
+     *
      * @param reason
      * @param host
      */
-	public void incOperationFailure(Host host, Exception reason);
+    public void incOperationFailure(Host host, Exception reason);
 
-	public long getOperationFailureCount();
+    public long getOperationFailureCount();
 
-    
+
     /**
      * An operation failed but the connection pool will attempt to fail over to
-     * another host/connection.  
+     * another host/connection.
      */
     public void incFailover(Host host, Exception reason);
 
     public long getFailoverCount();
 
-   
+
     /**
      * Created a connection successfully
      */
@@ -65,9 +65,8 @@ public interface ConnectionPoolMonitor {
 
     /**
      * Closed a connection
-     * 
+     *
      * @param reason
-     *           
      */
     public void incConnectionClosed(Host host, Exception reason);
 
@@ -75,7 +74,7 @@ public interface ConnectionPoolMonitor {
 
     /**
      * Attempt to create a connection failed
-     * 
+     *
      * @param host
      * @param reason
      */
@@ -85,11 +84,9 @@ public interface ConnectionPoolMonitor {
 
     /**
      * Incremented for each connection borrowed
-     * 
-     * @param host
-     *            Host from which the connection was borrowed
-     * @param delay
-     *            Time spent in the connection pool borrowing the connection
+     *
+     * @param host  Host from which the connection was borrowed
+     * @param delay Time spent in the connection pool borrowing the connection
      */
     public void incConnectionBorrowed(Host host, long delay);
 
@@ -124,9 +121,8 @@ public interface ConnectionPoolMonitor {
 
     /**
      * Incremented for each connection returned.
-     * 
-     * @param host
-     *            Host to which connection is returned
+     *
+     * @param host Host to which connection is returned
      */
     public void incConnectionReturned(Host host);
 
@@ -135,8 +131,7 @@ public interface ConnectionPoolMonitor {
     /**
      * Incremented for each connection recycle.
      *
-     * @param host
-     *            Host to which connection is returned for recycle
+     * @param host Host to which connection is returned for recycle
      */
     public void incConnectionRecycled(Host host);
 
@@ -156,27 +151,27 @@ public interface ConnectionPoolMonitor {
      * @return Count of socket timeouts trying to execute an operation
      */
     public long getSocketTimeoutCount();
-    
+
     /**
      * @return Get number of unknown errors
      */
     public long getUnknownErrorCount();
-    
+
     /**
      * @return Get number of invalid requests (i.e. bad argument values)
      */
     public long getBadRequestCount();
-    
+
     /**
      * @return Count of times no hosts at all were available to execute an operation.
      */
     public long getNoHostCount();
-    
+
     /**
      * @return Return the number of hosts in the pool
      */
     public long getHostCount();
-    
+
     /**
      * @return Return the number of times any host was marked as down.
      */
@@ -190,7 +185,7 @@ public interface ConnectionPoolMonitor {
     /**
      * A host was added and given the associated pool. The pool is immutable and
      * can be used to get info about the number of open connections
-     * 
+     *
      * @param host
      * @param pool
      */
@@ -199,23 +194,22 @@ public interface ConnectionPoolMonitor {
     /**
      * A host was removed from the pool. This is usually called when a downed
      * host is removed from the ring.
-     * 
+     *
      * @param host
      */
     public void hostRemoved(Host host);
 
     /**
      * A host was identified as downed.
-     * 
+     *
      * @param host
-     * @param reason
-     *            Exception that caused the host to be identified as down
+     * @param reason Exception that caused the host to be identified as down
      */
     public void hostDown(Host host, Exception reason);
 
     /**
      * A host was reactivated after being marked down
-     * 
+     *
      * @param host
      * @param pool
      */

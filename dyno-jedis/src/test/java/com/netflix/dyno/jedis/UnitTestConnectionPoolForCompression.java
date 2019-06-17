@@ -1,12 +1,12 @@
 /**
  * Copyright 2016 Netflix, Inc.
- *
+ * <p>
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -61,8 +61,8 @@ public class UnitTestConnectionPoolForCompression implements ConnectionPool<Jedi
         when(client.set(anyString(), anyString())).thenAnswer(new Answer<String>() {
             @Override
             public String answer(InvocationOnMock invocation) throws Throwable {
-                String key = (String)invocation.getArguments()[0];
-                String value = (String)invocation.getArguments()[1];
+                String key = (String) invocation.getArguments()[0];
+                String value = (String) invocation.getArguments()[1];
                 redis_data.put(key, value);
                 return value;
             }
@@ -99,7 +99,7 @@ public class UnitTestConnectionPoolForCompression implements ConnectionPool<Jedi
             }
         });
 
-        when(client.mget(Matchers.<String>anyVararg())).thenAnswer (new Answer<List<String>>() {
+        when(client.mget(Matchers.<String>anyVararg())).thenAnswer(new Answer<List<String>>() {
             @Override
             public List<String> answer(InvocationOnMock invocation) throws Throwable {
 
@@ -110,7 +110,7 @@ public class UnitTestConnectionPoolForCompression implements ConnectionPool<Jedi
                 for (int i = 0; i < keys.length; i++) {
                     // get the ith key, find the value in redis_data
                     // if found, return that else return nil
-                    String key = (String)keys[i];
+                    String key = (String) keys[i];
                     String value = redis_data.get(key);
                     values.add(i, value);
                 }

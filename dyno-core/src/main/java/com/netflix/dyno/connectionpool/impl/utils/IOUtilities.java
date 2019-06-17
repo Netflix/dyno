@@ -1,12 +1,12 @@
 /*******************************************************************************
  * Copyright 2011 Netflix
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,44 +25,44 @@ import java.util.List;
 
 public class IOUtilities {
 
-	public static List<String> readLines(File file) {
+    public static List<String> readLines(File file) {
 
-		BufferedReader reader = null;
-		try {
-			reader = new BufferedReader(new FileReader(file));
-			String line = null;
-			
-			List<String> lines = new ArrayList<String>();
-			while ((line = reader.readLine()) != null) {
-				lines.add(line);
-			}
-			return lines;
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		} finally {
-			if (reader != null) {
-				try {
-					reader.close();
-				} catch (IOException e) {
-				}
-			}
-		}
-	}
+        BufferedReader reader = null;
+        try {
+            reader = new BufferedReader(new FileReader(file));
+            String line = null;
 
-	public static String toString(InputStream in) {
+            List<String> lines = new ArrayList<String>();
+            while ((line = reader.readLine()) != null) {
+                lines.add(line);
+            }
+            return lines;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        } finally {
+            if (reader != null) {
+                try {
+                    reader.close();
+                } catch (IOException e) {
+                }
+            }
+        }
+    }
 
-		byte[] buffer = new byte[1024];
-		int numRead = -1;
-		StringBuilder sb = new StringBuilder();
+    public static String toString(InputStream in) {
 
-		try  {
-			while ((numRead = in.read(buffer)) != -1) {
-				sb.append(new String(buffer, 0, numRead));
-			}
-		} catch (IOException e) {
-			throw new RuntimeException(e);
-		}
-		return sb.toString();
-	}
+        byte[] buffer = new byte[1024];
+        int numRead = -1;
+        StringBuilder sb = new StringBuilder();
+
+        try {
+            while ((numRead = in.read(buffer)) != -1) {
+                sb.append(new String(buffer, 0, numRead));
+            }
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return sb.toString();
+    }
 
 }

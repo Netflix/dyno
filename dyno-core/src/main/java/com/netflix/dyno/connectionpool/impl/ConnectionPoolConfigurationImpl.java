@@ -1,12 +1,12 @@
 /*******************************************************************************
  * Copyright 2011 Netflix
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,53 +30,53 @@ import com.netflix.dyno.connectionpool.impl.health.SimpleErrorMonitorImpl.Simple
 import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
 
 public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfiguration {
-	
-	// DEFAULTS 
-	private static final int DEFAULT_MAX_CONNS_PER_HOST = 3;
-	private static final int DEFAULT_MAX_TIMEOUT_WHEN_EXHAUSTED = 800;
-	private static final int DEFAULT_MAX_FAILOVER_COUNT = 3; 
-	private static final int DEFAULT_CONNECT_TIMEOUT = 3000; 
-	private static final int DEFAULT_SOCKET_TIMEOUT = 12000; 
-	private static final int DEFAULT_POOL_SHUTDOWN_DELAY = 60000; 
-	private static final int DEFAULT_PING_FREQ_SECONDS = 30;
-	private static final int DEFAULT_FLUSH_TIMINGS_FREQ_SECONDS = 300;
-	private static final boolean DEFAULT_LOCAL_RACK_AFFINITY = true;
-	private static final LoadBalancingStrategy DEFAULT_LB_STRATEGY = LoadBalancingStrategy.TokenAware;
-	private static final CompressionStrategy DEFAULT_COMPRESSION_STRATEGY = CompressionStrategy.NONE;
+
+    // DEFAULTS
+    private static final int DEFAULT_MAX_CONNS_PER_HOST = 3;
+    private static final int DEFAULT_MAX_TIMEOUT_WHEN_EXHAUSTED = 800;
+    private static final int DEFAULT_MAX_FAILOVER_COUNT = 3;
+    private static final int DEFAULT_CONNECT_TIMEOUT = 3000;
+    private static final int DEFAULT_SOCKET_TIMEOUT = 12000;
+    private static final int DEFAULT_POOL_SHUTDOWN_DELAY = 60000;
+    private static final int DEFAULT_PING_FREQ_SECONDS = 30;
+    private static final int DEFAULT_FLUSH_TIMINGS_FREQ_SECONDS = 300;
+    private static final boolean DEFAULT_LOCAL_RACK_AFFINITY = true;
+    private static final LoadBalancingStrategy DEFAULT_LB_STRATEGY = LoadBalancingStrategy.TokenAware;
+    private static final CompressionStrategy DEFAULT_COMPRESSION_STRATEGY = CompressionStrategy.NONE;
     private static final String DEFAULT_CONFIG_PUBLISHER_ADDRESS = null;
     private static final boolean DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS = true;
     private static final int DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS_SECONDS = 60;
     private static final int DEFAULT_VALUE_COMPRESSION_THRESHOLD_BYTES = 5 * 1024; // By default, compression is OFF
-	private static final boolean DEFAULT_IS_DUAL_WRITE_ENABLED = false;
+    private static final boolean DEFAULT_IS_DUAL_WRITE_ENABLED = false;
     private static final int DEFAULT_DUAL_WRITE_PERCENTAGE = 0;
     private static final int DEFAULT_HEALTH_TRACKER_DELAY_MILLIS = 10 * 1000;
     private static final int DEFAULT_POOL_RECONNECT_WAIT_MILLIS = 5 * 1000;
 
     private HostSupplier hostSupplier;
-	private TokenMapSupplier tokenSupplier;
-	private HostConnectionPoolFactory hostConnectionPoolFactory;
-  private HashPartitioner hashPartitioner;
-	private String hashtag;
-	private final String name;
-	private int maxConnsPerHost = DEFAULT_MAX_CONNS_PER_HOST; 
-	private int maxTimeoutWhenExhausted = DEFAULT_MAX_TIMEOUT_WHEN_EXHAUSTED; 
-	private int maxFailoverCount = DEFAULT_MAX_FAILOVER_COUNT; 
-	private int connectTimeout = DEFAULT_CONNECT_TIMEOUT; 
-	private int socketTimeout = DEFAULT_SOCKET_TIMEOUT; 
-	private int poolShutdownDelay = DEFAULT_POOL_SHUTDOWN_DELAY; 
-	private int pingFrequencySeconds = DEFAULT_PING_FREQ_SECONDS;
-	private int flushTimingsFrequencySeconds = DEFAULT_FLUSH_TIMINGS_FREQ_SECONDS;
-	private boolean localZoneAffinity = DEFAULT_LOCAL_RACK_AFFINITY;
-	private LoadBalancingStrategy lbStrategy = DEFAULT_LB_STRATEGY; 
-	private String localRack;
-	private String localDataCenter;
+    private TokenMapSupplier tokenSupplier;
+    private HostConnectionPoolFactory hostConnectionPoolFactory;
+    private HashPartitioner hashPartitioner;
+    private String hashtag;
+    private final String name;
+    private int maxConnsPerHost = DEFAULT_MAX_CONNS_PER_HOST;
+    private int maxTimeoutWhenExhausted = DEFAULT_MAX_TIMEOUT_WHEN_EXHAUSTED;
+    private int maxFailoverCount = DEFAULT_MAX_FAILOVER_COUNT;
+    private int connectTimeout = DEFAULT_CONNECT_TIMEOUT;
+    private int socketTimeout = DEFAULT_SOCKET_TIMEOUT;
+    private int poolShutdownDelay = DEFAULT_POOL_SHUTDOWN_DELAY;
+    private int pingFrequencySeconds = DEFAULT_PING_FREQ_SECONDS;
+    private int flushTimingsFrequencySeconds = DEFAULT_FLUSH_TIMINGS_FREQ_SECONDS;
+    private boolean localZoneAffinity = DEFAULT_LOCAL_RACK_AFFINITY;
+    private LoadBalancingStrategy lbStrategy = DEFAULT_LB_STRATEGY;
+    private String localRack;
+    private String localDataCenter;
     private boolean failOnStartupIfNoHosts = DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS;
     private int failOnStarupIfNoHostsSeconds = DEFAULT_FAIL_ON_STARTUP_IFNOHOSTS_SECONDS;
     private CompressionStrategy compressionStrategy = DEFAULT_COMPRESSION_STRATEGY;
-	private int valueCompressionThreshold = DEFAULT_VALUE_COMPRESSION_THRESHOLD_BYTES;
+    private int valueCompressionThreshold = DEFAULT_VALUE_COMPRESSION_THRESHOLD_BYTES;
 
-	// Dual Write Settings
-	private boolean isDualWriteEnabled = DEFAULT_IS_DUAL_WRITE_ENABLED;
+    // Dual Write Settings
+    private boolean isDualWriteEnabled = DEFAULT_IS_DUAL_WRITE_ENABLED;
     private String dualWriteClusterName = null;
     private int dualWritePercentage = DEFAULT_DUAL_WRITE_PERCENTAGE;
     private int healthTrackerDelayMillis = DEFAULT_HEALTH_TRACKER_DELAY_MILLIS;
@@ -85,29 +85,29 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 
     private RetryPolicyFactory retryFactory = new RetryPolicyFactory() {
 
-		@Override
-		public RetryPolicy getRetryPolicy() {
-			return new RunOnce();
-		}
-	};
-	
-	private ErrorMonitorFactory errorMonitorFactory = new SimpleErrorMonitorFactory();
+        @Override
+        public RetryPolicy getRetryPolicy() {
+            return new RunOnce();
+        }
+    };
+
+    private ErrorMonitorFactory errorMonitorFactory = new SimpleErrorMonitorFactory();
 
 
     public ConnectionPoolConfigurationImpl(String name) {
-		this.name = name;
-		this.localRack = ConfigUtils.getLocalZone();
-		this.localDataCenter = ConfigUtils.getDataCenter();
-	}
+        this.name = name;
+        this.localRack = ConfigUtils.getLocalZone();
+        this.localDataCenter = ConfigUtils.getDataCenter();
+    }
 
-	/**
-	 * Copy constructor used to construct a new instance of this config with mostly the same values as the given
+    /**
+     * Copy constructor used to construct a new instance of this config with mostly the same values as the given
      * config.
      *
-	 * @param config
+     * @param config
      */
-	public ConnectionPoolConfigurationImpl(ConnectionPoolConfigurationImpl config) {
-	    this.name = config.getName() + "_shadow";
+    public ConnectionPoolConfigurationImpl(ConnectionPoolConfigurationImpl config) {
+        this.name = config.getName() + "_shadow";
 
         this.compressionStrategy = config.getCompressionStrategy();
         this.valueCompressionThreshold = config.getValueCompressionThreshold();
@@ -125,7 +125,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         this.socketTimeout = config.getSocketTimeout();
         this.errorMonitorFactory = config.getErrorMonitorFactory();
         this.tokenSupplier = config.getTokenSupplier();
-        this.hashPartitioner = config.getHashPartitioner();        
+        this.hashPartitioner = config.getHashPartitioner();
         this.isDualWriteEnabled = config.isDualWriteEnabled();
         this.dualWriteClusterName = config.getDualWriteClusterName();
         this.dualWritePercentage = config.getDualWritePercentage();
@@ -133,63 +133,63 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         this.healthTrackerDelayMillis = config.getHealthTrackerDelayMillis();
         this.poolReconnectWaitMillis = config.getPoolReconnectWaitMillis();
     }
-	
-	@Override
-	public String getName() {
-		return name;
-	}
+
+    @Override
+    public String getName() {
+        return name;
+    }
 
 
-	@Override
-	public int getMaxConnsPerHost() {
-		return maxConnsPerHost;
-	}
+    @Override
+    public int getMaxConnsPerHost() {
+        return maxConnsPerHost;
+    }
 
-	@Override
-	public int getMaxTimeoutWhenExhausted() {
-		return maxTimeoutWhenExhausted;
-	}
+    @Override
+    public int getMaxTimeoutWhenExhausted() {
+        return maxTimeoutWhenExhausted;
+    }
 
-	@Override
-	public int getMaxFailoverCount() {
-		return maxFailoverCount;
-	}
+    @Override
+    public int getMaxFailoverCount() {
+        return maxFailoverCount;
+    }
 
 
-	@Override
-	public int getConnectTimeout() {
-		return connectTimeout;
-	}
+    @Override
+    public int getConnectTimeout() {
+        return connectTimeout;
+    }
 
-	@Override
-	public int getSocketTimeout() {
-		return socketTimeout;
-	}
+    @Override
+    public int getSocketTimeout() {
+        return socketTimeout;
+    }
 
-	@Override
-	public RetryPolicyFactory getRetryPolicyFactory() {
-		return retryFactory;
-	}
+    @Override
+    public RetryPolicyFactory getRetryPolicyFactory() {
+        return retryFactory;
+    }
 
-	@Override
-	public boolean localZoneAffinity() {
-		return localZoneAffinity;
-	}
+    @Override
+    public boolean localZoneAffinity() {
+        return localZoneAffinity;
+    }
 
-	@Override
-	public ErrorMonitorFactory getErrorMonitorFactory() {
-		return errorMonitorFactory;
-	}
+    @Override
+    public ErrorMonitorFactory getErrorMonitorFactory() {
+        return errorMonitorFactory;
+    }
 
-	@Override
-	public LoadBalancingStrategy getLoadBalancingStrategy() {
-		return lbStrategy;
-	}
-	
-	@Override
-	public int getPingFrequencySeconds() {
-		return pingFrequencySeconds;
-	}
+    @Override
+    public LoadBalancingStrategy getLoadBalancingStrategy() {
+        return lbStrategy;
+    }
+
+    @Override
+    public int getPingFrequencySeconds() {
+        return pingFrequencySeconds;
+    }
 
     @Override
     public String getLocalRack() {
@@ -245,102 +245,102 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         return dualWritePercentage;
     }
 
-	@Override
-	public int getHealthTrackerDelayMillis() {
-		return healthTrackerDelayMillis;
-	}
+    @Override
+    public int getHealthTrackerDelayMillis() {
+        return healthTrackerDelayMillis;
+    }
 
-	@Override
-	public int getPoolReconnectWaitMillis() {
-		return poolReconnectWaitMillis;
-	}
+    @Override
+    public int getPoolReconnectWaitMillis() {
+        return poolReconnectWaitMillis;
+    }
 
-	@Override
-	public String toString() {
-		return "ConnectionPoolConfigurationImpl{" +
-				"name=" + name +
-				", hostSupplier=" + hostSupplier +
-				", tokenSupplier=" + tokenSupplier +
-				", hostConnectionPoolFactory=" + hostConnectionPoolFactory +
-				", name='" + name + '\'' +
-				", maxConnsPerHost=" + maxConnsPerHost +
-				", maxTimeoutWhenExhausted=" + maxTimeoutWhenExhausted +
-				", maxFailoverCount=" + maxFailoverCount +
-				", connectTimeout=" + connectTimeout +
-				", socketTimeout=" + socketTimeout +
-				", poolShutdownDelay=" + poolShutdownDelay +
-				", pingFrequencySeconds=" + pingFrequencySeconds +
-				", flushTimingsFrequencySeconds=" + flushTimingsFrequencySeconds +
-				", localZoneAffinity=" + localZoneAffinity +
-				", lbStrategy=" + lbStrategy +
-                                ", hashPartitioner=" + hashPartitioner + 
-				", localRack='" + localRack + '\'' +
-				", localDataCenter='" + localDataCenter + '\'' +
-				", failOnStartupIfNoHosts=" + failOnStartupIfNoHosts +
-				", failOnStarupIfNoHostsSeconds=" + failOnStarupIfNoHostsSeconds +
-				", compressionStrategy=" + compressionStrategy +
-				", valueCompressionThreshold=" + valueCompressionThreshold +
-				", isDualWriteEnabled=" + isDualWriteEnabled +
-				", dualWriteClusterName='" + dualWriteClusterName + '\'' +
-				", dualWritePercentage=" + dualWritePercentage +
-				", retryFactory=" + retryFactory +
-				", errorMonitorFactory=" + errorMonitorFactory +
-				", hashtag=" + hashtag +
-				", healthTrackerDelayMillis=" + healthTrackerDelayMillis +
-				", poolReconnectWaitMillis=" + poolReconnectWaitMillis +
-				'}';
-	}
+    @Override
+    public String toString() {
+        return "ConnectionPoolConfigurationImpl{" +
+                "name=" + name +
+                ", hostSupplier=" + hostSupplier +
+                ", tokenSupplier=" + tokenSupplier +
+                ", hostConnectionPoolFactory=" + hostConnectionPoolFactory +
+                ", name='" + name + '\'' +
+                ", maxConnsPerHost=" + maxConnsPerHost +
+                ", maxTimeoutWhenExhausted=" + maxTimeoutWhenExhausted +
+                ", maxFailoverCount=" + maxFailoverCount +
+                ", connectTimeout=" + connectTimeout +
+                ", socketTimeout=" + socketTimeout +
+                ", poolShutdownDelay=" + poolShutdownDelay +
+                ", pingFrequencySeconds=" + pingFrequencySeconds +
+                ", flushTimingsFrequencySeconds=" + flushTimingsFrequencySeconds +
+                ", localZoneAffinity=" + localZoneAffinity +
+                ", lbStrategy=" + lbStrategy +
+                ", hashPartitioner=" + hashPartitioner +
+                ", localRack='" + localRack + '\'' +
+                ", localDataCenter='" + localDataCenter + '\'' +
+                ", failOnStartupIfNoHosts=" + failOnStartupIfNoHosts +
+                ", failOnStarupIfNoHostsSeconds=" + failOnStarupIfNoHostsSeconds +
+                ", compressionStrategy=" + compressionStrategy +
+                ", valueCompressionThreshold=" + valueCompressionThreshold +
+                ", isDualWriteEnabled=" + isDualWriteEnabled +
+                ", dualWriteClusterName='" + dualWriteClusterName + '\'' +
+                ", dualWritePercentage=" + dualWritePercentage +
+                ", retryFactory=" + retryFactory +
+                ", errorMonitorFactory=" + errorMonitorFactory +
+                ", hashtag=" + hashtag +
+                ", healthTrackerDelayMillis=" + healthTrackerDelayMillis +
+                ", poolReconnectWaitMillis=" + poolReconnectWaitMillis +
+                '}';
+    }
 
-	// ALL SETTERS
-	public ConnectionPoolConfigurationImpl setMaxConnsPerHost(int maxConnsPerHost) {
-		this.maxConnsPerHost = maxConnsPerHost;
-		return this;
-	}
+    // ALL SETTERS
+    public ConnectionPoolConfigurationImpl setMaxConnsPerHost(int maxConnsPerHost) {
+        this.maxConnsPerHost = maxConnsPerHost;
+        return this;
+    }
 
-	public ConnectionPoolConfigurationImpl setMaxTimeoutWhenExhausted(int maxTimeoutWhenExhausted) {
-		this.maxTimeoutWhenExhausted = maxTimeoutWhenExhausted;
-		return this;
-	}
+    public ConnectionPoolConfigurationImpl setMaxTimeoutWhenExhausted(int maxTimeoutWhenExhausted) {
+        this.maxTimeoutWhenExhausted = maxTimeoutWhenExhausted;
+        return this;
+    }
 
-	public ConnectionPoolConfigurationImpl setMaxFailoverCount(int maxFailoverCount) {
-		this.maxFailoverCount = maxFailoverCount;
-		return this;
-	}
+    public ConnectionPoolConfigurationImpl setMaxFailoverCount(int maxFailoverCount) {
+        this.maxFailoverCount = maxFailoverCount;
+        return this;
+    }
 
-	public ConnectionPoolConfigurationImpl setConnectTimeout(int connectTimeout) {
-		this.connectTimeout = connectTimeout;
-		return this;
-	}
+    public ConnectionPoolConfigurationImpl setConnectTimeout(int connectTimeout) {
+        this.connectTimeout = connectTimeout;
+        return this;
+    }
 
-	public ConnectionPoolConfigurationImpl setSocketTimeout(int socketTimeout) {
-		this.socketTimeout = socketTimeout;
-		return this;
-	}
+    public ConnectionPoolConfigurationImpl setSocketTimeout(int socketTimeout) {
+        this.socketTimeout = socketTimeout;
+        return this;
+    }
 
-	public ConnectionPoolConfigurationImpl setLoadBalancingStrategy(LoadBalancingStrategy strategy) {
-		this.lbStrategy = strategy;
-		return this;
-	}
+    public ConnectionPoolConfigurationImpl setLoadBalancingStrategy(LoadBalancingStrategy strategy) {
+        this.lbStrategy = strategy;
+        return this;
+    }
 
-	public ConnectionPoolConfigurationImpl setRetryPolicyFactory(RetryPolicyFactory factory) {
-		this.retryFactory = factory;
-		return this;
-	}
+    public ConnectionPoolConfigurationImpl setRetryPolicyFactory(RetryPolicyFactory factory) {
+        this.retryFactory = factory;
+        return this;
+    }
 
-	public ConnectionPoolConfigurationImpl setPoolShutdownDelay(int shutdownDelaySeconds) {
-		poolShutdownDelay = shutdownDelaySeconds;
-		return this;
-	}
-	
-	public ConnectionPoolConfigurationImpl setPingFrequencySeconds(int seconds) {
-		pingFrequencySeconds = seconds;
-		return this;
-	}
+    public ConnectionPoolConfigurationImpl setPoolShutdownDelay(int shutdownDelaySeconds) {
+        poolShutdownDelay = shutdownDelaySeconds;
+        return this;
+    }
 
-	public ConnectionPoolConfigurationImpl setLocalZoneAffinity(boolean condition) {
-		localZoneAffinity = condition;
-		return this;
-	}
+    public ConnectionPoolConfigurationImpl setPingFrequencySeconds(int seconds) {
+        pingFrequencySeconds = seconds;
+        return this;
+    }
+
+    public ConnectionPoolConfigurationImpl setLocalZoneAffinity(boolean condition) {
+        localZoneAffinity = condition;
+        return this;
+    }
 
     public ConnectionPoolConfigurationImpl setFailOnStartupIfNoHosts(boolean condition) {
         this.failOnStartupIfNoHosts = condition;
@@ -357,52 +357,52 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         return this;
     }
 
-	public ConnectionPoolConfigurationImpl setCompressionThreshold(int thresholdInBytes) {
-		this.valueCompressionThreshold = thresholdInBytes;
-		return this;
-	}
+    public ConnectionPoolConfigurationImpl setCompressionThreshold(int thresholdInBytes) {
+        this.valueCompressionThreshold = thresholdInBytes;
+        return this;
+    }
 
 
-	public HostSupplier getHostSupplier() {
-		return hostSupplier;
-	}
+    public HostSupplier getHostSupplier() {
+        return hostSupplier;
+    }
 
-	public ConnectionPoolConfigurationImpl withHostSupplier(HostSupplier hSupplier) {
-		hostSupplier = hSupplier;
-		return this;
-	}
+    public ConnectionPoolConfigurationImpl withHostSupplier(HostSupplier hSupplier) {
+        hostSupplier = hSupplier;
+        return this;
+    }
 
-	public TokenMapSupplier getTokenSupplier() {
-		return tokenSupplier;
-	}
-	
-	public String getHashtag() {
-	    return hashtag;
-	}
+    public TokenMapSupplier getTokenSupplier() {
+        return tokenSupplier;
+    }
 
-	public ConnectionPoolConfigurationImpl withTokenSupplier(TokenMapSupplier tSupplier) {
-		tokenSupplier = tSupplier;
-		return this;
-	}
-        
-        public HashPartitioner getHashPartitioner() {
-                return hashPartitioner;
-        }
-        
-        public ConnectionPoolConfigurationImpl withHashPartitioner(HashPartitioner hPartitioner) {
-                hashPartitioner = hPartitioner;
-                return this;
-        }
-	
-       public ConnectionPoolConfigurationImpl withHashtag(String htag) {
-            hashtag = htag;
-            return this;
-        }
+    public String getHashtag() {
+        return hashtag;
+    }
 
-	public ConnectionPoolConfigurationImpl withErrorMonitorFactory(ErrorMonitorFactory factory) {
-		errorMonitorFactory = factory;
-		return this;
-	}
+    public ConnectionPoolConfigurationImpl withTokenSupplier(TokenMapSupplier tSupplier) {
+        tokenSupplier = tSupplier;
+        return this;
+    }
+
+    public HashPartitioner getHashPartitioner() {
+        return hashPartitioner;
+    }
+
+    public ConnectionPoolConfigurationImpl withHashPartitioner(HashPartitioner hPartitioner) {
+        hashPartitioner = hPartitioner;
+        return this;
+    }
+
+    public ConnectionPoolConfigurationImpl withHashtag(String htag) {
+        hashtag = htag;
+        return this;
+    }
+
+    public ConnectionPoolConfigurationImpl withErrorMonitorFactory(ErrorMonitorFactory factory) {
+        errorMonitorFactory = factory;
+        return this;
+    }
 
     public ConnectionPoolConfigurationImpl withHostConnectionPoolFactory(HostConnectionPoolFactory factory) {
         hostConnectionPoolFactory = factory;
@@ -421,68 +421,68 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
 
     public static class ErrorRateMonitorConfigImpl implements ErrorRateMonitorConfig {
 
-		int window = 20; 
-		int checkFrequency = 1;
-		int suppressWindow = 90; 
-		
-		private List<ErrorThreshold> thresholds = new ArrayList<ErrorThreshold>();
+        int window = 20;
+        int checkFrequency = 1;
+        int suppressWindow = 90;
 
-		public ErrorRateMonitorConfigImpl() {
-			this.addThreshold(10, 10, 80);
-		}
-		
-		public ErrorRateMonitorConfigImpl(int w, int f, int s) {
-			this.window = w;
-			this.checkFrequency = f;
-			this.suppressWindow = s;
-		}
-		
-		@Override
-		public int getWindowSizeSeconds() {
-			return window;
-		}
+        private List<ErrorThreshold> thresholds = new ArrayList<ErrorThreshold>();
 
-		@Override
-		public int getCheckFrequencySeconds() {
-			return checkFrequency;
-		}
+        public ErrorRateMonitorConfigImpl() {
+            this.addThreshold(10, 10, 80);
+        }
 
-		@Override
-		public int getCheckSuppressWindowSeconds() {
-			return suppressWindow;
-		}
+        public ErrorRateMonitorConfigImpl(int w, int f, int s) {
+            this.window = w;
+            this.checkFrequency = f;
+            this.suppressWindow = s;
+        }
 
-		@Override
-		public List<ErrorThreshold> getThresholds() {
-			return thresholds;
-		}
+        @Override
+        public int getWindowSizeSeconds() {
+            return window;
+        }
 
-		public void addThreshold(final int bucketThreshold, final int bucketWindow, final int bucketCoverage) {
-			thresholds.add(new ErrorThreshold() {
+        @Override
+        public int getCheckFrequencySeconds() {
+            return checkFrequency;
+        }
 
-				@Override
-				public int getThresholdPerSecond() {
-					return bucketThreshold;
-				}
+        @Override
+        public int getCheckSuppressWindowSeconds() {
+            return suppressWindow;
+        }
 
-				@Override
-				public int getWindowSeconds() {
-					return bucketWindow;
-				}
+        @Override
+        public List<ErrorThreshold> getThresholds() {
+            return thresholds;
+        }
 
-				@Override
-				public int getWindowCoveragePercentage() {
-					return bucketCoverage;
-				}
-				
-			});
-		}
-	}
+        public void addThreshold(final int bucketThreshold, final int bucketWindow, final int bucketCoverage) {
+            thresholds.add(new ErrorThreshold() {
+
+                @Override
+                public int getThresholdPerSecond() {
+                    return bucketThreshold;
+                }
+
+                @Override
+                public int getWindowSeconds() {
+                    return bucketWindow;
+                }
+
+                @Override
+                public int getWindowCoveragePercentage() {
+                    return bucketCoverage;
+                }
+
+            });
+        }
+    }
 
     public ConnectionPoolConfigurationImpl setLocalRack(String rack) {
-		this.localRack = rack;
-		return this;
-	}
+        this.localRack = rack;
+        return this;
+    }
 
     public ConnectionPoolConfigurationImpl setLocalDataCenter(String dc) {
         this.localDataCenter = dc;
