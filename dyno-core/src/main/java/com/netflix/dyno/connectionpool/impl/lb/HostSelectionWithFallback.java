@@ -401,7 +401,8 @@ public class HostSelectionWithFallback<CL> {
                 dataCenter = localRack.substring(0, localRack.length() - 1);
             } else {
                 // No DC specified. Get the DC from the first host and use its replication factor
-                dataCenter = allHostTokens.get(0).getHost().getRack().substring(0, localRack.length() - 1);
+                Host host = allHostTokens.get(0).getHost();
+                dataCenter = host.getRack().substring(0, host.getRack().length() - 1);
             }
         }
 

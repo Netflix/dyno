@@ -534,6 +534,10 @@ public class HostSelectionWithFallbackTest {
         );
 
         int rf = selection.calculateReplicationFactor(hostTokens);
+        Assert.assertEquals(3, rf);
+        cpConfig.setLocalRack(null);
+        selection = new HostSelectionWithFallback<Integer>(cpConfig, cpMonitor);
+        rf = selection.calculateReplicationFactor(hostTokens);
 
         Assert.assertEquals(3, rf);
     }
