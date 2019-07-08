@@ -35,6 +35,7 @@ import redis.clients.jedis.commands.BinaryRedisPipeline;
 import redis.clients.jedis.commands.RedisPipeline;
 import redis.clients.jedis.exceptions.JedisConnectionException;
 import redis.clients.jedis.params.GeoRadiusParam;
+import redis.clients.jedis.params.SetParams;
 import redis.clients.jedis.params.ZAddParams;
 import redis.clients.jedis.params.ZIncrByParams;
 
@@ -1180,6 +1181,11 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     }
 
     @Override
+    public Response<String> psetex(String key, long milliseconds, String value) {
+        return null;
+    }
+
+    @Override
     public Response<String> lindex(final String key, final long index) {
         return new PipelineOperation<String>() {
 
@@ -2297,6 +2303,51 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     }
 
     @Override
+    public Response<Long> bitpos(String key, boolean value) {
+        return null;
+    }
+
+    @Override
+    public Response<Long> bitpos(String key, boolean value, BitPosParams params) {
+        return null;
+    }
+
+    @Override
+    public Response<String> set(String key, String value, SetParams params) {
+        return null;
+    }
+
+    @Override
+    public Response<List<String>> srandmember(String key, int count) {
+        return null;
+    }
+
+    @Override
+    public Response<Set<Tuple>> zrangeByScoreWithScores(String key, String min, String max) {
+        return null;
+    }
+
+    @Override
+    public Response<Set<Tuple>> zrangeByScoreWithScores(String key, String min, String max, int offset, int count) {
+        return null;
+    }
+
+    @Override
+    public Response<Long> objectRefcount(String key) {
+        return null;
+    }
+
+    @Override
+    public Response<String> objectEncoding(String key) {
+        return null;
+    }
+
+    @Override
+    public Response<Long> objectIdletime(String key) {
+        return null;
+    }
+
+    @Override
     public Response<Long> zadd(String key, Map<String, Double> members, ZAddParams params) {
         return new PipelineOperation<Long>() {
 
@@ -3101,4 +3152,53 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
         throw new UnsupportedOperationException("not yet implemented");
     }
 
+    @Override
+    public Response<Long> bitpos(byte[] key, boolean value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<Long> bitpos(byte[] key, boolean value, BitPosParams params) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<String> set(byte[] key, byte[] value, SetParams params) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<List<byte[]>> srandmember(byte[] key, int count) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<Long> objectRefcount(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<byte[]> objectEncoding(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<Long> objectIdletime(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<Double> incrByFloat(byte[] key, double increment) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<String> psetex(byte[] key, long milliseconds, byte[] value) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<Double> hincrByFloat(byte[] key, byte[] field, double increment) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
 }
