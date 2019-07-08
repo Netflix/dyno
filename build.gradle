@@ -86,7 +86,7 @@ project(':dyno-jedis') {
     dependencies {
         compile project(':dyno-core')
         compile project(':dyno-contrib')
-        compile 'redis.clients:jedis:3.0.0'
+        compile 'redis.clients:jedis:3.0.1'
         compile 'org.projectlombok:lombok:1.18.4'
         testCompile 'com.netflix.spinnaker.embedded-redis:embedded-redis:0.8.0'
     }
