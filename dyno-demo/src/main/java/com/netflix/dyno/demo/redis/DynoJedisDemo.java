@@ -1229,14 +1229,15 @@ public class DynoJedisDemo {
                 demo = new DynoJedisDemo("dyno-localhost", rack);
                 demo.initWithLocalHost();
             } else {
-                demo = new DynoJedisDemo(cli.getOptionValue("p"), rack);
                 if (!cli.hasOption("s")) {
+                    demo = new DynoJedisDemo(cli.getOptionValue("p"), rack);
                     if (hostsFile != null) {
                         demo.initWithRemoteClusterFromFile(hostsFile, port);
                     } else {
                         demo.initWithRemoteClusterFromEurekaUrl(cli.getOptionValue("p"), port);
                     }
                 } else {
+                    demo = new DynoJedisDemo(cli.getOptionValue("p"), cli.getOptionValue("s"), rack);
                     if (hostsFile != null) {
                         demo.initDualClientWithRemoteClustersFromFile(hostsFile, shadowHostsFile, port);
                     } else {
