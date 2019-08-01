@@ -106,6 +106,9 @@ public class HostsUpdater {
         for (Host hostFromHostSupplier : allHostsFromHostSupplier) {
             if (hostFromHostSupplier.isUp()) {
                 Host hostFromTokenMapSupplier = allHostSetFromTokenMapSupplier.get(hostFromHostSupplier);
+                if (hostFromTokenMapSupplier == null) {
+                    throw new DynoException("Could not find " + hostFromHostSupplier.getHostName() + " in token map supplier.");
+                }
 
                 hostsUpFromHostSupplier.add(new Host(hostFromHostSupplier.getHostName(), hostFromHostSupplier.getIpAddress(),
                         hostFromTokenMapSupplier.getPort(), hostFromTokenMapSupplier.getSecurePort(), hostFromTokenMapSupplier.getRack(),
