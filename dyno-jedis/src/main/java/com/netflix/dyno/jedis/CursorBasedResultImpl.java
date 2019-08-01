@@ -84,7 +84,7 @@ public class CursorBasedResultImpl<T> implements CursorBasedResult<T>, TokenRack
     @Override
     public boolean isComplete() {
         for (ScanResult r : result.values()) {
-            if (!r.getCursor().equals("0")) {
+            if (!r.getStringCursor().equals("0")) {
                 return false;
             }
         }

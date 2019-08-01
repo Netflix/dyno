@@ -122,6 +122,7 @@ project(':dyno-demo') {
         compile project(':dyno-memcache')
         compile project(':dyno-jedis')
         compile project(':dyno-recipes')
+        compile 'commons-cli:commons-cli:1.4'
     }
 }
 

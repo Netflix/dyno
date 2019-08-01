@@ -15,9 +15,23 @@
  ******************************************************************************/
 package com.netflix.dyno.jedis;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 import com.netflix.discovery.DiscoveryClient;
 import com.netflix.discovery.EurekaClient;
 import com.netflix.dyno.connectionpool.*;
+import com.netflix.dyno.connectionpool.CompressionOperation;
+import com.netflix.dyno.connectionpool.ConnectionContext;
+import com.netflix.dyno.connectionpool.ConnectionPool;
+import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
+import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
+import com.netflix.dyno.connectionpool.CursorBasedResult;
+import com.netflix.dyno.connectionpool.HostSupplier;
+import com.netflix.dyno.connectionpool.MultiKeyCompressionOperation;
+import com.netflix.dyno.connectionpool.OperationResult;
+import com.netflix.dyno.connectionpool.TokenMapSupplier;
+import com.netflix.dyno.connectionpool.TokenRackMapper;
+import com.netflix.dyno.connectionpool.TopologyView;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
@@ -32,6 +46,7 @@ import com.netflix.dyno.contrib.DynoCPMonitor;
 import com.netflix.dyno.contrib.DynoOPMonitor;
 import com.netflix.dyno.contrib.EurekaHostsSupplier;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.tuple.Pair;
 import org.slf4j.Logger;
 import redis.clients.jedis.*;
 import redis.clients.jedis.BinaryClient.LIST_POSITION;
@@ -41,8 +56,17 @@ import redis.clients.jedis.params.sortedset.ZIncrByParams;
 
 import javax.net.ssl.SSLSocketFactory;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.CompressionStrategy;
@@ -51,6 +75,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         ScriptingCommands, MultiKeyBinaryCommands {
 
     private static final Logger Logger = org.slf4j.LoggerFactory.getLogger(DynoJedisClient.class);
+    private static final String DYNO_EXIPREHASH_METADATA_KEYPREFIX = "_metadata:";
 
     private final String appName;
     private final String clusterName;
@@ -331,7 +356,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     public OperationResult<Long> d_append(final String key, final String value) {
-
         return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.APPEND) {
             @Override
             public Long execute(Jedis client, ConnectionContext state) {
@@ -487,32 +511,89 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public Object evalsha(String sha1, int keyCount, String... params) {
-        throw new UnsupportedOperationException("This function is Not Implemented. Please use eval instead.");
+        return d_evalsha(sha1, keyCount, params).getResult();
+    }
+
+    public OperationResult<Object> d_evalsha(String sha1, int keyCount, String... params) {
+        if (keyCount == 0) {
+            throw new DynoException("Need at least one key in script");
+        }
+        return connPool.executeWithFailover(new BaseKeyOperation<Object>(params[0], OpName.EVALSHA) {
+            @Override
+            public Object execute(Jedis client, ConnectionContext state) {
+                return client.evalsha(sha1, keyCount, params);
+            }
+        });
     }
 
     @Override
     public Object evalsha(String sha1, List<String> keys, List<String> args) {
-        throw new UnsupportedOperationException("This function is Not Implemented. Please use eval instead.");
+        String[] params = ArrayUtils.addAll(keys.toArray(new String[0]), args.toArray(new String[0]));
+        return evalsha(sha1, keys.size(), params);
     }
 
     @Override
-    public Object evalsha(String script) {
-        throw new UnsupportedOperationException("This function is Not Implemented. Please use eval instead.");
+    public Object evalsha(String sha1) {
+        return evalsha(sha1, 0);
     }
 
     @Override
     public Boolean scriptExists(String sha1) {
-        throw new UnsupportedOperationException("This function is Not Implemented");
+        return d_scriptExists(sha1).getResult();
+    }
+
+    public OperationResult<Boolean> d_scriptExists(String sha1) {
+        return connPool.executeWithFailover(new BaseKeyOperation<Boolean>(sha1, OpName.SCRIPT_EXISTS) {
+            @Override
+            public Boolean execute(Jedis client, ConnectionContext state) throws DynoException {
+                return client.scriptExists(sha1);
+            }
+        });
     }
 
     @Override
     public List<Boolean> scriptExists(String... sha1) {
-        throw new UnsupportedOperationException("This function is Not Implemented");
+        return scriptExists(sha1);
     }
 
     @Override
     public String scriptLoad(String script) {
-        throw new UnsupportedOperationException("This function is Not Implemented");
+        return d_scriptLoad(script).getResult();
+    }
+
+    public OperationResult<String> d_scriptLoad(final String script) {
+        return connPool.executeWithFailover(new BaseKeyOperation<String>(script, OpName.SCRIPT_LOAD) {
+            @Override
+            public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                return client.scriptLoad(script);
+            }
+        });
+    }
+
+    public String scriptFlush() {
+        return d_scriptFlush().getResult();
+    }
+
+    public OperationResult<String> d_scriptFlush() {
+        return connPool.executeWithFailover(new BaseKeyOperation<String>("", OpName.SCRIPT_FLUSH) {
+            @Override
+            public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                return client.scriptFlush();
+            }
+        });
+    }
+
+    public String scriptKill() {
+        return d_scriptKill().getResult();
+    }
+
+    public OperationResult<String> d_scriptKill() {
+        return connPool.executeWithFailover(new BaseKeyOperation<String>("", OpName.SCRIPT_KILL) {
+            @Override
+            public String execute(Jedis client, ConnectionContext state) throws DynoException {
+                return client.scriptKill();
+            }
+        });
     }
 
     @Override
@@ -1028,7 +1109,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return d_linsert(key, where, pivot, value).getResult();
     }
 
-    public OperationResult<Long> d_linsert(final String key, final ListPosition where, final String pivot,
+    public OperationResult<Long> d_linsert(final String key, final LIST_POSITION where, final String pivot,
                                            final String value) {
 
         return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.LINSERT) {
@@ -1037,7 +1118,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             public Long execute(Jedis client, ConnectionContext state) {
                 return client.linsert(key, where, pivot, value);
             }
-
         });
     }
 
@@ -1438,26 +1518,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     public OperationResult<String> d_set(final String key, final String value, final String nxxx, final String expx,
                                          final long time) {
-        SetParams setParams = SetParams.setParams();
-        if (nxxx.equalsIgnoreCase("NX")) {
-            setParams.nx();
-        } else if (nxxx.equalsIgnoreCase("XX")) {
-            setParams.xx();
-        }
-        if (expx.equalsIgnoreCase("EX")) {
-            setParams.ex((int) time);
-        } else if (expx.equalsIgnoreCase("PX")) {
-            setParams.px(time);
-        }
-
-        return d_set(key, value, setParams);
-    }
-
-    public String set(final String key, final String value, final SetParams setParams) {
-        return d_set(key, value, setParams).getResult();
-    }
-
-    public OperationResult<String> d_set(final String key, final String value, final SetParams setParams) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy())
             return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
                 @Override
@@ -1465,7 +1525,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                     return client.set(key, value, nxxx, expx, time);
                 }
             });
-        } else {
+        else {
             return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.SET) {
                 @Override
                 public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
@@ -1787,6 +1847,22 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             @Override
             public ScanResult<String> execute(Jedis client, ConnectionContext state) {
                 return client.sscan(key, cursor, params);
+            }
+
+        });
+    }
+
+    @Override
+    public ScanResult<Tuple> zscan(final String key, final int cursor) {
+        return d_zscan(key, cursor).getResult();
+    }
+
+    public OperationResult<ScanResult<Tuple>> d_zscan(final String key, final int cursor) {
+
+        return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Tuple>>(key, OpName.ZSCAN) {
+            @Override
+            public ScanResult<Tuple> execute(Jedis client, ConnectionContext state) {
+                return client.zscan(key, cursor);
             }
 
         });
@@ -2145,22 +2221,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             @Override
             public Double execute(Jedis client, ConnectionContext state) {
                 return client.zscore(key, member);
-            }
-
-        });
-    }
-
-    @Override
-    public ScanResult<Tuple> zscan(final String key, final int cursor) {
-        return d_zscan(key, cursor).getResult();
-    }
-
-    public OperationResult<ScanResult<Tuple>> d_zscan(final String key, final int cursor) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Tuple>>(key, OpName.ZSCAN) {
-            @Override
-            public ScanResult<Tuple> execute(Jedis client, ConnectionContext state) {
-                return client.zscan(key, cursor);
             }
 
         });
@@ -3230,20 +3290,20 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         });
     }
 
-    @Override
     public String set(final byte[] key, final byte[] value, final byte[] nxxx, final byte[] expx, final long time) {
         return d_set(key, value, nxxx, expx, time).getResult();
     }
 
-    public OperationResult<String> d_set(final byte[] key, final byte[] value, final SetParams setParams) {
+
+    public OperationResult<String> d_set(final byte[] key, final byte[] value, final byte[] nxxx, final byte[] expx,
+        final long time) {
         return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
             @Override
             public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.set(key, value, setParams);
+                return client.set(key, value, nxxx, expx, time);
             }
         });
     }
-
 
     @Override
     public Boolean exists(final byte[] key) {
@@ -3947,7 +4007,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Long linsert(byte[] key, BinaryClient.LIST_POSITION where, byte[] pivot, byte[] value) {
+    public Long linsert(byte[] key, LIST_POSITION where, byte[] pivot, byte[] value) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -4232,15 +4292,12 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
             if (dualWriteTokenMapSupplier != null)
                 shadowConfig.withTokenSupplier(dualWriteTokenMapSupplier);
-            setLoadBalancingStrategy(shadowConfig);
-            setHashtagConnectionPool(shadowSupplier, shadowConfig);
 
             String shadowAppName = shadowConfig.getName();
             DynoCPMonitor shadowCPMonitor = new DynoCPMonitor(shadowAppName);
             DynoOPMonitor shadowOPMonitor = new DynoOPMonitor(shadowAppName);
 
             JedisConnectionFactory connFactory = new JedisConnectionFactory(shadowOPMonitor, sslSocketFactory);
-
             final ConnectionPoolImpl<Jedis> shadowPool = startConnectionPool(shadowAppName, connFactory, shadowConfig,
                     shadowCPMonitor);
 
@@ -4492,17 +4549,17 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
+    public String set(byte[] arg0, byte[] arg1, byte[] arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
     public ScanResult<Entry<byte[], byte[]>> hscan(byte[] arg0, byte[] arg1) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public ScanResult<Entry<byte[], byte[]>> hscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public String set(byte[] arg0, byte[] arg1, byte[] arg2) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -4538,11 +4595,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public ScanResult<Tuple> zscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<byte[]> bitfield(byte[] key, byte[]... arguments) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -4602,9 +4654,15 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         throw new UnsupportedOperationException("not yet implemented");
     }
 
+
     @Override
     public List<GeoRadiusResponse> georadiusByMember(String arg0, String arg1, double arg2, GeoUnit arg3,
                                                      GeoRadiusParam arg4) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<byte[]> bitfield(byte[] key, byte[]... arguments) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
