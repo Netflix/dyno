@@ -1,6 +1,7 @@
 package com.netflix.dyno.jedis;
 
 import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.HostBuilder;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.impl.lb.HostToken;
@@ -24,7 +25,7 @@ public class UnitTestTokenMapAndHostSupplierImpl implements TokenMapSupplier, Ho
             redisServer.start();
             redisServers.add(Pair.of(redisServer, port));
 
-            Host host = new Host("localhost", port, rack, Host.Status.Up);
+            Host host = new HostBuilder().setHostname("localhost").setPort(port).setRack(rack).setStatus(Host.Status.Up).createHost();
             hostTokenMap.put(host, new HostToken((long) i * hostTokenStride, host));
         }
     }

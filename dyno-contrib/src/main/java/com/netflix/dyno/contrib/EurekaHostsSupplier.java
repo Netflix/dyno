@@ -18,6 +18,7 @@ package com.netflix.dyno.contrib;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.netflix.dyno.connectionpool.HostBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,7 +115,7 @@ public class EurekaHostsSupplier implements HostSupplier {
                         if (rack == null) {
                             Logger.error("Rack wasn't found for host:" + info.getHostName() + " there may be issues matching it up to the token map");
                         }
-                        Host host = new Host(info.getHostName(), info.getIPAddr(), rack, status);
+                        Host host = new HostBuilder().setHostname(info.getHostName()).setIpAddress(info.getIPAddr()).setRack(rack).setStatus(status).createHost();
                         return host;
                     }
                 }));

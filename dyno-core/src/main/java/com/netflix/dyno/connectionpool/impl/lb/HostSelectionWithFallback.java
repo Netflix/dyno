@@ -15,8 +15,18 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl.lb;
 
-import com.netflix.dyno.connectionpool.*;
+import com.netflix.dyno.connectionpool.BaseOperation;
+import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.LoadBalancingStrategy;
+import com.netflix.dyno.connectionpool.ConnectionPoolMonitor;
+import com.netflix.dyno.connectionpool.HashPartitioner;
+import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.HostConnectionPool;
+import com.netflix.dyno.connectionpool.RetryPolicy;
+import com.netflix.dyno.connectionpool.TokenMapSupplier;
+import com.netflix.dyno.connectionpool.TokenPoolTopology;
+import com.netflix.dyno.connectionpool.TokenRackMapper;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
@@ -34,7 +44,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -71,9 +80,9 @@ public class HostSelectionWithFallback<CL> {
     // The selector for the local zone
     private final HostSelectionStrategy<CL> localSelector;
     // Track selectors for each remote zone
-    private final ConcurrentHashMap<String, HostSelectionStrategy<CL>> remoteRackSelectors = new ConcurrentHashMap<String, HostSelectionStrategy<CL>>();
+    private final ConcurrentHashMap<String, HostSelectionStrategy<CL>> remoteRackSelectors = new ConcurrentHashMap<>();
 
-    private final ConcurrentHashMap<Host, HostToken> hostTokens = new ConcurrentHashMap<Host, HostToken>();
+    private final ConcurrentHashMap<Host, HostToken> hostTokens = new ConcurrentHashMap<>();
 
     private final TokenMapSupplier tokenSupplier;
     private final ConnectionPoolConfiguration cpConfig;
@@ -86,7 +95,7 @@ public class HostSelectionWithFallback<CL> {
     private final AtomicReference<TokenPoolTopology> topology = new AtomicReference<>(null);
 
     // list of names of remote zones. Used for RoundRobin over remote zones when local zone host is down
-    private final CircularList<String> remoteDCNames = new CircularList<String>(new ArrayList<String>());
+    private final CircularList<String> remoteDCNames = new CircularList<>(new ArrayList<>());
 
     private final HostSelectionStrategyFactory<CL> selectorFactory;
 
@@ -356,7 +365,7 @@ public class HostSelectionWithFallback<CL> {
         Map<HostToken, HostConnectionPool<CL>> localPools = getHostPoolsForRack(tokenPoolMap, localRack);
         localSelector.initWithHosts(localPools);
         if (localSelector.isTokenAware()) {
-            replicationFactor.set(calculateReplicationFactorForDC(allHostTokens, cpConfig.getLocalDataCenter()));
+            replicationFactor.set(HostUtils.calculateReplicationFactorForDC(allHostTokens, cpConfig.getLocalDataCenter(), localRack));
         }
 
         // Initialize Remote selectors
@@ -381,57 +390,7 @@ public class HostSelectionWithFallback<CL> {
      * @return replicationFactor
      */
     int calculateReplicationFactor(List<HostToken> allHostTokens) {
-        return calculateReplicationFactorForDC(allHostTokens, null);
-    }
-
-    /**
-     * Calculate replication factor for a datacenter.
-     * If datacenter is null we use one of the hosts from the list and use its DC.
-     *
-     * @param allHostTokens
-     * @param dataCenter
-     * @return replicationFactor for the dataCenter
-     */
-    int calculateReplicationFactorForDC(List<HostToken> allHostTokens, String dataCenter) {
-        Map<Long, Integer> groups = new HashMap<>();
-
-        Set<HostToken> uniqueHostTokens = new HashSet<>(allHostTokens);
-        if (dataCenter == null) {
-            if (localRack != null) {
-                dataCenter = localRack.substring(0, localRack.length() - 1);
-            } else {
-                // No DC specified. Get the DC from the first host and use its replication factor
-                Host host = allHostTokens.get(0).getHost();
-                dataCenter = host.getRack().substring(0, host.getRack().length() - 1);
-            }
-        }
-
-        for (HostToken hostToken : uniqueHostTokens) {
-            if (hostToken.getHost().getRack().contains(dataCenter)) {
-                Long token = hostToken.getToken();
-                if (groups.containsKey(token)) {
-                    int current = groups.get(token);
-                    groups.put(token, current + 1);
-                } else {
-                    groups.put(token, 1);
-                }
-            }
-        }
-
-        Set<Integer> uniqueCounts = new HashSet<>(groups.values());
-
-        if (uniqueCounts.size() > 1) {
-            throw new RuntimeException("Invalid configuration - replication factor cannot be asymmetric");
-        }
-
-        int rf = uniqueCounts.toArray(new Integer[uniqueCounts.size()])[0];
-
-        if (rf > 3) {
-            logger.warn("Replication Factor is high: " + uniqueHostTokens);
-        }
-
-        return rf;
-
+        return HostUtils.calculateReplicationFactorForDC(allHostTokens, null, localRack);
     }
 
     public void addHost(Host host, HostConnectionPool<CL> hostPool) {

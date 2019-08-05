@@ -15,18 +15,6 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-
-import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.ConnectionFactory;
 import com.netflix.dyno.connectionpool.ConnectionPoolConfiguration;
@@ -36,8 +24,19 @@ import com.netflix.dyno.connectionpool.HostConnectionPool;
 import com.netflix.dyno.connectionpool.RetryPolicy;
 import com.netflix.dyno.connectionpool.exception.DynoConnectException;
 import com.netflix.dyno.connectionpool.exception.DynoException;
+import com.netflix.dyno.connectionpool.exception.PoolExhaustedException;
 import com.netflix.dyno.connectionpool.exception.PoolOfflineException;
 import com.netflix.dyno.connectionpool.exception.PoolTimeoutException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Main impl for {@link HostConnectionPool}
@@ -302,7 +301,8 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
         public Connection<CL> createConnection() {
 
             try {
-                Connection<CL> connection = connFactory.createConnection((HostConnectionPool<CL>) pool, null);
+                Connection<CL> connection = cpConfig.isConnectToDatastore() ? connFactory.createConnectionWithDataStore(pool) :
+                        connFactory.createConnection(pool);
                 connection.open();
                 availableConnections.add(connection);
 

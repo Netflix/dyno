@@ -14,6 +14,7 @@ subprojects {
     apply plugin: 'java'
     apply plugin: 'idea'
     apply plugin: 'eclipse'
+    apply plugin: 'jacoco'
     sourceCompatibility = 1.8
 
     repositories {
@@ -38,6 +39,16 @@ subprojects {
             options.addStringOption('Xdoclint:none', '-quiet')
         }
     }
+
+    jacocoTestReport {
+        reports {
+            xml.enabled false
+            csv.enabled false
+            html.enabled true
+        }
+    }
+
+    test.finalizedBy(project.tasks.jacocoTestReport)
 }
 
 project(':dyno-core') {
@@ -135,5 +146,10 @@ project(':dyno-recipes') {
         compile project(':dyno-core')
         compile project(':dyno-jedis')
         compile 'com.google.code.gson:gson:2.8.5'
+        testCompile 'com.netflix.spinnaker.embedded-redis:embedded-redis:0.8.0'
+    }
+
+    test {
+        testLogging.showStandardStreams = true
     }
 }

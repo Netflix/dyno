@@ -15,6 +15,26 @@
  */
 package com.netflix.dyno.connectionpool.impl;
 
+import com.netflix.dyno.connectionpool.AsyncOperation;
+import com.netflix.dyno.connectionpool.Connection;
+import com.netflix.dyno.connectionpool.ConnectionContext;
+import com.netflix.dyno.connectionpool.ConnectionFactory;
+import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.HostBuilder;
+import com.netflix.dyno.connectionpool.HostConnectionPool;
+import com.netflix.dyno.connectionpool.ListenableFuture;
+import com.netflix.dyno.connectionpool.Operation;
+import com.netflix.dyno.connectionpool.OperationResult;
+import com.netflix.dyno.connectionpool.exception.DynoConnectException;
+import com.netflix.dyno.connectionpool.exception.DynoException;
+import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.BeforeClass;
+import org.junit.Test;
+
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -23,31 +43,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-
-import com.netflix.dyno.connectionpool.AsyncOperation;
-import com.netflix.dyno.connectionpool.Connection;
-import com.netflix.dyno.connectionpool.ConnectionContext;
-import com.netflix.dyno.connectionpool.ConnectionFactory;
-import com.netflix.dyno.connectionpool.ConnectionObservor;
-import com.netflix.dyno.connectionpool.Host;
-import com.netflix.dyno.connectionpool.HostConnectionPool;
-import com.netflix.dyno.connectionpool.ListenableFuture;
-import com.netflix.dyno.connectionpool.Operation;
-import com.netflix.dyno.connectionpool.OperationResult;
-import com.netflix.dyno.connectionpool.exception.DynoConnectException;
-import com.netflix.dyno.connectionpool.exception.DynoException;
-import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
-import com.netflix.dyno.connectionpool.exception.ThrottledException;
-
 public class HostConnectionPoolImplTest {
 
-    private static final Host TestHost = new Host("TestHost", "TestAddress", 1234, "TestRack");
+    private static final Host TestHost = new HostBuilder().setHostname("TestHost").setIpAddress("TestAddress").setPort(1234).setRack("TestRack").createHost();
 
     // TEST UTILS SETUP
     private class TestClient {
@@ -119,8 +117,13 @@ public class HostConnectionPoolImplTest {
     private static ConnectionFactory<TestClient> connFactory = new ConnectionFactory<TestClient>() {
 
         @Override
-        public Connection<TestClient> createConnection(HostConnectionPool<TestClient> pool, ConnectionObservor cObservor) throws DynoConnectException, ThrottledException {
+        public Connection<TestClient> createConnection(HostConnectionPool<TestClient> pool) throws DynoConnectException {
             return new TestConnection(pool);
+        }
+
+        @Override
+        public Connection<TestClient> createConnectionWithDataStore(HostConnectionPool<TestClient> pool) throws DynoConnectException {
+            return null;
         }
     };
 

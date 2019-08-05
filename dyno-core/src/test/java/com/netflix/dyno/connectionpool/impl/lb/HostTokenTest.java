@@ -20,38 +20,37 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import com.netflix.dyno.connectionpool.HostBuilder;
 import org.junit.Assert;
 import org.junit.Test;
-
-import com.netflix.dyno.connectionpool.Host;
 
 public class HostTokenTest {
 
     @Test
     public void testEquals() throws Exception {
 
-        HostToken t1 = new HostToken(1L, new Host("foo", 1234, "foo_rack"));
-        HostToken t2 = new HostToken(1L, new Host("foo", 1234, "foo_rack"));
+        HostToken t1 = new HostToken(1L, new HostBuilder().setHostname("foo").setPort(1234).setRack("foo_rack").createHost());
+        HostToken t2 = new HostToken(1L, new HostBuilder().setHostname("foo").setPort(1234).setRack("foo_rack").createHost());
 
         Assert.assertEquals(t1, t2);
 
         // change token
-        HostToken t3 = new HostToken(2L, new Host("foo", 1234, "foo_rack"));
+        HostToken t3 = new HostToken(2L, new HostBuilder().setHostname("foo").setPort(1234).setRack("foo_rack").createHost());
         Assert.assertFalse(t1.equals(t3));
 
         // change host name
-        HostToken t4 = new HostToken(1L, new Host("foo1", 1234, "foo_rack"));
+        HostToken t4 = new HostToken(1L, new HostBuilder().setHostname("foo1").setPort(1234).setRack("foo_rack").createHost());
         Assert.assertFalse(t1.equals(t4));
     }
 
     @Test
     public void testSort() throws Exception {
 
-        HostToken t1 = new HostToken(1L, new Host("foo1", 1234, "foo_rack"));
-        HostToken t2 = new HostToken(2L, new Host("foo2", 1234, "foo_rack"));
-        HostToken t3 = new HostToken(3L, new Host("foo3", 1234, "foo_rack"));
-        HostToken t4 = new HostToken(4L, new Host("foo4", 1234, "foo_rack"));
-        HostToken t5 = new HostToken(5L, new Host("foo5", 1234, "foo_rack"));
+        HostToken t1 = new HostToken(1L, new HostBuilder().setHostname("foo1").setPort(1234).setRack("foo_rack").createHost());
+        HostToken t2 = new HostToken(2L, new HostBuilder().setHostname("foo2").setPort(1234).setRack("foo_rack").createHost());
+        HostToken t3 = new HostToken(3L, new HostBuilder().setHostname("foo3").setPort(1234).setRack("foo_rack").createHost());
+        HostToken t4 = new HostToken(4L, new HostBuilder().setHostname("foo4").setPort(1234).setRack("foo_rack").createHost());
+        HostToken t5 = new HostToken(5L, new HostBuilder().setHostname("foo5").setPort(1234).setRack("foo_rack").createHost());
 
         HostToken[] arr = {t5, t2, t4, t3, t1};
         List<HostToken> list = Arrays.asList(arr);

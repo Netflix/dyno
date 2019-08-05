@@ -17,6 +17,7 @@ package com.netflix.dyno.connectionpool.impl.lb;
 
 import java.util.*;
 
+import com.netflix.dyno.connectionpool.HostBuilder;
 import com.netflix.dyno.connectionpool.exception.TimeoutException;
 import com.netflix.dyno.connectionpool.impl.utils.ConfigUtils;
 import org.json.simple.JSONArray;
@@ -240,7 +241,7 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
                     securePort = Integer.valueOf(securePortStr);
                 }
 
-                Host host = new Host(hostname, ipAddress, port, securePort, zone, datacenter, Status.Up, hashtag);
+                Host host = new HostBuilder().setHostname(hostname).setIpAddress(ipAddress).setPort(port).setSecurePort(securePort).setRack(zone).setDatacenter(datacenter).setStatus(Status.Up).setHashtag(hashtag).createHost();
 
                 if (isLocalDatacenterHost(host)) {
                     HostToken hostToken = new HostToken(token, host);

@@ -27,6 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import com.netflix.dyno.connectionpool.HostBuilder;
 import org.apache.log4j.BasicConfigurator;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -66,7 +67,7 @@ public class ConnectionPoolHealthTrackerTest {
         ConnectionPoolHealthTracker<Integer> tracker = new ConnectionPoolHealthTracker<Integer>(config, threadPool, 1000, -1);
         tracker.start();
 
-        Host h1 = new Host("h1", "r1", Status.Up);
+        Host h1 = new HostBuilder().setHostname("h1").setRack("r1").setStatus(Status.Up).createHost();
         AtomicBoolean poolStatus = new AtomicBoolean(false);
         HostConnectionPool<Integer> hostPool = getMockConnectionPool(h1, poolStatus);
 
@@ -94,7 +95,7 @@ public class ConnectionPoolHealthTrackerTest {
         ConnectionPoolHealthTracker<Integer> tracker = new ConnectionPoolHealthTracker<Integer>(config, threadPool, 1000, -1);
         tracker.start();
 
-        Host h1 = new Host("h1", "r1", Status.Up);
+        Host h1 = new HostBuilder().setHostname("h1").setRack("r1").setStatus(Status.Up).createHost();
         AtomicBoolean poolStatus = new AtomicBoolean(false);
         HostConnectionPool<Integer> hostPool = getMockConnectionPool(h1, poolStatus, true);
 

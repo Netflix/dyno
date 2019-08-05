@@ -15,14 +15,6 @@
  */
 package com.netflix.dyno.contrib.consul;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
-import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.ecwid.consul.v1.ConsulClient;
 import com.ecwid.consul.v1.QueryParams;
 import com.ecwid.consul.v1.Response;
@@ -34,7 +26,15 @@ import com.google.common.collect.Collections2;
 import com.google.common.collect.Lists;
 import com.netflix.discovery.DiscoveryManager;
 import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.HostBuilder;
 import com.netflix.dyno.connectionpool.HostSupplier;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Simple class that implements {@link Supplier}<{@link List}<{@link Host}>>. It provides a List<{@link Host}>
@@ -129,8 +129,13 @@ public class ConsulHostsSupplier implements HostSupplier {
                             Logger.error("Rack wasn't found for host:" + info.getNode()
                                     + " there may be issues matching it up to the token map");
                         }
-                        Host host = new Host(hostName, hostName, info.getService().getPort(), rack,
-                                String.valueOf(metaData.get("datacenter")), status);
+                        Host host = new HostBuilder().setHostname(hostName)
+                                .setIpAddress(hostName)
+                                .setPort(info.getService().getPort())
+                                .setRack(rack)
+                                .setDatacenter(String.valueOf(metaData.get("datacenter")))
+                                .setStatus(status)
+                                .createHost();
                         return host;
                     }
                 }));

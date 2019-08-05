@@ -15,6 +15,7 @@
  */
 package com.netflix.dyno.connectionpool.impl;
 
+import com.netflix.dyno.connectionpool.HostBuilder;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -30,8 +31,8 @@ public class CountingConnectionPoolMonitorTest {
 
         CountingConnectionPoolMonitor counter = new CountingConnectionPoolMonitor();
 
-        Host host1 = new Host("host1", "address1", 1111, "rack1");
-        Host host2 = new Host("host2", "address2", 2222, "rack1");
+        Host host1 = new HostBuilder().setHostname("host1").setIpAddress("address1").setPort(1111).setRack("rack1").createHost();
+        Host host2 = new HostBuilder().setHostname("host2").setIpAddress("address2").setPort(2222).setRack("rack1").createHost();
 
         // Host 1
         counter.incConnectionCreated(host1);
