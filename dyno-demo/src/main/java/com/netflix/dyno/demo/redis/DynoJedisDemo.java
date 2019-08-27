@@ -206,8 +206,8 @@ public class DynoJedisDemo {
         this.shadowClusterClient = new DynoJedisClient.Builder()
                 .withApplicationName("demo")
                 .withDynomiteClusterName("dyno-dev")
-                .withHostSupplier(primaryClusterHostSupplier)
-                .withTokenMapSupplier(primaryTokenSupplier)
+                .withHostSupplier(shadowClusterHostSupplier)
+                .withTokenMapSupplier(shadowTokenSupplier)
                 .withCPConfig(shadowCPConfig)
                 .build();
 
