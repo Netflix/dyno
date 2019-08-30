@@ -16,6 +16,7 @@
 package com.netflix.dyno.connectionpool.impl;
 
 import com.netflix.dyno.connectionpool.Host;
+import com.netflix.dyno.connectionpool.HostBuilder;
 import com.netflix.dyno.connectionpool.HostSupplier;
 import com.netflix.dyno.connectionpool.TokenMapSupplier;
 import com.netflix.dyno.connectionpool.exception.DynoException;
@@ -116,12 +117,50 @@ public class HostsUpdater {
                     throw new DynoException("Could not find " + hostFromHostSupplier.getHostName() + " in token map supplier.");
                 }
 
-                hostsUpFromHostSupplier.add(Host.clone(hostFromTokenMapSupplier).setStatus(Host.Status.Up));
+                // XXX: There's slight subtlety here. We get the hostname and IPAddress from 'hostFromHostSupplier'
+                // which is derived from the HostSupplier, whereas we get everything else from the 'hostFromTokenMapSupplier'
+                // which is basically derived from the AbstractTokenMapSupplier.
+                // The reason for this subtlety is due to the fact that the host supplier returns the preferred IPAddress
+                // and the AbstractTokenMapSupplier may return an alternative IPAddress (public IP vs. private IP) that
+                // we may not be able to access. (The same applies to the following 'else' case.)
+                //
+                // Why does the AbstractTokenMapSupplier return public IPs?
+                // This is because the AbstractTokenMapSupplier derives its values from dynomite-manager which
+                // returns the topology seen by it and the server processes, and they use Public IPs to communicate with
+                // each other.
+                // TODO: Can we ensure that both the HostSupplier and AbstractTokenMapSupplier agree on the same values?
+                HostBuilder upHostBuilder = new HostBuilder()
+                        .setHostname(hostFromHostSupplier.getHostName())
+                        .setIpAddress(hostFromHostSupplier.getIpAddress())
+                        .setStatus(Host.Status.Up);
+
+                upHostBuilder.setPort(hostFromTokenMapSupplier.getPort())
+                        .setSecurePort(hostFromTokenMapSupplier.getSecurePort())
+                        .setDatastorePort(hostFromTokenMapSupplier.getDatastorePort())
+                        .setRack(hostFromTokenMapSupplier.getRack())
+                        .setDatacenter(hostFromTokenMapSupplier.getDatacenter())
+                        .setHashtag(hostFromHostSupplier.getHashtag())
+                        .setPassword(hostFromTokenMapSupplier.getPassword());
+
+                hostsUpFromHostSupplier.add(upHostBuilder.createHost());
                 allHostSetFromTokenMapSupplier.remove(hostFromTokenMapSupplier);
             } else {
                 Host hostFromTokenMapSupplier = allHostSetFromTokenMapSupplier.get(hostFromHostSupplier);
 
-                hostsDownFromHostSupplier.add(Host.clone(hostFromTokenMapSupplier).setStatus(Host.Status.Down));
+                HostBuilder downHostBuilder = new HostBuilder()
+                        .setHostname(hostFromHostSupplier.getHostName())
+                        .setIpAddress(hostFromHostSupplier.getIpAddress())
+                        .setStatus(Host.Status.Down);
+
+                downHostBuilder.setPort(hostFromTokenMapSupplier.getPort())
+                        .setSecurePort(hostFromTokenMapSupplier.getSecurePort())
+                        .setDatastorePort(hostFromTokenMapSupplier.getDatastorePort())
+                        .setRack(hostFromTokenMapSupplier.getRack())
+                        .setDatacenter(hostFromTokenMapSupplier.getDatacenter())
+                        .setHashtag(hostFromHostSupplier.getHashtag())
+                        .setPassword(hostFromTokenMapSupplier.getPassword());
+
+                hostsDownFromHostSupplier.add(downHostBuilder.createHost());
                 allHostSetFromTokenMapSupplier.remove(hostFromTokenMapSupplier);
             }
         }
