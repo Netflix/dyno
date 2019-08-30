@@ -25,7 +25,15 @@ public class LocalRedisLockTest extends DynoLockClientTest {
         redisServer = new RedisServer(REDIS_PORT);
         redisServer.start();
         Assume.assumeFalse(System.getProperty("os.name").toLowerCase().startsWith("win"));
-        host = new HostBuilder().setHostname("localhost").setDatastorePort(REDIS_PORT).setPort(REDIS_PORT).setRack(REDIS_RACK).setStatus(Host.Status.Up).createHost();
+        host = new HostBuilder()
+                .setHostname("localhost")
+                .setIpAddress("127.0.0.1")
+                .setDatastorePort(REDIS_PORT)
+                .setPort(REDIS_PORT)
+                .setRack(REDIS_RACK)
+                .setStatus(Host.Status.Up)
+                .createHost();
+
         tokenMapSupplier = new TokenMapSupplierImpl(host);
         dynoLockClient = constructDynoLockClient();
     }
