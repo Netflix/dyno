@@ -4689,6 +4689,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         private SSLSocketFactory sslSocketFactory;
         private TokenMapSupplier tokenMapSupplier;
         private TokenMapSupplier dualWriteTokenMapSupplier;
+        private boolean isDatastoreClient;
 
         public Builder() {
         }
@@ -4759,6 +4760,11 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
+        public Builder isDatastoreClient(boolean isDatastoreClient) {
+            this.isDatastoreClient = isDatastoreClient;
+            return this;
+        }
+
         public DynoJedisClient build() {
             assert (appName != null);
             assert (clusterName != null);
@@ -4767,6 +4773,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 cpConfig = new ArchaiusConnectionPoolConfiguration(appName);
                 Logger.info("Dyno Client runtime properties: " + cpConfig.toString());
             }
+            cpConfig.setConnectToDatastore(isDatastoreClient);
 
             if (cpConfig.isDualWriteEnabled()) {
                 return buildDynoDualWriterClient();
