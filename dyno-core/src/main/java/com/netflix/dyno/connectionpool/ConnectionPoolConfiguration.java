@@ -45,6 +45,12 @@ public interface ConnectionPoolConfiguration {
      */
     boolean isConnectToDatastore();
 
+    /**
+     * Returns 'true' if a connection-pool level consistency setting was provided.
+     * @return
+     */
+    boolean isConnectionPoolConsistencyProvided();
+
     boolean isFallbackEnabled();
 
     /**
@@ -235,6 +241,13 @@ public interface ConnectionPoolConfiguration {
      * @return
      */
     int getPoolReconnectWaitMillis();
+
+    /**
+     * Returns the user-provided connection pool level consistency setting if provided.
+     *
+     * @return
+     */
+    String getConnectionPoolConsistency();
 
     String getHashtag();
 

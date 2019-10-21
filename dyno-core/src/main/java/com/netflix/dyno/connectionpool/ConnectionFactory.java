@@ -39,4 +39,7 @@ public interface ConnectionFactory<CL> {
 
     Connection<CL> createConnectionWithDataStore(HostConnectionPool<CL> pool)
             throws DynoConnectException;
+
+    Connection<CL> createConnectionWithConsistencyLevel(HostConnectionPool<CL> pool, String consistency)
+            throws DynoConnectException;
 }

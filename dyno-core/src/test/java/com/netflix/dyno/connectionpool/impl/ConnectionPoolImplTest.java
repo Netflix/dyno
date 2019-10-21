@@ -149,6 +149,12 @@ public class ConnectionPoolImplTest {
         public Connection<TestClient> createConnectionWithDataStore(HostConnectionPool<TestClient> pool) throws DynoConnectException {
             return null;
         }
+
+        @Override
+        public Connection<TestClient> createConnectionWithConsistencyLevel(HostConnectionPool<TestClient> pool, String consistency) throws DynoConnectException {
+            return null;
+        }
+
     };
 
     private Host host1 = new HostBuilder().setHostname("host1").setPort(8080).setRack("localRack").setStatus(Status.Up).createHost();
@@ -513,6 +519,12 @@ public class ConnectionPoolImplTest {
             public Connection<TestClient> createConnectionWithDataStore(HostConnectionPool<TestClient> pool) throws DynoConnectException {
                 return null;
             }
+
+            @Override
+            public Connection<TestClient> createConnectionWithConsistencyLevel(HostConnectionPool<TestClient> pool, String consistency) throws DynoConnectException {
+                return null;
+            }
+
         };
 
         final ConnectionPoolImpl<TestClient> pool = new ConnectionPoolImpl<TestClient>(badConnectionFactory, cpConfig, cpMonitor);
@@ -629,6 +641,12 @@ public class ConnectionPoolImplTest {
             public Connection<TestClient> createConnectionWithDataStore(HostConnectionPool<TestClient> pool) throws DynoConnectException {
                 return null;
             }
+
+            @Override
+            public Connection<TestClient> createConnectionWithConsistencyLevel(HostConnectionPool<TestClient> pool, String consistency) throws DynoConnectException {
+                return null;
+            }
+
         };
 
         final RetryNTimes retry = new RetryNTimes(3, false);
