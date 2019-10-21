@@ -125,6 +125,12 @@ public class HostConnectionPoolImplTest {
         public Connection<TestClient> createConnectionWithDataStore(HostConnectionPool<TestClient> pool) throws DynoConnectException {
             return null;
         }
+
+        @Override
+        public Connection<TestClient> createConnectionWithConsistencyLevel(HostConnectionPool<TestClient> pool, String consistency) throws DynoConnectException {
+            return null;
+        }
+
     };
 
     private static ConnectionPoolConfigurationImpl config = new ConnectionPoolConfigurationImpl("TestClient");

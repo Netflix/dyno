@@ -4690,6 +4690,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         private TokenMapSupplier tokenMapSupplier;
         private TokenMapSupplier dualWriteTokenMapSupplier;
         private boolean isDatastoreClient;
+        private String connectionPoolConsistency;
 
         public Builder() {
         }
@@ -4765,15 +4766,30 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return this;
         }
 
+        public Builder withConnectionPoolConsistency(String consistency) {
+            this.connectionPoolConsistency = consistency;
+            return this;
+        }
+
         public DynoJedisClient build() {
             assert (appName != null);
             assert (clusterName != null);
+
+            // Make sure that the user doesn't set isDatastoreClient and connectionPoolConsistency together.
+            if (this.isDatastoreClient == true && this.connectionPoolConsistency != null) {
+                throw new DynoException("Cannot set isDatastoreClient(true) and also set withConnectionPoolConsistency() together");
+            }
 
             if (cpConfig == null) {
                 cpConfig = new ArchaiusConnectionPoolConfiguration(appName);
                 Logger.info("Dyno Client runtime properties: " + cpConfig.toString());
             }
             cpConfig.setConnectToDatastore(isDatastoreClient);
+
+            // If a connection-pool level consistency setting was provided, add it here.
+            if (this.connectionPoolConsistency != null) {
+                cpConfig.setConnectionPoolConsistency(connectionPoolConsistency);
+            }
 
             if (cpConfig.isDualWriteEnabled()) {
                 return buildDynoDualWriterClient();

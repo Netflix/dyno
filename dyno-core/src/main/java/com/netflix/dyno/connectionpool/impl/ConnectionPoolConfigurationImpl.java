@@ -54,6 +54,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     private static final boolean DEFAULT_FALLBACK_POLICY = true;
     private static final boolean DEFAULT_CONNECT_TO_DATASTORE = false;
     private static final int DEFAULT_LOCK_VOTING_SIZE = -1;
+    private static final String UNSET_CONNECTION_POOL_CONSISTENCY = "UNSET_CONFIG";
 
     private HostSupplier hostSupplier;
     private TokenMapSupplier tokenSupplier;
@@ -87,6 +88,7 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     private int lockVotingSize = DEFAULT_LOCK_VOTING_SIZE;
     private boolean fallbackEnabled = DEFAULT_FALLBACK_POLICY;
     private boolean connectToDatastore = DEFAULT_CONNECT_TO_DATASTORE;
+    private String connectionPoolConsistency = UNSET_CONNECTION_POOL_CONSISTENCY;
 
 
     private RetryPolicyFactory retryFactory = new RetryPolicyFactory() {
@@ -144,6 +146,11 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
     @Override
     public boolean isConnectToDatastore() {
         return connectToDatastore;
+    }
+
+    @Override
+    public boolean isConnectionPoolConsistencyProvided() {
+        return !(this.connectionPoolConsistency.compareTo(UNSET_CONNECTION_POOL_CONSISTENCY) == 0);
     }
 
     @Override
@@ -318,6 +325,10 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         this.connectToDatastore = connectToDatastore;
     }
 
+    public void setConnectionPoolConsistency(String consistency) {
+        this.connectionPoolConsistency = consistency;
+    }
+
     public ConnectionPoolConfigurationImpl setFallbackEnabled(boolean fallbackEnabled) {
         this.fallbackEnabled = fallbackEnabled;
         return this;
@@ -393,6 +404,10 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         return this;
     }
 
+    @Override
+    public String getConnectionPoolConsistency() {
+        return this.connectionPoolConsistency;
+    }
 
     public HostSupplier getHostSupplier() {
         return hostSupplier;

@@ -65,12 +65,20 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
         return new JedisConnection(pool, true);
     }
 
+    @Override
+    public Connection<Jedis> createConnectionWithConsistencyLevel(HostConnectionPool<Jedis> pool, String consistency) {
+        JedisConnection connection = new JedisConnection(pool);
+        connection.setConsistencyLevel(consistency);
+        return connection;
+    }
+
     // TODO: raghu compose redisconnection with jedisconnection in it
     public class JedisConnection implements Connection<Jedis> {
 
         private final HostConnectionPool<Jedis> hostPool;
         private final Jedis jedisClient;
         private final ConnectionContextImpl context = new ConnectionContextImpl();
+        private String consistencyLevel;
 
         private DynoConnectException lastDynoException;
 
@@ -98,6 +106,14 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 
                 jedisClient = new Jedis(shardInfo);
             }
+        }
+
+        public void setConsistencyLevel(String consistency) {
+            this.consistencyLevel = consistency;
+        }
+
+        public boolean isConsistencyLevelProvided() {
+            return this.consistencyLevel != null;
         }
 
         @Override
@@ -158,6 +174,9 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
         @Override
         public void open() throws DynoException {
             jedisClient.connect();
+            if (isConsistencyLevelProvided()) {
+                jedisClient.getClient().sendCommand(DynoConfigCommand.CONN_CONSISTENCY, this.consistencyLevel);
+            }
         }
 
         @Override

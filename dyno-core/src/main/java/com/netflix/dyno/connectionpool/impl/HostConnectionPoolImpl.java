@@ -301,8 +301,15 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
         public Connection<CL> createConnection() {
 
             try {
-                Connection<CL> connection = cpConfig.isConnectToDatastore() ? connFactory.createConnectionWithDataStore(pool) :
-                        connFactory.createConnection(pool);
+                Connection<CL> connection;
+                if (cpConfig.isConnectToDatastore()) {
+                    connection = connFactory.createConnectionWithDataStore(pool);
+                } else if (cpConfig.isConnectionPoolConsistencyProvided()) {
+                    connection = connFactory.createConnectionWithConsistencyLevel(pool, cpConfig.getConnectionPoolConsistency());
+                } else {
+                    connection = connFactory.createConnection(pool);
+                }
+
                 connection.open();
                 availableConnections.add(connection);
 

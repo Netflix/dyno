@@ -58,6 +58,11 @@ public class RedissonConnectionFactory implements ConnectionFactory<RedisAsyncCo
         throw new UnsupportedOperationException("");
     }
 
+    @Override
+    public Connection<RedisAsyncConnection<String, String>> createConnectionWithConsistencyLevel(HostConnectionPool<RedisAsyncConnection<String, String>> pool, String consistency) throws DynoConnectException {
+        throw new UnsupportedOperationException("");
+    }
+
     public static class RedissonConnection implements Connection<RedisAsyncConnection<String, String>> {
 
         private final HostConnectionPool<RedisAsyncConnection<String, String>> hostPool;
