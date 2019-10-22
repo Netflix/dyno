@@ -176,6 +176,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
             jedisClient.connect();
             if (isConsistencyLevelProvided()) {
                 jedisClient.getClient().sendCommand(DynoConfigCommand.CONN_CONSISTENCY, this.consistencyLevel);
+                jedisClient.getClient().getStatusCodeReply();
             }
         }
 
