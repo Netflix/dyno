@@ -80,7 +80,7 @@ public class EurekaHostsSupplier implements HostSupplier {
             throw new RuntimeException("EurekaHostsSupplier needs a non-null DiscoveryClient");
         }
 
-        Logger.info("Dyno fetching instance list for app: " + applicationName);
+        Logger.debug("Dyno fetching instance list for app: " + applicationName);
 
         Application app = discoveryClient.getApplication(applicationName);
         List<Host> hosts = new ArrayList<Host>();
@@ -120,7 +120,7 @@ public class EurekaHostsSupplier implements HostSupplier {
                     }
                 }));
 
-        Logger.info("Dyno found hosts from eureka - num hosts: " + hosts.size());
+        Logger.debug("Dyno found hosts from eureka - num hosts: " + hosts.size());
 
         return hosts;
     }
