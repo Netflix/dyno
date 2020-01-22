@@ -98,7 +98,7 @@ project(':dyno-jedis') {
         compile project(':dyno-core')
         compile project(':dyno-contrib')
         compile 'redis.clients:jedis:3.0.1'
-        compile 'org.projectlombok:lombok:1.18.4'
+        compileOnly 'org.projectlombok:lombok:1.18.4'
         testCompile 'com.netflix.spinnaker.embedded-redis:embedded-redis:0.8.0'
     }
 }
@@ -146,6 +146,7 @@ project(':dyno-recipes') {
         compile project(':dyno-core')
         compile project(':dyno-jedis')
         compile 'com.google.code.gson:gson:2.8.5'
+        compileOnly 'org.projectlombok:lombok:1.18.4'
         testCompile 'com.netflix.spinnaker.embedded-redis:embedded-redis:0.8.0'
     }
 
