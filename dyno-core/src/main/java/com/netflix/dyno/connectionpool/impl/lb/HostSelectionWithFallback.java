@@ -95,7 +95,7 @@ public class HostSelectionWithFallback<CL> {
     private final AtomicReference<TokenPoolTopology> topology = new AtomicReference<>(null);
 
     // list of names of remote zones. Used for RoundRobin over remote zones when local zone host is down
-    private final CircularList<String> remoteDCNames = new CircularList<>(new ArrayList<>());
+    private final CircularList<String> remoteRackNames = new CircularList<>(new ArrayList<>());
 
     private final HostSelectionStrategyFactory<CL> selectorFactory;
 
@@ -211,12 +211,12 @@ public class HostSelectionWithFallback<CL> {
 
     private boolean attemptFallback() {
         return cpConfig.getMaxFailoverCount() > 0 &&
-                (cpConfig.localZoneAffinity() && remoteDCNames.getEntireList().size() > 0) ||
+                (cpConfig.localZoneAffinity() && remoteRackNames.getEntireList().size() > 0) ||
                 (!cpConfig.localZoneAffinity() && !localSelector.isEmpty());
     }
 
     private HostConnectionPool<CL> getFallbackHostPool(BaseOperation<CL, ?> op, Long token) {
-        int numRemotes = remoteDCNames.getEntireList().size();
+        int numRemotes = remoteRackNames.getEntireList().size();
         if (numRemotes == 0) {
             throw new NoAvailableHostsException("Could not find any remote Racks for fallback");
         }
@@ -228,13 +228,13 @@ public class HostSelectionWithFallback<CL> {
         while ((numTries > 0)) {
 
             numTries--;
-            String remoteDC = remoteDCNames.getNextElement();
-            HostSelectionStrategy<CL> remoteDCSelector = remoteRackSelectors.get(remoteDC);
+            String remoteRack = remoteRackNames.getNextElement();
+            HostSelectionStrategy<CL> remoteRackSelector = remoteRackSelectors.get(remoteRack);
 
             try {
 
                 HostConnectionPool<CL> fallbackHostPool =
-                        (op != null) ? remoteDCSelector.getPoolForOperation(op, cpConfig.getHashtag()) : remoteDCSelector.getPoolForToken(token);
+                        (op != null) ? remoteRackSelector.getPoolForOperation(op, cpConfig.getHashtag()) : remoteRackSelector.getPoolForToken(token);
 
                 if (isConnectionPoolActive(fallbackHostPool)) {
                     return fallbackHostPool;
@@ -378,7 +378,7 @@ public class HostSelectionWithFallback<CL> {
             remoteRackSelectors.put(rack, remoteSelector);
         }
 
-        remoteDCNames.swapWithList(remoteRackSelectors.keySet());
+        remoteRackNames.swapWithList(remoteRackSelectors.keySet());
 
         topology.set(createTokenPoolTopology(allHostTokens));
     }
@@ -505,14 +505,14 @@ public class HostSelectionWithFallback<CL> {
                 "localDataCenter='" + localDataCenter + '\'' +
                 ", localRack='" + localRack + '\'' +
                 ", localSelector=" + localSelector +
-                ", remoteDCSelectors=" + remoteRackSelectors +
+                ", remoteRackSelectors=" + remoteRackSelectors +
                 ", hostTokens=" + hostTokens +
                 ", tokenSupplier=" + tokenSupplier +
                 ", cpConfig=" + cpConfig +
                 ", cpMonitor=" + cpMonitor +
                 ", replicationFactor=" + replicationFactor +
                 ", topology=" + topology +
-                ", remoteDCNames=" + remoteDCNames +
+                ", remoteRackNames=" + remoteRackNames +
                 ", selectorFactory=" + selectorFactory +
                 '}';
     }
