@@ -22,7 +22,6 @@ import com.netflix.dyno.connectionpool.HostBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Function;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.Lists;
@@ -74,14 +73,11 @@ public class EurekaHostsSupplier implements HostSupplier {
     }
 
     private List<Host> getUpdateFromEureka() {
-
         if (discoveryClient == null) {
             Logger.error("Discovery client cannot be null");
             throw new RuntimeException("EurekaHostsSupplier needs a non-null DiscoveryClient");
         }
-
         Logger.info("Dyno fetching instance list for app: " + applicationName);
-
         Application app = discoveryClient.getApplication(applicationName);
         List<Host> hosts = new ArrayList<Host>();
 
@@ -95,33 +91,25 @@ public class EurekaHostsSupplier implements HostSupplier {
             return hosts;
         }
 
-        hosts = Lists.newArrayList(Collections2.transform(ins,
+        hosts = Lists.newArrayList(Collections2.transform(ins, info -> {
+            Host.Status status = info.getStatus() == InstanceStatus.UP ? Host.Status.Up : Host.Status.Down;
 
-                new Function<InstanceInfo, Host>() {
-                    @Override
-                    public Host apply(InstanceInfo info) {
-
-                        Host.Status status = info.getStatus() == InstanceStatus.UP ? Host.Status.Up : Host.Status.Down;
-
-                        String rack = null;
-                        try {
-                            if (info.getDataCenterInfo() instanceof AmazonInfo) {
-                                AmazonInfo amazonInfo = (AmazonInfo) info.getDataCenterInfo();
-                                rack = amazonInfo.get(MetaDataKey.availabilityZone);
-                            }
-                        } catch (Throwable t) {
-                            Logger.error("Error getting rack for host " + info.getHostName(), t);
-                        }
-                        if (rack == null) {
-                            Logger.error("Rack wasn't found for host:" + info.getHostName() + " there may be issues matching it up to the token map");
-                        }
-                        Host host = new HostBuilder().setHostname(info.getHostName()).setIpAddress(info.getIPAddr()).setRack(rack).setStatus(status).createHost();
-                        return host;
-                    }
-                }));
-
+            String rack = null;
+            try {
+                if (info.getDataCenterInfo() instanceof AmazonInfo) {
+                    AmazonInfo amazonInfo = (AmazonInfo) info.getDataCenterInfo();
+                    rack = amazonInfo.get(MetaDataKey.availabilityZone);
+                }
+            } catch (Throwable t) {
+                Logger.error("Error getting rack for host " + info.getHostName(), t);
+            }
+            if (rack == null) {
+                Logger.error("Rack wasn't found for host:" + info.getHostName() + " there may be issues matching it up to the token map");
+            }
+            Host host = new HostBuilder().setHostname(info.getHostName()).setIpAddress(info.getIPAddr()).setRack(rack).setStatus(status).createHost();
+            return host;
+        }));
         Logger.info("Dyno found hosts from eureka - num hosts: " + hosts.size());
-
         return hosts;
     }
 
