@@ -162,10 +162,25 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 
         @Override
         public void close() {
-            jedisClient.quit();
-            jedisClient.disconnect();
+            RuntimeException lastException = null;
+            
+            try {
+                jedisClient.quit();
+            } catch (RuntimeException e) {
+                lastException = e;
+            }
+            
+            try {
+                jedisClient.disconnect(); 
+            } catch (RuntimeException e) {
+                lastException = e;
+            }
+            
+            if (lastException != null) {
+                throw lastException;
+            }
         }
-
+            
         @Override
         public Host getHost() {
             return hostPool.getHost();
