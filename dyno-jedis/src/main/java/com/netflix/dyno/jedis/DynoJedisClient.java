@@ -17,6 +17,7 @@ package com.netflix.dyno.jedis;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
+
 import com.netflix.discovery.DiscoveryClient;
 import com.netflix.discovery.EurekaClient;
 import com.netflix.dyno.connectionpool.CompressionOperation;
@@ -72,6 +73,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 import static com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.CompressionStrategy;
 
@@ -149,6 +151,10 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             super(k, o);
         }
 
+        private CompressionValueOperation(byte[] k, OpName o) {
+            super(k, o);
+        }
+
         /**
          * Compresses the value based on the threshold defined by
          * {@link ConnectionPoolConfiguration#getValueCompressionThreshold()}
@@ -178,6 +184,26 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         @Override
+        public byte[] compressValue(byte[] value, ConnectionContext ctx) {
+            byte[] result = value;
+            int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
+
+            try {
+                // prefer speed over accuracy here so rather than using
+                // getBytes() to get the actual size
+                // just estimate using 2 bytes per character
+                if ((2 * value.length) > thresholdBytes) {
+                    result = ZipUtils.compressBytesNonBase64(value);
+                    ctx.setMetadata("compression", true);
+                }
+            } catch (IOException e) {
+                Logger.warn(
+                  "UNABLE to compress [" + value + "] for key [" + getStringKey() + "]; sending value uncompressed");
+            }
+
+            return result;
+        }
+        @Override
         public String decompressValue(String value, ConnectionContext ctx) {
             try {
                 if (ZipUtils.isCompressed(value)) {
@@ -186,6 +212,20 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 }
             } catch (IOException e) {
                 Logger.warn("Unable to decompress value [" + value + "]");
+            }
+
+            return value;
+        }
+
+        @Override
+        public byte[] decompressValue(byte[] value, ConnectionContext ctx) {
+            try {
+                if (ZipUtils.isCompressed(value)) {
+                    ctx.setMetadata("decompression", true);
+                    return ZipUtils.decompressBytesNonBase64(value);
+                }
+            } catch (IOException e) {
+                Logger.warn("Unable to decompress value [" + Arrays.toString(value) + "]");
             }
 
             return value;
@@ -251,11 +291,57 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         }
 
         @Override
+        public byte[][] compressMultiKeyValue(ConnectionContext ctx, byte[]... keyValues) {
+            List<byte[]> items = Arrays.asList(keyValues);
+            List<byte[]> newItems = new ArrayList<>();
+
+            for (int i = 0; i < items.size(); i++) {
+                /*
+                 * byte[]... keyValues is a List of keys and values.
+                 * The value always comes second and this is the one
+                 * we want to compress.
+                 */
+                if (i % 2 == 0) {
+                    byte[] value = items.get(i);
+
+                    try {
+                        if ((2 * value.length) > connPool.getConfiguration().getValueCompressionThreshold()) {
+                            newItems.add(i, ZipUtils.compressBytesNonBase64(value));
+                            ctx.setMetadata("compression", true);
+                        }
+
+                    } catch (IOException e) {
+                        Logger.warn(
+                          "UNABLE to compress [" + Arrays.toString(value) + "] for key ["
+                              + Arrays.toString(getBinaryKey()) + "]; sending value uncompressed");
+                    }
+                } else {
+                    newItems.add(items.get(i));
+                }
+            }
+            return (byte[][]) newItems.toArray();
+        }
+
+        @Override
         public String decompressValue(ConnectionContext ctx, String value) {
             try {
                 if (ZipUtils.isCompressed(value)) {
                     ctx.setMetadata("decompression", true);
                     return ZipUtils.decompressFromBase64String(value);
+                }
+            } catch (IOException e) {
+                Logger.warn("Unable to decompress value [" + value + "]");
+            }
+
+            return value;
+        }
+
+        @Override
+        public byte[] decompressValue(ConnectionContext ctx, byte[] value) {
+            try {
+                if (ZipUtils.isCompressed(value)) {
+                    ctx.setMetadata("decompression", true);
+                    return ZipUtils.decompressBytesNonBase64(value);
                 }
             } catch (IOException e) {
                 Logger.warn("Unable to decompress value [" + value + "]");
@@ -274,93 +360,127 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         return connPool.executeWithFailover(handler);
     }
 
-    @Override
-    public Long append(final String key, final String value) {
-        return d_append(key, value).getResult();
+    protected <T> T execOp(String key, OpName opName, Function<Jedis, T> fn) {
+        return connPool.executeWithFailover(new BaseKeyOperation<T>(key, opName) {
+            @Override
+            public T execute(Jedis client, ConnectionContext state) throws DynoException {
+                return fn.apply(client);
+            }
+        }).getResult();
     }
 
-    public OperationResult<Long> d_append(final String key, final String value) {
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.APPEND) {
+    protected <T> T execOp(byte[] key, OpName opName, Function<Jedis, T> fn) {
+        return connPool.executeWithFailover(new BaseKeyOperation<T>(key, opName) {
             @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.append(key, value);
+            public T execute(Jedis client, ConnectionContext state) throws DynoException {
+                return fn.apply(client);
             }
-        });
+        }).getResult();
+    }
+
+    protected <T> T execMultiOp(String[] keys, OpName opName, Function<Jedis, T> fn) {
+        return connPool.executeWithFailover(new MultiKeyOperation<T>(Arrays.asList(keys), opName) {
+            @Override
+            public T execute(Jedis client, ConnectionContext state) throws DynoException {
+                return fn.apply(client);
+            }
+        }).getResult();
+    }
+
+    protected <T> T execMultiOp(byte[][] keys, OpName opName, Function<Jedis, T> fn) {
+        return connPool.executeWithFailover(new MultiKeyOperation<T>(Arrays.asList(keys), opName) {
+            @Override
+            public T execute(Jedis client, ConnectionContext state) throws DynoException {
+                return fn.apply(client);
+            }
+        }).getResult();
+    }
+
+    @FunctionalInterface
+    interface CompressionFunction<Jedis, ConnectionContext, CompressionOperation, T> {
+        T apply(Jedis jedis, ConnectionContext state, CompressionOperation op);
+    }
+
+    protected <T> T execCompressOp(String key, OpName opName,
+                                 CompressionFunction<Jedis, ConnectionContext, CompressionOperation, T> fn) {
+        return connPool.executeWithFailover(new CompressionValueOperation<T>(key, opName) {
+            @Override
+            public T execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                return fn.apply(client, state, this);
+            }
+        }).getResult();
+    }
+
+    protected <T> T execCompressOp(byte[] key, OpName opName,
+                                 CompressionFunction<Jedis, ConnectionContext, CompressionOperation, T> fn) {
+        return connPool.executeWithFailover(new CompressionValueOperation<T>(key, opName) {
+            @Override
+            public T execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                return fn.apply(client, state, this);
+            }
+        }).getResult();
+    }
+
+    @FunctionalInterface
+    interface MultiKeyCompressionFunction<Jedis, ConnectionContext, MultiKeyCompressionOperation, T> {
+        T apply(Jedis jedis, ConnectionContext state, MultiKeyCompressionOperation op);
+    }
+
+    protected <T> T execCompressMultiOp(String[] keys, OpName opName,
+                                      MultiKeyCompressionFunction<Jedis, ConnectionContext, MultiKeyCompressionOperation, T> fn) {
+        return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<T>(Arrays.asList(keys), opName) {
+            @Override
+            public T execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                return fn.apply(client, state, this);
+            }
+        }).getResult();
+    }
+
+    protected <T> T execCompressMultiOp(byte[][] keys, OpName opName,
+                                      MultiKeyCompressionFunction<Jedis, ConnectionContext, MultiKeyCompressionOperation, T> fn) {
+        return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<T>(Arrays.asList(keys), opName) {
+            @Override
+            public T execute(final Jedis client, final ConnectionContext state) throws DynoException {
+                return fn.apply(client, state, this);
+            }
+        }).getResult();
+    }
+
+
+    /******************* Jedis String Commands **************/
+
+    @Override
+    public Long append(final String key, final String value) {
+        return execOp(key, OpName.APPEND, client -> client.append(key, value));
     }
 
     @Override
     public Long decr(final String key) {
-        return d_decr(key).getResult();
-    }
-
-    public OperationResult<Long> d_decr(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.DECR) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.decr(key);
-            }
-
-        });
+        return execOp(key, OpName.DECR, client -> client.decr(key));
     }
 
     @Override
     public Long decrBy(final String key, final long delta) {
-        return d_decrBy(key, delta).getResult();
-    }
-
-    public OperationResult<Long> d_decrBy(final String key, final Long delta) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.DECRBY) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.decrBy(key, delta);
-            }
-
-        });
+        return execOp(key, OpName.DECRBY, client -> client.decrBy(key, delta));
     }
 
     @Override
     public Long del(final String key) {
-        return d_del(key).getResult();
+        return execOp(key, OpName.DEL, client -> client.del(key));
     }
 
     @Override
     public Long unlink(String key) {
-        return d_unlink(key).getResult();
-    }
-
-    public OperationResult<Long> d_unlink(String key) {
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.UNLINK) {
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.unlink(key);
-            }
-
-        });
-    }
-
-    public OperationResult<Long> d_del(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.DEL) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.del(key);
-            }
-
-        });
+        return execOp(key, OpName.UNLINK, client -> client.unlink(key));
     }
 
     public byte[] dump(final String key) {
-        return d_dump(key).getResult();
+        return execOp(key, OpName.DUMP, client -> client.dump(key));
     }
 
     @Override
     public String restore(String key, int ttl, byte[] serializedValue) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.RESTORE, client -> client.restore(key, ttl, serializedValue));
     }
 
     @Override
@@ -368,83 +488,27 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         throw new UnsupportedOperationException("not yet implemented");
     }
 
-    public OperationResult<byte[]> d_dump(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<byte[]>(key, OpName.DUMP) {
-
-            @Override
-            public byte[] execute(Jedis client, ConnectionContext state) {
-                return client.dump(key);
-            }
-
-        });
-    }
-
     @Override
     public Boolean exists(final String key) {
-        return d_exists(key).getResult();
-    }
-
-    public OperationResult<Boolean> d_exists(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Boolean>(key, OpName.EXISTS) {
-
-            @Override
-            public Boolean execute(Jedis client, ConnectionContext state) {
-                return client.exists(key);
-            }
-
-        });
+        return execOp(key, OpName.EXISTS, client -> client.exists(key));
     }
 
     @Override
     public Long expire(final String key, final int seconds) {
-        return d_expire(key, seconds).getResult();
-    }
-
-    public OperationResult<Long> d_expire(final String key, final int seconds) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.EXPIRE) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.expire(key, seconds);
-            }
-        });
+        return execOp(key, OpName.EXPIRE, client -> client.expire(key, seconds));
     }
 
     @Override
     public Long expireAt(final String key, final long unixTime) {
-        return d_expireAt(key, unixTime).getResult();
-    }
-
-    public OperationResult<Long> d_expireAt(final String key, final long unixTime) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.EXPIREAT) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.expireAt(key, unixTime);
-            }
-
-        });
+        return execOp(key, OpName.EXPIREAT, client -> client.expireAt(key, unixTime));
     }
 
     @Override
     public Object eval(String script, int keyCount, String... params) {
-        return d_eval(script, keyCount, params).getResult();
-    }
-
-    public OperationResult<Object> d_eval(final String script, final int keyCount, final String... params) {
         if (keyCount == 0) {
             throw new DynoException("Need at least one key in script");
         }
-        return connPool.executeWithFailover(new BaseKeyOperation<Object>(params[0], OpName.EVAL) {
-            @Override
-            public Object execute(Jedis client, ConnectionContext state) {
-                return client.eval(script, keyCount, params);
-            }
-        });
+        return execOp(params[0], OpName.EVAL, client -> client.eval(script, keyCount, params));
     }
 
     @Override
@@ -460,19 +524,10 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public Object evalsha(String sha1, int keyCount, String... params) {
-        return d_evalsha(sha1, keyCount, params).getResult();
-    }
-
-    public OperationResult<Object> d_evalsha(String sha1, int keyCount, String... params) {
         if (keyCount == 0) {
             throw new DynoException("Need at least one key in script");
         }
-        return connPool.executeWithFailover(new BaseKeyOperation<Object>(params[0], OpName.EVALSHA) {
-            @Override
-            public Object execute(Jedis client, ConnectionContext state) {
-                return client.evalsha(sha1, keyCount, params);
-            }
-        });
+        return execOp(params[0], OpName.EVALSHA, client -> client.evalsha(sha1, keyCount, params));
     }
 
     @Override
@@ -488,337 +543,140 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public Boolean scriptExists(String sha1) {
-        return d_scriptExists(sha1).getResult();
-    }
-
-    public OperationResult<Boolean> d_scriptExists(String sha1) {
-        return connPool.executeWithFailover(new BaseKeyOperation<Boolean>(sha1, OpName.SCRIPT_EXISTS) {
-            @Override
-            public Boolean execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.scriptExists(sha1);
-            }
-        });
+        return execOp(sha1, OpName.SCRIPT_EXISTS, client -> client.scriptExists(sha1));
     }
 
     @Override
     public List<Boolean> scriptExists(String... sha1) {
-        return scriptExists(sha1);
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public String scriptLoad(String script) {
-        return d_scriptLoad(script).getResult();
-    }
-
-    public OperationResult<String> d_scriptLoad(final String script) {
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(script, OpName.SCRIPT_LOAD) {
-            @Override
-            public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.scriptLoad(script);
-            }
-        });
+        return execOp(script, OpName.SCRIPT_LOAD, client -> client.scriptLoad(script));
     }
 
     public String scriptFlush() {
-        return d_scriptFlush().getResult();
-    }
-
-    public OperationResult<String> d_scriptFlush() {
-        return connPool.executeWithFailover(new BaseKeyOperation<String>("", OpName.SCRIPT_FLUSH) {
-            @Override
-            public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.scriptFlush();
-            }
-        });
+        return execOp("", OpName.SCRIPT_FLUSH, client -> client.scriptFlush());
     }
 
     public String scriptKill() {
-        return d_scriptKill().getResult();
-    }
-
-    public OperationResult<String> d_scriptKill() {
-        return connPool.executeWithFailover(new BaseKeyOperation<String>("", OpName.SCRIPT_KILL) {
-            @Override
-            public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.scriptKill();
-            }
-        });
+        return execOp("", OpName.SCRIPT_KILL, client -> client.scriptKill());
     }
 
     @Override
     public String get(final String key) {
-        return d_get(key).getResult();
-    }
-
-    public OperationResult<String> d_get(final String key) {
-
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.GET) {
-                @Override
-                public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                    return client.get(key);
-                }
-            });
+            return execOp(key, OpName.GET, client -> client.get(key));
         } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.GET) {
-                @Override
-                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return decompressValue(client.get(key), state);
-                }
-            });
+            return execCompressOp(key, OpName.GET, (client, state, op) -> op.decompressValue(client.get(key), state));
         }
     }
 
     @Override
     public Boolean getbit(final String key, final long offset) {
-        return d_getbit(key, offset).getResult();
-    }
-
-    public OperationResult<Boolean> d_getbit(final String key, final Long offset) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Boolean>(key, OpName.GETBIT) {
-
-            @Override
-            public Boolean execute(Jedis client, ConnectionContext state) {
-                return client.getbit(key, offset);
-            }
-
-        });
+        return execOp(key, OpName.GETBIT, client -> client.getbit(key, offset));
     }
 
     @Override
     public String getrange(final String key, final long startOffset, final long endOffset) {
-        return d_getrange(key, startOffset, endOffset).getResult();
-    }
-
-    public OperationResult<String> d_getrange(final String key, final Long startOffset, final Long endOffset) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.GETRANGE) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.getrange(key, startOffset, endOffset);
-            }
-
-        });
+        return execOp(key, OpName.GETRANGE, client -> client.getrange(key, startOffset, endOffset));
     }
 
     @Override
     public String getSet(final String key, final String value) {
-        return d_getSet(key, value).getResult();
-    }
-
-    public OperationResult<String> d_getSet(final String key, final String value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.GETSET) {
-                @Override
-                public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                    return client.getSet(key, value);
-                }
-            });
+            return execOp(key, OpName.GETSET, client -> client.getSet(key, value));
         } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.GETSET) {
-                @Override
-                public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                    return decompressValue(client.getSet(key, compressValue(value, state)), state);
-                }
-            });
+            return execCompressOp(
+              key,
+              OpName.GETSET,
+              (client, state, op) -> op.decompressValue(client.getSet(key, op.compressValue(value, state)), state)
+            );
         }
     }
 
     @Override
     public Long hdel(final String key, final String... fields) {
-        return d_hdel(key, fields).getResult();
-    }
-
-    public OperationResult<Long> d_hdel(final String key, final String... fields) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HDEL) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.hdel(key, fields);
-            }
-
-        });
+        return execOp(key, OpName.HDEL, client -> client.hdel(key, fields));
     }
 
     @Override
     public Boolean hexists(final String key, final String field) {
-        return d_hexists(key, field).getResult();
-    }
-
-    public OperationResult<Boolean> d_hexists(final String key, final String field) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Boolean>(key, OpName.HEXISTS) {
-
-            @Override
-            public Boolean execute(Jedis client, ConnectionContext state) {
-                return client.hexists(key, field);
-            }
-
-        });
+        return execOp(key, OpName.HEXISTS, client -> client.hexists(key, field));
     }
 
     @Override
     public String hget(final String key, final String field) {
-        return d_hget(key, field).getResult();
-    }
-
-    public OperationResult<String> d_hget(final String key, final String field) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.HGET) {
-                @Override
-                public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                    return client.hget(key, field);
-                }
-            });
+            return execOp(key, OpName.HGET, client -> client.hget(key, field));
         } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.HGET) {
-                @Override
-                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return decompressValue(client.hget(key, field), state);
-                }
-            });
+            return execCompressOp(
+              key,
+              OpName.HGET,
+              (client, state, op) -> op.decompressValue(client.hget(key, field), state)
+            );
         }
     }
 
     @Override
     public Map<String, String> hgetAll(final String key) {
-        return d_hgetAll(key).getResult();
-    }
-
-    public OperationResult<Map<String, String>> d_hgetAll(final String key) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<Map<String, String>>(key, OpName.HGETALL) {
-                @Override
-                public Map<String, String> execute(Jedis client, ConnectionContext state) throws DynoException {
-                    return client.hgetAll(key);
-                }
-            });
+            return execOp(key, OpName.HGETALL, client -> client.hgetAll(key));
         } else {
-            return connPool
-                    .executeWithFailover(new CompressionValueOperation<Map<String, String>>(key, OpName.HGETALL) {
-                        @Override
-                        public Map<String, String> execute(final Jedis client, final ConnectionContext state) {
-                            return CollectionUtils.transform(client.hgetAll(key),
-                                    new CollectionUtils.MapEntryTransform<String, String, String>() {
-                                        @Override
-                                        public String get(String key, String val) {
-                                            return decompressValue(val, state);
-                                        }
-                                    });
-                        }
-                    });
+            return execCompressOp(
+              key,
+              OpName.HGETALL,
+              (client, state, op) -> CollectionUtils.transform(client.hgetAll(key),
+                                                               (key1, val) -> op.decompressValue(val, state))
+            );
         }
     }
 
     @Override
     public Long hincrBy(final String key, final String field, final long value) {
-        return d_hincrBy(key, field, value).getResult();
-    }
-
-    public OperationResult<Long> d_hincrBy(final String key, final String field, final long value) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HINCRBY) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.hincrBy(key, field, value);
-            }
-
-        });
+        return execOp(key, OpName.HINCRBY, client -> client.hincrBy(key, field, value));
     }
 
     /* not supported by RedisPipeline 2.7.3 */
     public Double hincrByFloat(final String key, final String field, final double value) {
-        return d_hincrByFloat(key, field, value).getResult();
-    }
-
-    public OperationResult<Double> d_hincrByFloat(final String key, final String field, final double value) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Double>(key, OpName.HINCRBYFLOAT) {
-
-            @Override
-            public Double execute(Jedis client, ConnectionContext state) {
-                return client.hincrByFloat(key, field, value);
-            }
-
-        });
+        return execOp(key, OpName.HINCRBYFLOAT, client -> client.hincrByFloat(key, field, value));
     }
 
     @Override
     public Long hsetnx(final String key, final String field, final String value) {
-        return d_hsetnx(key, field, value).getResult();
-    }
-
-    public OperationResult<Long> d_hsetnx(final String key, final String field, final String value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HSETNX) {
-                @Override
-                public Long execute(Jedis client, ConnectionContext state) {
-                    return client.hsetnx(key, field, value);
-                }
-
-            });
+            return execOp(key, OpName.HSETNX, client -> client.hsetnx(key, field, value));
         } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<Long>(key, OpName.HSETNX) {
-                @Override
-                public Long execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return client.hsetnx(key, field, compressValue(value, state));
-                }
-            });
+            return execCompressOp(
+              key,
+              OpName.HSETNX,
+              (client, state, op) -> client.hsetnx(key, field, op.compressValue(value, state))
+            );
         }
     }
 
     @Override
     public Set<String> hkeys(final String key) {
-        return d_hkeys(key).getResult();
-    }
-
-    public OperationResult<Set<String>> d_hkeys(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.HKEYS) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.hkeys(key);
-            }
-
-        });
+        return execOp(key, OpName.HKEYS, client -> client.hkeys(key));
     }
 
     @Override
     public ScanResult<Map.Entry<String, String>> hscan(final String key, final String cursor) {
-        return d_hscan(key, cursor).getResult();
-    }
-
-    public OperationResult<ScanResult<Map.Entry<String, String>>> d_hscan(final String key, final String cursor) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(
-                    new BaseKeyOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
-                        @Override
-                        public ScanResult<Map.Entry<String, String>> execute(Jedis client, ConnectionContext state) {
-                            return client.hscan(key, cursor);
-                        }
-                    });
+            return execOp(key, OpName.HSCAN, client -> client.hscan(key, cursor));
         } else {
-            return connPool.executeWithFailover(
-                    new CompressionValueOperation<ScanResult<Map.Entry<String, String>>>(key, OpName.HSCAN) {
-                        @Override
-                        public ScanResult<Map.Entry<String, String>> execute(final Jedis client,
-                                                                             final ConnectionContext state) {
-                            return new ScanResult<>(cursor, new ArrayList(CollectionUtils.transform(
-                                    client.hscan(key, cursor).getResult(),
-                                    new CollectionUtils.Transform<Map.Entry<String, String>, Map.Entry<String, String>>() {
-                                        @Override
-                                        public Map.Entry<String, String> get(Map.Entry<String, String> entry) {
-                                            entry.setValue(decompressValue(entry.getValue(), state));
-                                            return entry;
-                                        }
-                                    })));
-                        }
-                    });
+            return execCompressOp(
+              key,
+              OpName.HSCAN,
+              (client, state, op) ->
+                new ScanResult<>(cursor, new ArrayList(CollectionUtils.transform(
+                  client.hscan(key, cursor).getResult(),
+                  entry -> {
+                      entry.setValue(op.decompressValue(entry.getValue(), state));
+                      return entry;
+                  })))
+            );
         }
     }
 
@@ -854,393 +712,151 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public Long hlen(final String key) {
-        return d_hlen(key).getResult();
-    }
-
-    public OperationResult<Long> d_hlen(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HLEN) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.hlen(key);
-            }
-
-        });
+        return execOp(key, OpName.HLEN, client -> client.hlen(key));
     }
 
     @Override
     public List<String> hmget(final String key, final String... fields) {
-        return d_hmget(key, fields).getResult();
-    }
-
-    public OperationResult<List<String>> d_hmget(final String key, final String... fields) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.HMGET) {
-                @Override
-                public List<String> execute(Jedis client, ConnectionContext state) {
-                    return client.hmget(key, fields);
-                }
-            });
+            return execOp(key, OpName.HMGET, client -> client.hmget(key, fields));
         } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<List<String>>(key, OpName.HMGET) {
-                @Override
-                public List<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return new ArrayList<String>(CollectionUtils.transform(client.hmget(key, fields),
-                            new CollectionUtils.Transform<String, String>() {
-                                @Override
-                                public String get(String s) {
-                                    return decompressValue(s, state);
-                                }
-                            }));
-                }
-            });
+            return execCompressOp(
+              key,
+              OpName.HMGET,
+              (client, state, op) ->
+                new ArrayList<>(CollectionUtils.transform(client.hmget(key, fields),
+                                                                s -> op.decompressValue(s, state)))
+            );
         }
     }
 
     @Override
     public String hmset(final String key, final Map<String, String> hash) {
-        return d_hmset(key, hash).getResult();
-    }
-
-    public OperationResult<String> d_hmset(final String key, final Map<String, String> hash) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.HMSET) {
-                @Override
-                public String execute(Jedis client, ConnectionContext state) {
-                    return client.hmset(key, hash);
-                }
-            });
+            return execOp(key, OpName.HMSET, client -> client.hmset(key, hash));
         } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.HMSET) {
-                @Override
-                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return client.hmset(key, CollectionUtils.transform(hash,
-                            new CollectionUtils.MapEntryTransform<String, String, String>() {
-                                @Override
-                                public String get(String key, String val) {
-                                    return compressValue(val, state);
-                                }
-                            }));
-                }
-            });
+            return execCompressOp(
+              key,
+              OpName.HMSET,
+              (client, state, op) ->
+                client.hmset(key, CollectionUtils.transform(hash, (key1, val) -> op.compressValue(val, state)))
+            );
         }
     }
 
     @Override
     public Long hset(final String key, final String field, final String value) {
-        return d_hset(key, field, value).getResult();
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HSET, client -> client.hset(key, field, value));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.HSET,
+              (client, state, op) -> client.hset(key, field, op.compressValue(value, state))
+            );
+        }
     }
 
     @Override
     public Long hset(String key, Map<String, String> hash) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    public OperationResult<Long> d_hset(final String key, final String field, final String value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HSET) {
-                @Override
-                public Long execute(Jedis client, ConnectionContext state) {
-                    return client.hset(key, field, value);
-                }
-
-            });
+            return execOp(key, OpName.HSET, client -> client.hset(key, hash));
         } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<Long>(key, OpName.HSET) {
-                @Override
-                public Long execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return client.hset(key, field, compressValue(value, state));
-                }
-            });
+            throw new UnsupportedOperationException("not yet implemented");
         }
     }
 
     @Override
     public List<String> hvals(final String key) {
-        return d_hvals(key).getResult();
-    }
-
-    public OperationResult<List<String>> d_hvals(final String key) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.HVALS) {
-                @Override
-                public List<String> execute(Jedis client, ConnectionContext state) {
-                    return client.hvals(key);
-                }
-
-            });
+            return execOp(key, OpName.HVALS, client -> client.hvals(key));
         } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<List<String>>(key, OpName.HVALS) {
-                @Override
-                public List<String> execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return new ArrayList<String>(CollectionUtils.transform(client.hvals(key),
-                            new CollectionUtils.Transform<String, String>() {
-                                @Override
-                                public String get(String s) {
-                                    return decompressValue(s, state);
-                                }
-                            }));
-                }
-            });
+            return execCompressOp(
+              key,
+              OpName.HVALS,
+              (client, state, op) ->
+                new ArrayList<>(CollectionUtils.transform(client.hvals(key), s -> op.decompressValue(s, state)))
+            );
         }
     }
 
     @Override
     public Long incr(final String key) {
-        return d_incr(key).getResult();
-    }
-
-    public OperationResult<Long> d_incr(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.INCR) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.incr(key);
-            }
-
-        });
+        return execOp(key, OpName.INCR, client -> client.incr(key));
     }
 
     @Override
     public Long incrBy(final String key, final long delta) {
-        return d_incrBy(key, delta).getResult();
-    }
-
-    public OperationResult<Long> d_incrBy(final String key, final Long delta) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.INCRBY) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.incrBy(key, delta);
-            }
-
-        });
+        return execOp(key, OpName.INCRBY, client -> client.incrBy(key, delta));
     }
 
     public Double incrByFloat(final String key, final double increment) {
-        return d_incrByFloat(key, increment).getResult();
-    }
-
-    public OperationResult<Double> d_incrByFloat(final String key, final Double increment) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Double>(key, OpName.INCRBYFLOAT) {
-
-            @Override
-            public Double execute(Jedis client, ConnectionContext state) {
-                return client.incrByFloat(key, increment);
-            }
-
-        });
+        return execOp(key, OpName.INCRBYFLOAT, client -> client.incrByFloat(key, increment));
     }
 
     @Override
     public String lindex(final String key, final long index) {
-        return d_lindex(key, index).getResult();
-    }
-
-    public OperationResult<String> d_lindex(final String key, final Long index) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.LINDEX) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.lindex(key, index);
-            }
-
-        });
+        return execOp(key, OpName.LINDEX, client -> client.lindex(key, index));
     }
 
     @Override
     public Long linsert(final String key, final ListPosition where, final String pivot, final String value) {
-        return d_linsert(key, where, pivot, value).getResult();
-    }
-
-    public OperationResult<Long> d_linsert(final String key, final ListPosition where, final String pivot,
-                                           final String value) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.LINSERT) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.linsert(key, where, pivot, value);
-            }
-        });
+        return execOp(key, OpName.LINSERT, client -> client.linsert(key, where, pivot, value));
     }
 
     @Override
     public Long llen(final String key) {
-        return d_llen(key).getResult();
-    }
-
-    public OperationResult<Long> d_llen(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.LLEN) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.llen(key);
-            }
-
-        });
+        return execOp(key, OpName.LLEN, client -> client.llen(key));
     }
 
     @Override
     public String lpop(final String key) {
-        return d_lpop(key).getResult();
-    }
-
-    public OperationResult<String> d_lpop(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.LPOP) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.lpop(key);
-            }
-
-        });
+        return execOp(key, OpName.LPOP, client -> client.lpop(key));
     }
 
     @Override
     public Long lpush(final String key, final String... values) {
-        return d_lpush(key, values).getResult();
-    }
-
-    public OperationResult<Long> d_lpush(final String key, final String... values) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.LPUSH) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.lpush(key, values);
-            }
-
-        });
+        return execOp(key, OpName.LPUSH, client -> client.lpush(key, values));
     }
 
     @Override
     public Long lpushx(final String key, final String... values) {
-        return d_lpushx(key, values).getResult();
-    }
-
-    public OperationResult<Long> d_lpushx(final String key, final String... values) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.LPUSHX) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.lpushx(key, values);
-            }
-
-        });
+        return execOp(key, OpName.LPUSHX, client -> client.lpushx(key, values));
     }
 
     @Override
     public List<String> lrange(final String key, final long start, final long end) {
-        return d_lrange(key, start, end).getResult();
-    }
-
-    public OperationResult<List<String>> d_lrange(final String key, final Long start, final Long end) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.LRANGE) {
-
-            @Override
-            public List<String> execute(Jedis client, ConnectionContext state) {
-                return client.lrange(key, start, end);
-            }
-
-        });
+        return execOp(key, OpName.LRANGE, client -> client.lrange(key, start, end));
     }
 
     @Override
     public Long lrem(final String key, final long count, final String value) {
-        return d_lrem(key, count, value).getResult();
-    }
-
-    public OperationResult<Long> d_lrem(final String key, final Long count, final String value) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.LREM) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.lrem(key, count, value);
-            }
-
-        });
+        return execOp(key, OpName.LREM, client -> client.lrem(key, count, value));
     }
 
     @Override
     public String lset(final String key, final long index, final String value) {
-        return d_lset(key, index, value).getResult();
-    }
-
-    public OperationResult<String> d_lset(final String key, final Long index, final String value) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.LSET) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.lset(key, index, value);
-            }
-
-        });
+        return execOp(key, OpName.LSET, client -> client.lset(key, index, value));
     }
 
     @Override
     public String ltrim(final String key, final long start, final long end) {
-        return d_ltrim(key, start, end).getResult();
-    }
-
-    public OperationResult<String> d_ltrim(final String key, final long start, final long end) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.LTRIM) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.ltrim(key, start, end);
-            }
-
-        });
+        return execOp(key, OpName.LTRIM, client -> client.ltrim(key, start, end));
     }
 
     @Override
     public Long persist(final String key) {
-        return d_persist(key).getResult();
+        return execOp(key, OpName.PERSIST, client -> client.persist(key));
     }
 
-    public OperationResult<Long> d_persist(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.PERSIST) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.persist(key);
-            }
-
-        });
-    }
-
+    @Override
     public Long pexpireAt(final String key, final long millisecondsTimestamp) {
-        return d_pexpireAt(key, millisecondsTimestamp).getResult();
+        return execOp(key, OpName.PEXPIREAT, client -> client.pexpireAt(key, millisecondsTimestamp));
     }
 
-    public OperationResult<Long> d_pexpireAt(final String key, final Long millisecondsTimestamp) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.PEXPIREAT) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.pexpireAt(key, millisecondsTimestamp);
-            }
-
-        });
-    }
-
+    @Override
     public Long pttl(final String key) {
-        return d_pttl(key).getResult();
+        return execOp(key, OpName.PTTL, client -> client.pttl(key));
     }
 
     @Override
@@ -1248,221 +864,71 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         throw new UnsupportedOperationException("not yet implemented");
     }
 
-    public OperationResult<Long> d_pttl(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.PTTL) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.pttl(key);
-            }
-
-        });
-    }
-
     @Override
     public String rename(String oldkey, String newkey) {
-        return d_rename(oldkey, newkey).getResult();
-    }
-
-    public OperationResult<String> d_rename(final String oldkey, final String newkey) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(oldkey, OpName.RENAME) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.rename(oldkey, newkey);
-            }
-
-        });
+        return execOp(oldkey, OpName.RENAME, client -> client.rename(oldkey, newkey));
     }
 
     @Override
     public Long renamenx(String oldkey, String newkey) {
-        return d_renamenx(oldkey, newkey).getResult();
-    }
-
-    public OperationResult<Long> d_renamenx(final String oldkey, final String newkey) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(oldkey, OpName.RENAMENX) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.renamenx(oldkey, newkey);
-            }
-
-        });
+        return execOp(oldkey, OpName.RENAMENX, client -> client.renamenx(oldkey, newkey));
     }
 
     public String restore(final String key, final Integer ttl, final byte[] serializedValue) {
-        return d_restore(key, ttl, serializedValue).getResult();
+        return execOp(key, OpName.RESTORE, client -> client.restore(key, ttl, serializedValue));
     }
 
-    public OperationResult<String> d_restore(final String key, final Integer ttl, final byte[] serializedValue) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.RESTORE) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.restore(key, ttl, serializedValue);
-            }
-
-        });
-    }
-
+    @Override
     public String rpop(final String key) {
-        return d_rpop(key).getResult();
+        return execOp(key, OpName.RPOP, client -> client.rpop(key));
     }
 
-    public OperationResult<String> d_rpop(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.RPOP) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.rpop(key);
-            }
-
-        });
-    }
-
+    @Override
     public String rpoplpush(final String srckey, final String dstkey) {
-        return d_rpoplpush(srckey, dstkey).getResult();
+        return execOp(srckey, OpName.RPOPLPUSH, client -> client.rpoplpush(srckey, dstkey));
     }
 
-    public OperationResult<String> d_rpoplpush(final String srckey, final String dstkey) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(srckey, OpName.RPOPLPUSH) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.rpoplpush(srckey, dstkey);
-            }
-
-        });
-    }
-
+    @Override
     public Long rpush(final String key, final String... values) {
-        return d_rpush(key, values).getResult();
-    }
-
-    public OperationResult<Long> d_rpush(final String key, final String... values) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.RPUSH) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.rpush(key, values);
-            }
-
-        });
+        return execOp(key, OpName.RPUSH, client -> client.rpush(key, values));
     }
 
     @Override
     public Long rpushx(final String key, final String... values) {
-        return d_rpushx(key, values).getResult();
-    }
-
-    public OperationResult<Long> d_rpushx(final String key, final String... values) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.RPUSHX) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.rpushx(key, values);
-            }
-
-        });
+        return execOp(key, OpName.RPUSHX, client -> client.rpushx(key, values));
     }
 
     @Override
     public Long sadd(final String key, final String... members) {
-        return d_sadd(key, members).getResult();
-    }
-
-    public OperationResult<Long> d_sadd(final String key, final String... members) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.SADD) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.sadd(key, members);
-            }
-
-        });
+        return execOp(key, OpName.SADD, client -> client.sadd(key, members));
     }
 
     @Override
     public Long scard(final String key) {
-        return d_scard(key).getResult();
+        return execOp(key, OpName.SCARD, client -> client.scard(key));
     }
 
-    public OperationResult<Long> d_scard(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.SCARD) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.scard(key);
-            }
-
-        });
-    }
-
+    @Override
     public Set<String> sdiff(final String... keys) {
-        return d_sdiff(keys).getResult();
+        return execOp(keys[0], OpName.SDIFF, client -> client.sdiff(keys));
     }
 
-    public OperationResult<Set<String>> d_sdiff(final String... keys) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(keys[0], OpName.SDIFF) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.sdiff(keys);
-            }
-
-        });
-    }
-
+    @Override
     public Long sdiffstore(final String dstkey, final String... keys) {
-        return d_sdiffstore(dstkey, keys).getResult();
-    }
-
-    public OperationResult<Long> d_sdiffstore(final String dstkey, final String... keys) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(dstkey, OpName.SDIFFSTORE) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.sdiffstore(dstkey, keys);
-            }
-
-        });
+        return execOp(dstkey, OpName.SDIFFSTORE, client -> client.sdiffstore(dstkey, keys));
     }
 
     @Override
     public String set(final String key, final String value) {
-        return d_set(key, value).getResult();
-    }
-
-    public OperationResult<String> d_set(final String key, final String value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
-                @Override
-                public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                    return client.set(key, value);
-                }
-            });
+            return execOp(key, OpName.SET, client -> client.set(key, value));
         } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.SET) {
-                @Override
-                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return client.set(key, compressValue(value, state));
-                }
-            });
+            return execCompressOp(
+              key,
+              OpName.SET,
+              (client, state, op) -> client.set(key, op.compressValue(value, state))
+            );
         }
-
     }
 
     @Deprecated
@@ -1470,11 +936,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
      * use {@link set(String, String, SetParams)} instead
      */
     public String set(final String key, final String value, final String nxxx, final String expx, final long time) {
-        return d_set(key, value, nxxx, expx, time).getResult();
-    }
-
-    public OperationResult<String> d_set(final String key, final String value, final String nxxx, final String expx,
-                                         final long time) {
         SetParams setParams = SetParams.setParams();
         if (nxxx.equalsIgnoreCase("NX")) {
             setParams.nx();
@@ -1487,1160 +948,373 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             setParams.px(time);
         }
 
-        return d_set(key, value, setParams);
+        return set(key, value, setParams);
     }
 
+    @Override
     public String set(final String key, final String value, final SetParams setParams) {
-        return d_set(key, value, setParams).getResult();
-    }
-
-    public OperationResult<String> d_set(final String key, final String value, final SetParams setParams) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy())
-            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
-                @Override
-                public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                    return client.set(key, value, setParams);
-                }
-            });
+            return execOp(key, OpName.SET, client -> client.set(key, value, setParams));
         else {
-            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.SET) {
-                @Override
-                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return client.set(key, compressValue(value, state), setParams);
-                }
-            });
+            return execCompressOp(
+              key,
+              OpName.SET,
+              (client, state, op) -> client.set(key, op.compressValue(value, state), setParams)
+            );
         }
     }
 
     @Override
     public Boolean setbit(final String key, final long offset, final boolean value) {
-        return d_setbit(key, offset, value).getResult();
-    }
-
-    public OperationResult<Boolean> d_setbit(final String key, final Long offset, final Boolean value) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Boolean>(key, OpName.SETBIT) {
-
-            @Override
-            public Boolean execute(Jedis client, ConnectionContext state) {
-                return client.setbit(key, offset, value);
-            }
-
-        });
+        return execOp(key, OpName.SETBIT, client -> client.setbit(key, offset, value));
     }
 
     @Override
     public Boolean setbit(final String key, final long offset, final String value) {
-        return d_setbit(key, offset, value).getResult();
-    }
-
-    public OperationResult<Boolean> d_setbit(final String key, final Long offset, final String value) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Boolean>(key, OpName.SETBIT) {
-
-            @Override
-            public Boolean execute(Jedis client, ConnectionContext state) {
-                return client.setbit(key, offset, value);
-            }
-
-        });
+        return execOp(key, OpName.SETBIT, client -> client.setbit(key, offset, value));
     }
 
     @Override
     public String setex(final String key, final int seconds, final String value) {
-        return d_setex(key, seconds, value).getResult();
-    }
-
-    public OperationResult<String> d_setex(final String key, final Integer seconds, final String value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SETEX) {
-                @Override
-                public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                    return client.setex(key, seconds, value);
-                }
-            });
+            return execOp(key, OpName.SETEX, client -> client.setex(key, seconds, value));
         } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.SETEX) {
-                @Override
-                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return client.setex(key, seconds, compressValue(value, state));
-                }
-            });
+            return execCompressOp(
+              key,
+              OpName.SETEX,
+              (client, state, op) -> client.setex(key, seconds, op.compressValue(value, state))
+            );
         }
     }
 
     @Override
     public String psetex(final String key, final long milliseconds, final String value) {
-        return d_psetex(key, milliseconds, value).getResult();
-    }
-
-    public OperationResult<String> d_psetex(final String key, final long milliseconds, final String value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.PSETEX) {
-                @Override
-                public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                    return client.psetex(key, milliseconds, value);
-                }
-            });
+            return execOp(key, OpName.PSETEX, client -> client.psetex(key, milliseconds, value));
         } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<String>(key, OpName.PSETEX) {
-                @Override
-                public String execute(final Jedis client, final ConnectionContext state) throws DynoException {
-                    return client.psetex(key, milliseconds, compressValue(value, state));
-                }
-            });
+            return execCompressOp(
+              key,
+              OpName.PSETEX,
+              (client, state, op) -> client.psetex(key, milliseconds, op.compressValue(value, state))
+            );
         }
     }
 
-
     @Override
     public Long setnx(final String key, final String value) {
-        return d_setnx(key, value).getResult();
-    }
-
-    public OperationResult<Long> d_setnx(final String key, final String value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.SETNX) {
-                @Override
-                public Long execute(Jedis client, ConnectionContext state) throws DynoException {
-                    return client.setnx(key, value);
-                }
-            });
+            return execOp(key, OpName.SETNX, client -> client.setnx(key, value));
         } else {
-            return connPool.executeWithFailover(new CompressionValueOperation<Long>(key, OpName.SETNX) {
-                @Override
-                public Long execute(final Jedis client, final ConnectionContext state) {
-                    return client.setnx(key, compressValue(value, state));
-                }
-            });
+            return execCompressOp(
+              key,
+              OpName.SETNX,
+              (client, state, op) -> client.setnx(key, op.compressValue(value, state))
+            );
         }
     }
 
     @Override
     public Long setrange(final String key, final long offset, final String value) {
-        return d_setrange(key, offset, value).getResult();
-    }
-
-    public OperationResult<Long> d_setrange(final String key, final Long offset, final String value) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.SETRANGE) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.setrange(key, offset, value);
-            }
-
-        });
+        return execOp(key, OpName.SETRANGE, client -> client.setrange(key, offset, value));
     }
 
     @Override
     public Boolean sismember(final String key, final String member) {
-        return d_sismember(key, member).getResult();
-    }
-
-    public OperationResult<Boolean> d_sismember(final String key, final String member) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Boolean>(key, OpName.SISMEMBER) {
-
-            @Override
-            public Boolean execute(Jedis client, ConnectionContext state) {
-                return client.sismember(key, member);
-            }
-
-        });
+        return execOp(key, OpName.SISMEMBER, client -> client.sismember(key, member));
     }
 
     @Override
     public Set<String> smembers(final String key) {
-        return d_smembers(key).getResult();
-    }
-
-    public OperationResult<Set<String>> d_smembers(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.SMEMBERS) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.smembers(key);
-            }
-
-        });
+        return execOp(key, OpName.SMEMBERS, client -> client.smembers(key));
     }
 
     public Long smove(final String srckey, final String dstkey, final String member) {
-        return d_smove(srckey, dstkey, member).getResult();
+        return execOp(srckey, OpName.SMOVE, client -> client.smove(srckey, dstkey, member));
     }
-
-    public OperationResult<Long> d_smove(final String srckey, final String dstkey, final String member) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(srckey, OpName.SMOVE) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.smove(srckey, dstkey, member);
-            }
-
-        });
-    }
-
     @Override
     public List<String> sort(String key) {
-        return d_sort(key).getResult();
-    }
-
-    public OperationResult<List<String>> d_sort(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.SORT) {
-
-            @Override
-            public List<String> execute(Jedis client, ConnectionContext state) {
-                return client.sort(key);
-            }
-
-        });
+        return execOp(key, OpName.SORT, client -> client.sort(key));
     }
 
     @Override
     public List<String> sort(String key, SortingParams sortingParameters) {
-        return d_sort(key, sortingParameters).getResult();
-    }
-
-    public OperationResult<List<String>> d_sort(final String key, final SortingParams sortingParameters) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.SORT) {
-
-            @Override
-            public List<String> execute(Jedis client, ConnectionContext state) {
-                return client.sort(key, sortingParameters);
-            }
-
-        });
+        return execOp(key, OpName.SORT, client -> client.sort(key, sortingParameters));
     }
 
     @Override
     public String spop(final String key) {
-        return d_spop(key).getResult();
-    }
-
-    public OperationResult<String> d_spop(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SPOP) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.spop(key);
-            }
-
-        });
+        return execOp(key, OpName.SPOP, client -> client.spop(key));
     }
 
     @Override
     public Set<String> spop(String key, long count) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.SPOP, client -> client.spop(key, count));
     }
 
     @Override
     public String srandmember(final String key) {
-        return d_srandmember(key).getResult();
+        return execOp(key, OpName.SRANDMEMBER, client -> client.srandmember(key));
     }
 
     @Override
     public List<String> srandmember(String key, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    public OperationResult<String> d_srandmember(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SRANDMEMBER) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.srandmember(key);
-            }
-
-        });
+        return execOp(key, OpName.SRANDMEMBER, client -> client.srandmember(key, count));
     }
 
     @Override
     public Long srem(final String key, final String... members) {
-        return d_srem(key, members).getResult();
-    }
-
-    public OperationResult<Long> d_srem(final String key, final String... members) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.SREM) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.srem(key, members);
-            }
-
-        });
+        return execOp(key, OpName.SREM, client -> client.srem(key, members));
     }
 
     @Override
     public ScanResult<String> sscan(final String key, final String cursor) {
-        return d_sscan(key, cursor).getResult();
-    }
-
-    public OperationResult<ScanResult<String>> d_sscan(final String key, final String cursor) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<String>>(key, OpName.SSCAN) {
-
-            @Override
-            public ScanResult<String> execute(Jedis client, ConnectionContext state) {
-                return client.sscan(key, cursor);
-            }
-
-        });
+        return execOp(key, OpName.SSCAN, client -> client.sscan(key, cursor));
     }
 
     @Override
     public ScanResult<String> sscan(final String key, final String cursor, final ScanParams params) {
-        return d_sscan(key, cursor, params).getResult();
-    }
-
-    public OperationResult<ScanResult<String>> d_sscan(final String key, final String cursor, final ScanParams params) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<String>>(key, OpName.SSCAN) {
-
-            @Override
-            public ScanResult<String> execute(Jedis client, ConnectionContext state) {
-                return client.sscan(key, cursor, params);
-            }
-
-        });
+        return execOp(key, OpName.SSCAN, client -> client.sscan(key, cursor, params));
     }
 
     @Override
     public Long strlen(final String key) {
-        return d_strlen(key).getResult();
-    }
-
-    public OperationResult<Long> d_strlen(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.STRLEN) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.strlen(key);
-            }
-
-        });
+        return execOp(key, OpName.STRLEN, client -> client.strlen(key));
     }
 
     @Override
     public String substr(String key, int start, int end) {
-        return d_substr(key, start, end).getResult();
-    }
-
-    public OperationResult<String> d_substr(final String key, final Integer start, final Integer end) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SUBSTR) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.substr(key, start, end);
-            }
-
-        });
+        return execOp(key, OpName.SUBSTR, client -> client.substr(key, start, end));
     }
 
     @Override
     public Long ttl(final String key) {
-        return d_ttl(key).getResult();
-    }
-
-    public OperationResult<Long> d_ttl(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.TTL) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.ttl(key);
-            }
-
-        });
+        return execOp(key, OpName.TTL, client -> client.ttl(key));
     }
 
     @Override
     public String type(final String key) {
-        return d_type(key).getResult();
-    }
-
-    public OperationResult<String> d_type(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.TYPE) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.type(key);
-            }
-
-        });
+        return execOp(key, OpName.TYPE, client -> client.type(key));
     }
 
     @Override
     public Long zadd(String key, double score, String member) {
-        return d_zadd(key, score, member).getResult();
-    }
-
-    public OperationResult<Long> d_zadd(final String key, final Double score, final String member) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZADD) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zadd(key, score, member);
-            }
-
-        });
+        return execOp(key, OpName.ZADD, client -> client.zadd(key, score, member));
     }
 
     @Override
     public Long zadd(String key, Map<String, Double> scoreMembers) {
-        return d_zadd(key, scoreMembers).getResult();
-    }
-
-    public OperationResult<Long> d_zadd(final String key, final Map<String, Double> scoreMembers) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZADD) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zadd(key, scoreMembers);
-            }
-
-        });
+        return execOp(key, OpName.ZADD, client -> client.zadd(key, scoreMembers));
     }
 
     @Override
     public Long zadd(String key, double score, String member, ZAddParams params) {
-        return d_zadd(key, score, member, params).getResult();
-    }
-
-    public OperationResult<Long> d_zadd(final String key, final double score, final String member,
-                                        final ZAddParams params) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZADD) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zadd(key, score, member, params);
-            }
-
-        });
+        return execOp(key, OpName.ZADD, client -> client.zadd(key, score, member, params));
     }
 
     @Override
     public Long zcard(final String key) {
-        return d_zcard(key).getResult();
-    }
-
-    public OperationResult<Long> d_zcard(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZCARD) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zcard(key);
-            }
-
-        });
+        return execOp(key, OpName.ZCARD, client -> client.zcard(key));
     }
 
     @Override
     public Long zcount(final String key, final double min, final double max) {
-        return d_zcount(key, min, max).getResult();
-    }
-
-    public OperationResult<Long> d_zcount(final String key, final Double min, final Double max) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZCOUNT) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zcount(key, min, max);
-            }
-
-        });
+        return execOp(key, OpName.ZCOUNT, client -> client.zcount(key, min, max));
     }
 
     @Override
     public Long zcount(String key, String min, String max) {
-        return d_zcount(key, min, max).getResult();
-    }
-
-    public OperationResult<Long> d_zcount(final String key, final String min, final String max) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZCOUNT) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zcount(key, min, max);
-            }
-
-        });
+        return execOp(key, OpName.ZCOUNT, client -> client.zcount(key, min, max));
     }
 
     @Override
     public Double zincrby(final String key, final double score, final String member) {
-        return d_zincrby(key, score, member).getResult();
-    }
-
-    public OperationResult<Double> d_zincrby(final String key, final Double score, final String member) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Double>(key, OpName.ZINCRBY) {
-
-            @Override
-            public Double execute(Jedis client, ConnectionContext state) {
-                return client.zincrby(key, score, member);
-            }
-
-        });
+        return execOp(key, OpName.ZINCRBY, client -> client.zincrby(key, score, member));
     }
 
     @Override
     public Set<String> zrange(String key, long start, long end) {
-        return d_zrange(key, start, end).getResult();
-    }
-
-    public OperationResult<Set<String>> d_zrange(final String key, final Long start, final Long end) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZRANGE) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrange(key, start, end);
-            }
-
-        });
+        return execOp(key, OpName.ZRANGE, client -> client.zrange(key, start, end));
     }
 
     @Override
     public Long zrank(final String key, final String member) {
-        return d_zrank(key, member).getResult();
-    }
-
-    public OperationResult<Long> d_zrank(final String key, final String member) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZRANK) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zrank(key, member);
-            }
-
-        });
+        return execOp(key, OpName.ZRANK, client -> client.zrank(key, member));
     }
 
     @Override
     public Long zrem(String key, String... member) {
-        return d_zrem(key, member).getResult();
-    }
-
-    public OperationResult<Long> d_zrem(final String key, final String... member) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZREM) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zrem(key, member);
-            }
-
-        });
+        return execOp(key, OpName.ZREM, client -> client.zrem(key, member));
     }
 
     @Override
     public Long zremrangeByRank(final String key, final long start, final long end) {
-        return d_zremrangeByRank(key, start, end).getResult();
-    }
-
-    public OperationResult<Long> d_zremrangeByRank(final String key, final Long start, final Long end) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZREMRANGEBYRANK) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zremrangeByRank(key, start, end);
-            }
-
-        });
+        return execOp(key, OpName.ZREMRANGEBYRANK, client -> client.zremrangeByRank(key, start, end));
     }
 
     @Override
     public Long zremrangeByScore(final String key, final double start, final double end) {
-        return d_zremrangeByScore(key, start, end).getResult();
-    }
-
-    public OperationResult<Long> d_zremrangeByScore(final String key, final Double start, final Double end) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZREMRANGEBYSCORE) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zremrangeByScore(key, start, end);
-            }
-
-        });
+        return execOp(key, OpName.ZREMRANGEBYSCORE, client -> client.zremrangeByScore(key, start, end));
     }
 
     @Override
     public Set<String> zrevrange(String key, long start, long end) {
-        return d_zrevrange(key, start, end).getResult();
-    }
-
-    public OperationResult<Set<String>> d_zrevrange(final String key, final Long start, final Long end) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZREVRANGE) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrevrange(key, start, end);
-            }
-
-        });
+        return execOp(key, OpName.ZREVRANGE, client -> client.zrevrange(key, start, end));
     }
 
     @Override
     public Long zrevrank(final String key, final String member) {
-        return d_zrevrank(key, member).getResult();
-    }
-
-    public OperationResult<Long> d_zrevrank(final String key, final String member) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZREVRANK) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zrevrank(key, member);
-            }
-
-        });
+        return execOp(key, OpName.ZREVRANK, client -> client.zrevrank(key, member));
     }
 
     @Override
     public Set<Tuple> zrangeWithScores(String key, long start, long end) {
-        return d_zrangeWithScores(key, start, end).getResult();
-    }
-
-    public OperationResult<Set<Tuple>> d_zrangeWithScores(final String key, final Long start, final Long end) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZRANGEWITHSCORES) {
-
-            @Override
-            public Set<Tuple> execute(Jedis client, ConnectionContext state) {
-                return client.zrangeWithScores(key, start, end);
-            }
-
-        });
+        return execOp(key, OpName.ZRANGEWITHSCORES, client -> client.zrangeWithScores(key, start, end));
     }
 
     @Override
     public Set<Tuple> zrevrangeWithScores(String key, long start, long end) {
-        return d_zrevrangeWithScores(key, start, end).getResult();
-    }
-
-    public OperationResult<Set<Tuple>> d_zrevrangeWithScores(final String key, final Long start, final Long end) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZREVRANGEWITHSCORES) {
-
-            @Override
-            public Set<Tuple> execute(Jedis client, ConnectionContext state) {
-                return client.zrevrangeWithScores(key, start, end);
-            }
-
-        });
+        return execOp(key, OpName.ZREVRANGEWITHSCORES, client -> client.zrevrangeWithScores(key, start, end));
     }
 
     @Override
     public Double zscore(final String key, final String member) {
-        return d_zscore(key, member).getResult();
-    }
-
-    public OperationResult<Double> d_zscore(final String key, final String member) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Double>(key, OpName.ZSCORE) {
-
-            @Override
-            public Double execute(Jedis client, ConnectionContext state) {
-                return client.zscore(key, member);
-            }
-
-        });
+        return execOp(key, OpName.ZSCORE, client -> client.zscore(key, member));
     }
 
     @Override
     public ScanResult<Tuple> zscan(final String key, final String cursor) {
-        return d_zscan(key, cursor).getResult();
-    }
-
-    public OperationResult<ScanResult<Tuple>> d_zscan(final String key, final String cursor) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<ScanResult<Tuple>>(key, OpName.ZSCAN) {
-            @Override
-            public ScanResult<Tuple> execute(Jedis client, ConnectionContext state) {
-                return client.zscan(key, cursor);
-            }
-
-        });
+        return execOp(key, OpName.ZSCAN, client -> client.zscan(key, cursor));
     }
 
     @Override
     public Set<String> zrangeByScore(String key, double min, double max) {
-        return d_zrangeByScore(key, min, max).getResult();
-    }
-
-    public OperationResult<Set<String>> d_zrangeByScore(final String key, final Double min, final Double max) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZRANGEBYSCORE) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrangeByScore(key, min, max);
-            }
-
-        });
+        return execOp(key, OpName.ZRANGEBYSCORE, client -> client.zrangeByScore(key, min, max));
     }
 
     @Override
     public Set<String> zrangeByScore(String key, String min, String max) {
-        return d_zrangeByScore(key, min, max).getResult();
-    }
-
-    public OperationResult<Set<String>> d_zrangeByScore(final String key, final String min, final String max) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZRANGEBYSCORE) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrangeByScore(key, min, max);
-            }
-
-        });
+        return execOp(key, OpName.ZRANGEBYSCORE, client -> client.zrangeByScore(key, min, max));
     }
 
     @Override
     public Set<String> zrangeByScore(String key, double min, double max, int offset, int count) {
-        return d_zrangeByScore(key, min, max, offset, count).getResult();
-    }
-
-    public OperationResult<Set<String>> d_zrangeByScore(final String key, final Double min, final Double max,
-                                                        final Integer offset, final Integer count) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZRANGEBYSCORE) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrangeByScore(key, min, max, offset, count);
-            }
-
-        });
-    }
-
-    @Override
-    public Set<String> zrevrangeByScore(String key, String max, String min) {
-        return d_zrevrangeByScore(key, max, min).getResult();
-    }
-
-    public OperationResult<Set<String>> d_zrevrangeByScore(final String key, final String max, final String min) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZREVRANGEBYSCORE) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrevrangeByScore(key, max, min);
-            }
-
-        });
+        return execOp(key, OpName.ZRANGEBYSCORE, client -> client.zrangeByScore(key, min, max, offset, count));
     }
 
     @Override
     public Set<String> zrangeByScore(String key, String min, String max, int offset, int count) {
-        return d_zrangeByScore(key, min, max, offset, count).getResult();
+        return execOp(key, OpName.ZRANGEBYSCORE, client -> client.zrangeByScore(key, min, max, offset, count));
     }
 
-    public OperationResult<Set<String>> d_zrangeByScore(final String key, final String min, final String max,
-                                                        final Integer offset, final Integer count) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZRANGEBYSCORE) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrangeByScore(key, min, max, offset, count);
-            }
-
-        });
+    @Override
+    public Set<String> zrevrangeByScore(String key, String max, String min) {
+        return execOp(key, OpName.ZREVRANGEBYSCORE, client -> client.zrevrangeByScore(key, max, min));
     }
 
     @Override
     public Set<String> zrevrangeByScore(String key, double max, double min, int offset, int count) {
-        return d_zrevrangeByScore(key, max, min, offset, count).getResult();
-    }
-
-    public OperationResult<Set<String>> d_zrevrangeByScore(final String key, final Double max, final Double min,
-                                                           final Integer offset, final Integer count) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZREVRANGEBYSCORE) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrevrangeByScore(key, max, min, offset, count);
-            }
-
-        });
+        return execOp(key, OpName.ZREVRANGEBYSCORE, client -> client.zrevrangeByScore(key, max, min, offset, count));
     }
 
     @Override
     public Set<String> zrevrangeByScore(String key, double max, double min) {
-        return d_zrevrangeByScore(key, max, min).getResult();
-    }
-
-    public OperationResult<Set<String>> d_zrevrangeByScore(final String key, final Double max, final Double min) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZREVRANGEBYSCORE) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrevrangeByScore(key, max, min);
-            }
-
-        });
+        return execOp(key, OpName.ZREVRANGEBYSCORE, client -> client.zrevrangeByScore(key, max, min));
     }
 
     @Override
     public Set<Tuple> zrangeByScoreWithScores(String key, double min, double max) {
-        return d_zrangeByScoreWithScores(key, min, max).getResult();
-    }
-
-    public OperationResult<Set<Tuple>> d_zrangeByScoreWithScores(final String key, final Double min, final Double max) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZREVRANGEBYSCORE) {
-
-            @Override
-            public Set<Tuple> execute(Jedis client, ConnectionContext state) {
-                return client.zrangeByScoreWithScores(key, min, max);
-            }
-
-        });
+        return execOp(key, OpName.ZRANGEBYSCOREWITHSCORES, client -> client.zrangeByScoreWithScores(key, min, max));
     }
 
     @Override
     public Set<Tuple> zrevrangeByScoreWithScores(String key, double max, double min) {
-        return d_zrevrangeByScoreWithScores(key, min, max).getResult();
-    }
-
-    public OperationResult<Set<Tuple>> d_zrevrangeByScoreWithScores(final String key, final Double max,
-                                                                    final Double min) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZREVRANGEBYSCOREWITHSCORES) {
-
-            @Override
-            public Set<Tuple> execute(Jedis client, ConnectionContext state) {
-                return client.zrevrangeByScoreWithScores(key, max, min);
-            }
-
-        });
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, client -> client.zrevrangeByScoreWithScores(key, max, min));
     }
 
     @Override
     public Set<Tuple> zrangeByScoreWithScores(String key, double min, double max, int offset, int count) {
-        return d_zrangeByScoreWithScores(key, min, max, offset, count).getResult();
-    }
-
-    public OperationResult<Set<Tuple>> d_zrangeByScoreWithScores(final String key, final Double min, final Double max,
-                                                                 final Integer offset, final Integer count) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZRANGEBYSCOREWITHSCORES) {
-
-            @Override
-            public Set<Tuple> execute(Jedis client, ConnectionContext state) {
-                return client.zrangeByScoreWithScores(key, min, max, offset, count);
-            }
-
-        });
+        return execOp(key, OpName.ZRANGEBYSCOREWITHSCORES, client -> client.zrangeByScoreWithScores(key, min, max, offset, count));
     }
 
     @Override
     public Set<String> zrevrangeByScore(String key, String max, String min, int offset, int count) {
-        return d_zrevrangeByScore(key, max, min, offset, count).getResult();
-    }
-
-    public OperationResult<Set<String>> d_zrevrangeByScore(final String key, final String max, final String min,
-                                                           final Integer offset, final Integer count) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZREVRANGEBYSCORE) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrevrangeByScore(key, max, min, offset, count);
-            }
-
-        });
+        return execOp(key, OpName.ZREVRANGEBYSCORE, client -> client.zrevrangeByScore(key, max, min, offset, count));
     }
 
     @Override
     public Set<Tuple> zrangeByScoreWithScores(String key, String min, String max) {
-        return d_zrangeByScoreWithScores(key, min, max).getResult();
-    }
-
-    public OperationResult<Set<Tuple>> d_zrangeByScoreWithScores(final String key, final String min, final String max) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZRANGEBYSCOREWITHSCORES) {
-
-            @Override
-            public Set<Tuple> execute(Jedis client, ConnectionContext state) {
-                return client.zrangeByScoreWithScores(key, min, max);
-            }
-
-        });
+        return execOp(key, OpName.ZRANGEBYSCOREWITHSCORES, client -> client.zrangeByScoreWithScores(key, min, max));
     }
 
     @Override
     public Set<Tuple> zrevrangeByScoreWithScores(String key, String max, String min) {
-        return d_zrevrangeByScoreWithScores(key, max, min).getResult();
-    }
-
-    public OperationResult<Set<Tuple>> d_zrevrangeByScoreWithScores(final String key, final String max,
-                                                                    final String min) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZREVRANGEBYSCOREWITHSCORES) {
-
-            @Override
-            public Set<Tuple> execute(Jedis client, ConnectionContext state) {
-                return client.zrevrangeByScoreWithScores(key, max, min);
-            }
-
-        });
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, client -> client.zrevrangeByScoreWithScores(key, max, min));
     }
 
     @Override
     public Set<Tuple> zrangeByScoreWithScores(String key, String min, String max, int offset, int count) {
-        return d_zrangeByScoreWithScores(key, min, max, offset, count).getResult();
-    }
-
-    public OperationResult<Set<Tuple>> d_zrangeByScoreWithScores(final String key, final String min, final String max,
-                                                                 final Integer offset, final Integer count) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZRANGEBYSCOREWITHSCORES) {
-
-            @Override
-            public Set<Tuple> execute(Jedis client, ConnectionContext state) {
-                return client.zrangeByScoreWithScores(key, min, max, offset, count);
-            }
-
-        });
+        return execOp(key, OpName.ZRANGEBYSCOREWITHSCORES, client -> client.zrangeByScoreWithScores(key, min, max, offset, count));
     }
 
     @Override
     public Set<Tuple> zrevrangeByScoreWithScores(String key, double max, double min, int offset, int count) {
-        return d_zrevrangeByScoreWithScores(key, max, min, offset, count).getResult();
-    }
-
-    public OperationResult<Set<Tuple>> d_zrevrangeByScoreWithScores(final String key, final Double max,
-                                                                    final Double min, final Integer offset, final Integer count) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZREVRANGEBYSCOREWITHSCORES) {
-
-            @Override
-            public Set<Tuple> execute(Jedis client, ConnectionContext state) {
-                return client.zrevrangeByScoreWithScores(key, max, min, offset, count);
-            }
-
-        });
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, client -> client.zrevrangeByScoreWithScores(key, max, min, offset, count));
     }
 
     @Override
     public Set<Tuple> zrevrangeByScoreWithScores(String key, String max, String min, int offset, int count) {
-        return d_zrevrangeByScoreWithScores(key, max, min, offset, count).getResult();
-    }
-
-    public OperationResult<Set<Tuple>> d_zrevrangeByScoreWithScores(final String key, final String max,
-                                                                    final String min, final Integer offset, final Integer count) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<Tuple>>(key, OpName.ZREVRANGEBYSCOREWITHSCORES) {
-
-            @Override
-            public Set<Tuple> execute(Jedis client, ConnectionContext state) {
-                return client.zrevrangeByScoreWithScores(key, max, min, offset, count);
-            }
-
-        });
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, client -> client.zrevrangeByScoreWithScores(key, max, min, offset, count));
     }
 
     @Override
     public Long zremrangeByScore(String key, String start, String end) {
-        return d_zremrangeByScore(key, start, end).getResult();
+        return execOp(key, OpName.ZREMRANGEBYSCORE, client -> client.zremrangeByScore(key, start, end));
     }
 
     @Override
     public Long zlexcount(String key, String min, String max) {
-        return d_zlexcount(key, min, max).getResult();
-    }
-
-    public OperationResult<Long> d_zlexcount(final String key, final String min, final String max) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZLEXCOUNT) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zlexcount(key, min, max);
-            }
-
-        });
+        return execOp(key, OpName.ZLEXCOUNT, client -> client.zlexcount(key, min, max));
     }
 
     @Override
     public Set<String> zrangeByLex(String key, String min, String max) {
-        return d_zrangeByLex(key, min, max).getResult();
-    }
-
-    public OperationResult<Set<String>> d_zrangeByLex(final String key, final String min, final String max) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZRANGEBYLEX) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrangeByLex(key, min, max);
-            }
-
-        });
+        return execOp(key, OpName.ZRANGEBYLEX, client -> client.zrangeByLex(key, min, max));
     }
 
     @Override
     public Set<String> zrangeByLex(String key, String min, String max, int offset, int count) {
-        return d_zrangeByLex(key, min, max, offset, count).getResult();
+        return execOp(key, OpName.ZRANGEBYLEX, client -> client.zrangeByLex(key, min, max, offset, count));
     }
-
-    public OperationResult<Set<String>> d_zrangeByLex(final String key, final String min, final String max,
-                                                      final int offset, final int count) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZRANGEBYLEX) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrangeByLex(key, min, max, offset, count);
-            }
-
-        });
-    }
-
 
     @Override
     public Long zremrangeByLex(String key, String min, String max) {
-        return d_zremrangeByLex(key, min, max).getResult();
-    }
-
-    public OperationResult<Long> d_zremrangeByLex(final String key, final String min, final String max) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZREMRANGEBYLEX) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zremrangeByLex(key, min, max);
-            }
-
-        });
-    }
-
-
-    public OperationResult<Long> d_zremrangeByScore(final String key, final String start, final String end) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZREMRANGEBYSCORE) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zremrangeByScore(key, start, end);
-            }
-
-        });
+        return execOp(key, OpName.ZREMRANGEBYLEX, client -> client.zremrangeByLex(key, min, max));
     }
 
     @Override
     public List<String> blpop(int timeout, String key) {
-        return d_blpop(timeout, key).getResult();
-    }
-
-    public OperationResult<List<String>> d_blpop(final int timeout, final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.BLPOP) {
-
-            @Override
-            public List<String> execute(Jedis client, ConnectionContext state) {
-                return client.blpop(timeout, key);
-            }
-
-        });
+        return execOp(key, OpName.BLPOP, client -> client.blpop(timeout, key));
     }
 
     @Override
     public List<String> brpop(int timeout, String key) {
-        return d_brpop(timeout, key).getResult();
-    }
-
-    public OperationResult<List<String>> d_brpop(final int timeout, final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<List<String>>(key, OpName.BRPOP) {
-
-            @Override
-            public List<String> execute(Jedis client, ConnectionContext state) {
-                return client.brpop(timeout, key);
-            }
-
-        });
+        return execOp(key, OpName.BRPOP, client -> client.brpop(timeout, key));
     }
 
     @Override
     public String echo(String string) {
-        return d_echo(string).getResult();
-    }
-
-    public OperationResult<String> d_echo(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.ECHO) {
-
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.echo(key);
-            }
-
-        });
+        return execOp(string, OpName.ECHO, client -> client.echo(string));
     }
 
     @Override
     public Long move(String key, int dbIndex) {
-        return d_move(key, dbIndex).getResult();
-    }
-
-    public OperationResult<Long> d_move(final String key, final Integer dbIndex) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.MOVE) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.move(key, dbIndex);
-            }
-
-        });
+        return execOp(key, OpName.MOVE, client -> client.move(key, dbIndex));
     }
 
     @Override
     public Long bitcount(String key) {
-        return d_bitcount(key).getResult();
+        return execOp(key, OpName.BITCOUNT, client -> client.bitcount(key));
     }
-
-    public OperationResult<Long> d_bitcount(final String key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.BITCOUNT) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.bitcount(key);
-            }
-
-        });
-    }
-
 
     @Override
     public Long pfadd(String key, String... elements) {
@@ -2654,44 +1328,31 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public Long bitcount(String key, long start, long end) {
-        return d_bitcount(key, start, end).getResult();
-    }
-
-    public OperationResult<Long> d_bitcount(final String key, final Long start, final Long end) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.BITCOUNT) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.bitcount(key, start, end);
-            }
-
-        });
+        return execOp(key, OpName.BITCOUNT, client -> client.bitcount(key, start, end));
     }
 
     /**
      * MULTI-KEY COMMANDS
      */
 
-
     @Override
     public List<String> blpop(int timeout, String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execMultiOp(keys, OpName.BLPOP, client -> client.blpop(timeout, keys));
     }
 
     @Override
     public List<String> brpop(int timeout, String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execMultiOp(keys, OpName.BRPOP, client -> client.brpop(timeout, keys));
     }
 
     @Override
-    public List<String> blpop(String... args) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public List<String> blpop(String... keys) {
+        return execMultiOp(keys, OpName.BLPOP, client -> client.blpop(keys));
     }
 
     @Override
-    public List<String> brpop(String... args) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public List<String> brpop(String... keys) {
+        return execMultiOp(keys, OpName.BRPOP, client -> client.brpop(keys));
     }
 
     @Override
@@ -2730,7 +1391,7 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
     @Override
     public Long pexpire(String key, long milliseconds) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.PEXPIRE, client -> client.pexpire(key, milliseconds));
     }
 
     /**
@@ -2744,148 +1405,86 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
      */
     @Override
     public List<String> mget(String... keys) {
-        return d_mget(keys).getResult();
-    }
-
-    public OperationResult<List<String>> d_mget(final String... keys) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-
-            return connPool.executeWithFailover(new MultiKeyOperation<List<String>>(Arrays.asList(keys), OpName.MGET) {
-                @Override
-                public List<String> execute(Jedis client, ConnectionContext state) {
-                    return client.mget(keys);
-                }
-            });
+            return execMultiOp(keys, OpName.MGET, client -> client.mget(keys));
         } else {
-            return connPool.executeWithFailover(
-                    new CompressionValueMultiKeyOperation<List<String>>(Arrays.asList(keys), OpName.MGET) {
-                        @Override
-                        public List<String> execute(final Jedis client, final ConnectionContext state)
-                                throws DynoException {
-                            return new ArrayList<String>(CollectionUtils.transform(client.mget(keys),
-                                    new CollectionUtils.Transform<String, String>() {
-                                        @Override
-                                        public String get(String s) {
-                                            return decompressValue(state, s);
-                                        }
-                                    }));
-                        }
-                    });
+            return execCompressMultiOp(
+              keys,
+              OpName.MGET,
+              (client, state, op) -> new ArrayList<>(CollectionUtils.transform(client.mget(keys),
+                                                                               s -> op.decompressValue(state, s)))
+            );
         }
     }
 
-
     @Override
-    public Long exists(String... arg0) {
-        return d_exists(arg0).getResult();
-    }
-
-    public OperationResult<Long> d_exists(final String... arg0) {
-        return connPool.executeWithFailover(new MultiKeyOperation<Long>(Arrays.asList(arg0), OpName.EXISTS) {
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.exists(arg0);
-            }
-        });
+    public Long exists(String... keys) {
+        return execMultiOp(keys, OpName.EXISTS, client -> client.exists(keys));
     }
 
     @Override
     public Long del(String... keys) {
-        return d_del(keys).getResult();
+        return execMultiOp(keys, OpName.DEL, client -> client.del(keys));
     }
 
     @Override
     public Long unlink(String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execMultiOp(keys, OpName.UNLINK, client -> client.unlink(keys));
     }
-
-    public OperationResult<Long> d_del(final String... keys) {
-
-        return connPool.executeWithFailover(new MultiKeyOperation<Long>(Arrays.asList(keys), OpName.DEL) {
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.del(keys);
-            }
-        });
-    }
-
 
     @Override
     public Long msetnx(String... keysvalues) {
-        return d_msetnx(keysvalues).getResult();
-    }
-
-    public OperationResult<Long> d_msetnx(final String... keysvalues) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-
-            return connPool.executeWithFailover(new MultiKeyOperation<Long>(Arrays.asList(keysvalues), OpName.MSETNX) {
-                @Override
-                public Long execute(Jedis client, ConnectionContext state) {
-                    return client.msetnx(keysvalues);
-                }
-            });
+            return execMultiOp(keysvalues, OpName.MSETNX, client -> client.msetnx(keysvalues));
         } else {
-            return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<Long>(Arrays.asList(keysvalues), OpName.MSETNX) {
-                @Override
-                public Long execute(final Jedis client, final ConnectionContext state) {
-                    return client.msetnx(compressMultiKeyValue(state, keysvalues));
-                }
-            });
+            return execCompressMultiOp(
+              keysvalues,
+              OpName.MSETNX,
+              (client, state, op) -> client.msetnx(op.compressMultiKeyValue(state, keysvalues))
+            );
         }
     }
 
     @Override
     public String mset(String... keysvalues) {
-        return d_mset(keysvalues).getResult();
-    }
-
-    public OperationResult<String> d_mset(final String... keysvalues) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-
-            return connPool.executeWithFailover(new MultiKeyOperation<String>(Arrays.asList(keysvalues), OpName.MSET) {
-                @Override
-                public String execute(Jedis client, ConnectionContext state) {
-
-                    return client.mset(keysvalues);
-                }
-            });
+            return execOp(keysvalues[0], OpName.MSET, client -> client.mset(keysvalues));
         } else {
-            return connPool.executeWithFailover(new CompressionValueMultiKeyOperation<String>(Arrays.asList(keysvalues), OpName.MSET) {
-                @Override
-                public String execute(final Jedis client, final ConnectionContext state) {
-                    return client.mset(compressMultiKeyValue(state, keysvalues));
-                }
-            });
+            return execCompressMultiOp(
+              keysvalues,
+              OpName.MSET,
+              (client, state, op) -> client.mset(op.compressMultiKeyValue(state, keysvalues))
+            );
         }
     }
 
     @Override
     public Set<String> sinter(String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execMultiOp(keys, OpName.SINTER, client -> client.sinter(keys));
     }
 
     public Long sinterstore(final String dstkey, final String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(dstkey, OpName.SINTERSTORE, client -> client.sinterstore(dstkey, keys));
     }
 
     @Override
     public Long sort(String key, SortingParams sortingParameters, String dstkey) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.SORT, client -> client.sort(key, sortingParameters, dstkey));
     }
 
     @Override
     public Long sort(String key, String dstkey) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.SORT, client -> client.sort(key, dstkey));
     }
 
     @Override
     public Set<String> sunion(String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execMultiOp(keys, OpName.SUNION, client -> client.sunion(keys));
     }
 
     @Override
     public Long sunionstore(String dstkey, String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(dstkey, OpName.SUNIONSTORE, client -> client.sunionstore(dstkey, keys));
     }
 
     @Override
@@ -2894,154 +1493,1157 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     }
 
     @Override
-    public Long del(byte[]... keys) {
+    public String unwatch() {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long unlink(byte[]... keys) {
+    public Long zinterstore(String dstkey, String... sets) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long exists(byte[]... keys) {
+    public Long zinterstore(String dstkey, ZParams params, String... sets) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public List<byte[]> blpop(int timeout, byte[]... keys) {
+    public Set<String> zrevrangeByLex(String key, String max, String min) {
+        return execOp(key, OpName.ZREVRANGEBYLEX, client -> client.zrevrangeByLex(key, max, min));
+    }
+
+    @Override
+    public Set<String> zrevrangeByLex(String key, String max, String min, int offset, int count) {
+        return execOp(key, OpName.ZREVRANGEBYLEX, client -> client.zrevrangeByLex(key, max, min, offset, count));
+    }
+
+    @Override
+    public Long zunionstore(String dstkey, String... sets) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public List<byte[]> brpop(int timeout, byte[]... keys) {
+    public Long zunionstore(String dstkey, ZParams params, String... sets) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public List<byte[]> blpop(byte[]... args) {
+    public String brpoplpush(String source, String destination, int timeout) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public List<byte[]> brpop(byte[]... args) {
+    public Long publish(String channel, String message) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> keys(byte[] pattern) {
+    public void subscribe(JedisPubSub jedisPubSub, String... channels) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public List<byte[]> mget(byte[]... keys) {
-        return d_mget(keys).getResult();
+    public void psubscribe(JedisPubSub jedisPubSub, String... patterns) {
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
-    public OperationResult<List<byte[]>> d_mget(final byte[]... keys) {
+    @Override
+    public String randomKey() {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long bitop(BitOP op, String destKey, String... srcKeys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    /**
+     * NOT SUPPORTED ! Use {@link #dyno_scan(CursorBasedResult, int, String...)}
+     * instead.
+     *
+     * @param cursor
+     * @return nothing -- throws UnsupportedOperationException when invoked
+     * @see #dyno_scan(CursorBasedResult, int, String...)
+     */
+    @Override
+    public ScanResult<String> scan(String cursor) {
+        throw new UnsupportedOperationException("Not supported - use dyno_scan(String, CursorBasedResult");
+    }
+
+    public CursorBasedResult<String> dyno_scan(String... pattern) {
+        return this.dyno_scan(10, pattern);
+    }
+
+    public CursorBasedResult<String> dyno_scan(int count, String... pattern) {
+        return this.dyno_scan(null, count, pattern);
+    }
+
+    public CursorBasedResult<String> dyno_scan(CursorBasedResult<String> cursor, int count, String... pattern) {
+        if (cursor == null) {
+            // Create a temporary cursor context which will maintain a map of token to rack
+            cursor = new CursorBasedResultImpl<>(new LinkedHashMap<String, ScanResult<String>>());
+        }
+        final Map<String, ScanResult<String>> results = new LinkedHashMap<>();
+
+        List<OperationResult<ScanResult<String>>> opResults = scatterGatherScan(cursor, count, pattern);
+        for (OperationResult<ScanResult<String>> opResult : opResults) {
+            results.put(opResult.getNode().getHostAddress(), opResult.getResult());
+        }
+        return new CursorBasedResultImpl<>(results, ((TokenRackMapper) cursor).getTokenRackMap());
+    }
+
+    @Override
+    public String pfmerge(String destkey, String... sourcekeys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public long pfcount(String... keys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long touch(String... keys) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+
+    @Override
+    public ScanResult<String> scan(String arg0, ScanParams arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long bitpos(String arg0, boolean arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long bitpos(String arg0, boolean arg1, BitPosParams arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long geoadd(String arg0, Map<String, GeoCoordinate> arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long geoadd(String arg0, double arg1, double arg2, String arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Double geodist(String arg0, String arg1, String arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Double geodist(String arg0, String arg1, String arg2, GeoUnit arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<String> geohash(String arg0, String... arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<GeoCoordinate> geopos(String arg0, String... arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<GeoRadiusResponse> georadius(String arg0, double arg1, double arg2, double arg3, GeoUnit arg4) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<GeoRadiusResponse> georadiusReadonly(String key, double longitude, double latitude, double radius, GeoUnit unit) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<GeoRadiusResponse> georadius(String arg0, double arg1, double arg2, double arg3, GeoUnit arg4,
+                                             GeoRadiusParam arg5) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<GeoRadiusResponse> georadiusReadonly(String key, double longitude, double latitude, double radius, GeoUnit unit, GeoRadiusParam param) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<GeoRadiusResponse> georadiusByMember(String arg0, String arg1, double arg2, GeoUnit arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<GeoRadiusResponse> georadiusByMemberReadonly(String key, String member, double radius, GeoUnit unit) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<GeoRadiusResponse> georadiusByMember(String arg0, String arg1, double arg2, GeoUnit arg3,
+                                                     GeoRadiusParam arg4) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<GeoRadiusResponse> georadiusByMemberReadonly(String key, String member, double radius, GeoUnit unit, GeoRadiusParam param) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public List<Long> bitfield(String key, String... arguments) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long hstrlen(String key, String field) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public ScanResult<Entry<String, String>> hscan(String arg0, String arg1, ScanParams arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Long zadd(String arg0, Map<String, Double> arg1, ZAddParams arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Double zincrby(String arg0, double arg1, String arg2, ZIncrByParams arg3) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public ScanResult<Tuple> zscan(String arg0, String arg1, ScanParams arg2) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    /******************* End Jedis String Commands **************/
+
+
+
+    /******************* Jedis Binary Commands **************/
+
+    @Override
+    public Long append(final byte[] key, final byte[] value) {
+        return execOp(key, OpName.APPEND, client -> client.append(key, value));
+    }
+
+    @Override
+    public Long decr(final byte[] key) {
+        return execOp(key, OpName.DECR, client -> client.decr(key));
+    }
+
+    @Override
+    public Long decrBy(final byte[] key, final long delta) {
+        return execOp(key, OpName.DECRBY, client -> client.decrBy(key, delta));
+    }
+
+    @Override
+    public Long del(final byte[] key) {
+        return execOp(key, OpName.DEL, client -> client.del(key));
+    }
+
+    @Override
+    public Long unlink(byte[] key) {
+        return execOp(key, OpName.UNLINK, client -> client.unlink(key));
+    }
+
+    public byte[] dump(final byte[] key) {
+        return execOp(key, OpName.DUMP, client -> client.dump(key));
+    }
+
+    @Override
+    public String restore(byte[] key, int ttl, byte[] serializedValue) {
+        return execOp(key, OpName.RESTORE, client -> client.restore(key, ttl, serializedValue));
+    }
+
+    @Override
+    public String restoreReplace(byte[] key, int ttl, byte[] serializedValue) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Boolean exists(final byte[] key) {
+        return execOp(key, OpName.EXISTS, client -> client.exists(key));
+    }
+
+    @Override
+    public Long expire(final byte[] key, final int seconds) {
+        return execOp(key, OpName.EXPIRE, client -> client.expire(key, seconds));
+    }
+
+    @Override
+    public Long expireAt(final byte[] key, final long unixTime) {
+        return execOp(key, OpName.EXPIREAT, client -> client.expireAt(key, unixTime));
+    }
+
+    @Override
+    public byte[] get(final byte[] key) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-
-            return connPool.executeWithFailover(new MultiKeyOperation<List<byte[]>>(Arrays.asList(keys), OpName.MGET) {
-                @Override
-                public List<byte[]> execute(Jedis client, ConnectionContext state) {
-                    return client.mget(keys);
-                }
-            });
+            return execOp(key, OpName.GET, client -> client.get(key));
         } else {
-            return connPool.executeWithFailover(
-                    new CompressionValueMultiKeyOperation<List<byte[]>>(Arrays.asList(keys), OpName.MGET) {
-                        @Override
-                        public List<byte[]> execute(final Jedis client, final ConnectionContext state)
-                                throws DynoException {
-                            return new ArrayList<>(CollectionUtils.transform(client.mget(keys),
-                                    new CollectionUtils.Transform<byte[], byte[]>() {
-                                        @Override
-                                        public byte[] get(byte[] s) {
-                                            return decompressValue(state, String.valueOf(s)).getBytes();
-                                        }
-                                    }));
-                        }
-                    });
+            return execCompressOp(key, OpName.GET, (client, state, op) -> op.decompressValue(client.get(key), state));
         }
     }
 
     @Override
-    public String mset(byte[]... keysvalues) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Boolean getbit(final byte[] key, final long offset) {
+        return execOp(key, OpName.GETBIT, client -> client.getbit(key, offset));
     }
 
     @Override
-    public Long msetnx(byte[]... keysvalues) {
+    public byte[] getrange(final byte[] key, final long startOffset, final long endOffset) {
+        return execOp(key, OpName.GETRANGE, client -> client.getrange(key, startOffset, endOffset));
+    }
+
+    @Override
+    public byte[] getSet(final byte[] key, final byte[] value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.GETSET, client -> client.getSet(key, value));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.GETSET,
+              (client, state, op) -> op.decompressValue(client.getSet(key, op.compressValue(value, state)), state)
+            );
+        }
+    }
+
+    @Override
+    public Long hdel(final byte[] key, final byte[]... fields) {
+        return execOp(key, OpName.HDEL, client -> client.hdel(key, fields));
+    }
+
+    @Override
+    public Boolean hexists(final byte[] key, final byte[] field) {
+        return execOp(key, OpName.HEXISTS, client -> client.hexists(key, field));
+    }
+
+    @Override
+    public byte[] hget(final byte[] key, final byte[] field) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HGET, client -> client.hget(key, field));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.HGET,
+              (client, state, op) -> op.decompressValue(client.hget(key, field), state)
+            );
+        }
+    }
+
+    @Override
+    public Map<byte[], byte[]> hgetAll(final byte[] key) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HGETALL, client -> client.hgetAll(key));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.HGETALL,
+              (client, state, op) -> CollectionUtils.transform(client.hgetAll(key),
+                                                               (key1, val) -> op.decompressValue(val, state))
+            );
+        }
+    }
+
+    @Override
+    public Long hincrBy(final byte[] key, final byte[] field, final long value) {
+        return execOp(key, OpName.HINCRBY, client -> client.hincrBy(key, field, value));
+    }
+
+    /* not supported by RedisPipeline 2.7.3 */
+    public Double hincrByFloat(final byte[] key, final byte[] field, final double value) {
+        return execOp(key, OpName.HINCRBYFLOAT, client -> client.hincrByFloat(key, field, value));
+    }
+
+    @Override
+    public Long hsetnx(final byte[] key, final byte[] field, final byte[] value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HSETNX, client -> client.hsetnx(key, field, value));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.HSETNX,
+              (client, state, op) -> client.hsetnx(key, field, op.compressValue(value, state))
+            );
+        }
+    }
+
+    @Override
+    public Set<byte[]> hkeys(final byte[] key) {
+        return execOp(key, OpName.HKEYS, client -> client.hkeys(key));
+    }
+
+    @Override
+    public ScanResult<Map.Entry<byte[], byte[]>> hscan(final byte[] key, final byte[] cursor) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HSCAN, client -> client.hscan(key, cursor));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.HSCAN,
+              (client, state, op) ->
+                new ScanResult<>(cursor, new ArrayList(CollectionUtils.transform(
+                  client.hscan(key, cursor).getResult(),
+                  entry -> {
+                      entry.setValue(op.decompressValue(entry.getValue(), state));
+                      return entry;
+                  })))
+            );
+        }
+    }
+
+    @Override
+    public Long hlen(final byte[] key) {
+        return execOp(key, OpName.HLEN, client -> client.hlen(key));
+    }
+
+    @Override
+    public List<byte[]> hmget(final byte[] key, final byte[]... fields) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HMGET, client -> client.hmget(key, fields));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.HMGET,
+              (client, state, op) ->
+                new ArrayList<>(CollectionUtils.transform(client.hmget(key, fields),
+                                                          s -> op.decompressValue(s, state)))
+            );
+        }
+    }
+
+    @Override
+    public String hmset(final byte[] key, final Map<byte[], byte[]> hash) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HMSET, client -> client.hmset(key, hash));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.HMSET,
+              (client, state, op) ->
+                client.hmset(key, CollectionUtils.transform(hash, (key1, val) -> op.compressValue(val, state)))
+            );
+        }
+    }
+
+    @Override
+    public Long hset(final byte[] key, final byte[] field, final byte[] value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HSET, client -> client.hset(key, field, value));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.HSET,
+              (client, state, op) -> client.hset(key, field, op.compressValue(value, state))
+            );
+        }
+    }
+
+    @Override
+    public Long hset(byte[] key, Map<byte[], byte[]> hash) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HSET, client -> client.hset(key, hash));
+        } else {
+            throw new UnsupportedOperationException("not yet implemented");
+        }
+    }
+
+    @Override
+    public List<byte[]> hvals(final byte[] key) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HVALS, client -> client.hvals(key));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.HVALS,
+              (client, state, op) ->
+                new ArrayList<>(CollectionUtils.transform(client.hvals(key), s -> op.decompressValue(s, state)))
+            );
+        }
+    }
+
+    @Override
+    public Long incr(final byte[] key) {
+        return execOp(key, OpName.INCR, client -> client.incr(key));
+    }
+
+    @Override
+    public Long incrBy(final byte[] key, final long delta) {
+        return execOp(key, OpName.INCRBY, client -> client.incrBy(key, delta));
+    }
+
+    public Double incrByFloat(final byte[] key, final double increment) {
+        return execOp(key, OpName.INCRBYFLOAT, client -> client.incrByFloat(key, increment));
+    }
+
+    @Override
+    public byte[] lindex(final byte[] key, final long index) {
+        return execOp(key, OpName.LINDEX, client -> client.lindex(key, index));
+    }
+
+    @Override
+    public Long linsert(final byte[] key, final ListPosition where, final byte[] pivot, final byte[] value) {
+        return execOp(key, OpName.LINSERT, client -> client.linsert(key, where, pivot, value));
+    }
+
+    @Override
+    public Long llen(final byte[] key) {
+        return execOp(key, OpName.LLEN, client -> client.llen(key));
+    }
+
+    @Override
+    public byte[] lpop(final byte[] key) {
+        return execOp(key, OpName.LPOP, client -> client.lpop(key));
+    }
+
+    @Override
+    public Long lpush(final byte[] key, final byte[]... values) {
+        return execOp(key, OpName.LPUSH, client -> client.lpush(key, values));
+    }
+
+    @Override
+    public Long lpushx(final byte[] key, final byte[]... values) {
+        return execOp(key, OpName.LPUSHX, client -> client.lpushx(key, values));
+    }
+
+    @Override
+    public List<byte[]> lrange(final byte[] key, final long start, final long end) {
+        return execOp(key, OpName.LRANGE, client -> client.lrange(key, start, end));
+    }
+
+    @Override
+    public Long lrem(final byte[] key, final long count, final byte[] value) {
+        return execOp(key, OpName.LREM, client -> client.lrem(key, count, value));
+    }
+
+    @Override
+    public String lset(final byte[] key, final long index, final byte[] value) {
+        return execOp(key, OpName.LSET, client -> client.lset(key, index, value));
+    }
+
+    @Override
+    public String ltrim(final byte[] key, final long start, final long end) {
+        return execOp(key, OpName.LTRIM, client -> client.ltrim(key, start, end));
+    }
+
+    @Override
+    public Long persist(final byte[] key) {
+        return execOp(key, OpName.PERSIST, client -> client.persist(key));
+    }
+
+    @Override
+    public Long pexpireAt(final byte[] key, final long millisecondsTimestamp) {
+        return execOp(key, OpName.PEXPIREAT, client -> client.pexpireAt(key, millisecondsTimestamp));
+    }
+
+    @Override
+    public Long pttl(final byte[] key) {
+        return execOp(key, OpName.PTTL, client -> client.pttl(key));
+    }
+
+    @Override
+    public Long touch(byte[] key) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public String rename(byte[] oldkey, byte[] newkey) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(oldkey, OpName.RENAME, client -> client.rename(oldkey, newkey));
     }
 
     @Override
     public Long renamenx(byte[] oldkey, byte[] newkey) {
+        return execOp(oldkey, OpName.RENAMENX, client -> client.renamenx(oldkey, newkey));
+    }
+
+    public String restore(final byte[] key, final Integer ttl, final byte[] serializedValue) {
+        return execOp(key, OpName.RESTORE, client -> client.restore(key, ttl, serializedValue));
+    }
+
+    @Override
+    public byte[] rpop(final byte[] key) {
+        return execOp(key, OpName.RPOP, client -> client.rpop(key));
+    }
+
+    @Override
+    public byte[] rpoplpush(final byte[] srckey, final byte[] dstkey) {
+        return execOp(srckey, OpName.RPOPLPUSH, client -> client.rpoplpush(srckey, dstkey));
+    }
+
+    @Override
+    public Long rpush(final byte[] key, final byte[]... values) {
+        return execOp(key, OpName.RPUSH, client -> client.rpush(key, values));
+    }
+
+    @Override
+    public Long rpushx(final byte[] key, final byte[]... values) {
+        return execOp(key, OpName.RPUSHX, client -> client.rpushx(key, values));
+    }
+
+    @Override
+    public Long sadd(final byte[] key, final byte[]... members) {
+        return execOp(key, OpName.SADD, client -> client.sadd(key, members));
+    }
+
+    @Override
+    public Long scard(final byte[] key) {
+        return execOp(key, OpName.SCARD, client -> client.scard(key));
+    }
+
+    @Override
+    public Set<byte[]> sdiff(final byte[]... keys) {
+        return execOp(keys[0], OpName.SDIFF, client -> client.sdiff(keys));
+    }
+
+    @Override
+    public Long sdiffstore(final byte[] dstkey, final byte[]... keys) {
+        return execOp(dstkey, OpName.SDIFFSTORE, client -> client.sdiffstore(dstkey, keys));
+    }
+
+    @Override
+    public String set(final byte[] key, final byte[] value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.SET, client -> client.set(key, value));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.SET,
+              (client, state, op) -> client.set(key, op.compressValue(value, state))
+            );
+        }
+    }
+
+    @Deprecated
+    /**
+     * use {@link set(byte[], byte[], SetParams)} instead
+     */
+    public String set(final byte[] key, final byte[] value, final String nxxx, final String expx, final long time) {
+        SetParams setParams = SetParams.setParams();
+        if (nxxx.equalsIgnoreCase("NX")) {
+            setParams.nx();
+        } else if (nxxx.equalsIgnoreCase("XX")) {
+            setParams.xx();
+        }
+        if (expx.equalsIgnoreCase("EX")) {
+            setParams.ex((int) time);
+        } else if (expx.equalsIgnoreCase("PX")) {
+            setParams.px(time);
+        }
+
+        return d_set(key, value, setParams);
+    }
+
+    public String set(final byte[] key, final byte[] value, final SetParams setParams) {
+        return d_set(key, value, setParams);
+    }
+
+    public String d_set(final byte[] key, final byte[] value, final SetParams setParams) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy())
+            return execOp(key, OpName.SET, client -> client.set(key, value, setParams));
+        else {
+            return execCompressOp(
+              key,
+              OpName.SET,
+              (client, state, op) -> client.set(key, op.compressValue(value, state), setParams)
+            );
+        }
+    }
+
+    @Override
+    public Boolean setbit(final byte[] key, final long offset, final boolean value) {
+        return execOp(key, OpName.SETBIT, client -> client.setbit(key, offset, value));
+    }
+
+    @Override
+    public Boolean setbit(final byte[] key, final long offset, final byte[] value) {
+        return execOp(key, OpName.SETBIT, client -> client.setbit(key, offset, value));
+    }
+
+    @Override
+    public String setex(final byte[] key, final int seconds, final byte[] value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.SETEX, client -> client.setex(key, seconds, value));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.SETEX,
+              (client, state, op) -> client.setex(key, seconds, op.compressValue(value, state))
+            );
+        }
+    }
+
+    @Override
+    public String psetex(final byte[] key, final long milliseconds, final byte[] value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.PSETEX, client -> client.psetex(key, milliseconds, value));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.PSETEX,
+              (client, state, op) -> client.psetex(key, milliseconds, op.compressValue(value, state))
+            );
+        }
+    }
+
+    @Override
+    public Long setnx(final byte[] key, final byte[] value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.SETNX, client -> client.setnx(key, value));
+        } else {
+            return execCompressOp(
+              key,
+              OpName.SETNX,
+              (client, state, op) -> client.setnx(key, op.compressValue(value, state))
+            );
+        }
+    }
+
+    @Override
+    public Long setrange(final byte[] key, final long offset, final byte[] value) {
+        return execOp(key, OpName.SETRANGE, client -> client.setrange(key, offset, value));
+    }
+
+    @Override
+    public Boolean sismember(final byte[] key, final byte[] member) {
+        return execOp(key, OpName.SISMEMBER, client -> client.sismember(key, member));
+    }
+
+    @Override
+    public Set<byte[]> smembers(final byte[] key) {
+        return execOp(key, OpName.SMEMBERS, client -> client.smembers(key));
+    }
+
+    public Long smove(final byte[] srckey, final byte[] dstkey, final byte[] member) {
+        return execOp(srckey, OpName.SMOVE, client -> client.smove(srckey, dstkey, member));
+    }
+    @Override
+    public List<byte[]> sort(byte[] key) {
+        return execOp(key, OpName.SORT, client -> client.sort(key));
+    }
+
+    @Override
+    public List<byte[]> sort(byte[] key, SortingParams sortingParameters) {
+        return execOp(key, OpName.SORT, client -> client.sort(key, sortingParameters));
+    }
+
+    @Override
+    public byte[] spop(final byte[] key) {
+        return execOp(key, OpName.SPOP, client -> client.spop(key));
+    }
+
+    @Override
+    public Set<byte[]> spop(byte[] key, long count) {
+        return execOp(key, OpName.SPOP, client -> client.spop(key, count));
+    }
+
+    @Override
+    public byte[] srandmember(final byte[] key) {
+        return execOp(key, OpName.SRANDMEMBER, client -> client.srandmember(key));
+    }
+
+    @Override
+    public List<byte[]> srandmember(byte[] key, int count) {
+        return execOp(key, OpName.SRANDMEMBER, client -> client.srandmember(key, count));
+    }
+
+    @Override
+    public Long srem(final byte[] key, final byte[]... members) {
+        return execOp(key, OpName.SREM, client -> client.srem(key, members));
+    }
+
+    @Override
+    public ScanResult<byte[]> sscan(final byte[] key, final byte[] cursor) {
+        return execOp(key, OpName.SSCAN, client -> client.sscan(key, cursor));
+    }
+
+    @Override
+    public ScanResult<byte[]> sscan(final byte[] key, final byte[] cursor, final ScanParams params) {
+        return execOp(key, OpName.SSCAN, client -> client.sscan(key, cursor, params));
+    }
+
+    @Override
+    public Long strlen(final byte[] key) {
+        return execOp(key, OpName.STRLEN, client -> client.strlen(key));
+    }
+
+    @Override
+    public byte[] substr(byte[] key, int start, int end) {
+        return execOp(key, OpName.SUBSTR, client -> client.substr(key, start, end));
+    }
+
+    @Override
+    public Long ttl(final byte[] key) {
+        return execOp(key, OpName.TTL, client -> client.ttl(key));
+    }
+
+    @Override
+    public String type(final byte[] key) {
+        return execOp(key, OpName.TYPE, client -> client.type(key));
+    }
+
+    @Override
+    public Long zadd(byte[] key, double score, byte[] member) {
+        return execOp(key, OpName.ZADD, client -> client.zadd(key, score, member));
+    }
+
+    @Override
+    public Long zadd(byte[] key, Map<byte[], Double> scoreMembers) {
+        return execOp(key, OpName.ZADD, client -> client.zadd(key, scoreMembers));
+    }
+
+    @Override
+    public Long zadd(byte[] key, double score, byte[] member, ZAddParams params) {
+        return execOp(key, OpName.ZADD, client -> client.zadd(key, score, member, params));
+    }
+
+    @Override
+    public Long zcard(final byte[] key) {
+        return execOp(key, OpName.ZCARD, client -> client.zcard(key));
+    }
+
+    @Override
+    public Long zcount(final byte[] key, final double min, final double max) {
+        return execOp(key, OpName.ZCOUNT, client -> client.zcount(key, min, max));
+    }
+
+    @Override
+    public Long zcount(byte[] key, byte[] min, byte[] max) {
+        return execOp(key, OpName.ZCOUNT, client -> client.zcount(key, min, max));
+    }
+
+    @Override
+    public Double zincrby(final byte[] key, final double score, final byte[] member) {
+        return execOp(key, OpName.ZINCRBY, client -> client.zincrby(key, score, member));
+    }
+
+    @Override
+    public Set<byte[]> zrange(byte[] key, long start, long end) {
+        return execOp(key, OpName.ZRANGE, client -> client.zrange(key, start, end));
+    }
+
+    @Override
+    public Long zrank(final byte[] key, final byte[] member) {
+        return execOp(key, OpName.ZRANK, client -> client.zrank(key, member));
+    }
+
+    @Override
+    public Long zrem(byte[] key, byte[]... member) {
+        return execOp(key, OpName.ZREM, client -> client.zrem(key, member));
+    }
+
+    @Override
+    public Long zremrangeByRank(final byte[] key, final long start, final long end) {
+        return execOp(key, OpName.ZREMRANGEBYRANK, client -> client.zremrangeByRank(key, start, end));
+    }
+
+    @Override
+    public Long zremrangeByScore(final byte[] key, final double start, final double end) {
+        return execOp(key, OpName.ZREMRANGEBYSCORE, client -> client.zremrangeByScore(key, start, end));
+    }
+
+    @Override
+    public Set<byte[]> zrevrange(byte[] key, long start, long end) {
+        return execOp(key, OpName.ZREVRANGE, client -> client.zrevrange(key, start, end));
+    }
+
+    @Override
+    public Long zrevrank(final byte[] key, final byte[] member) {
+        return execOp(key, OpName.ZREVRANK, client -> client.zrevrank(key, member));
+    }
+
+    @Override
+    public Set<Tuple> zrangeWithScores(byte[] key, long start, long end) {
+        return execOp(key, OpName.ZRANGEWITHSCORES, client -> client.zrangeWithScores(key, start, end));
+    }
+
+    @Override
+    public Set<Tuple> zrevrangeWithScores(byte[] key, long start, long end) {
+        return execOp(key, OpName.ZREVRANGEWITHSCORES, client -> client.zrevrangeWithScores(key, start, end));
+    }
+
+    @Override
+    public Double zscore(final byte[] key, final byte[] member) {
+        return execOp(key, OpName.ZSCORE, client -> client.zscore(key, member));
+    }
+
+    @Override
+    public ScanResult<Tuple> zscan(final byte[] key, final byte[] cursor) {
+        return execOp(key, OpName.ZSCAN, client -> client.zscan(key, cursor));
+    }
+
+    @Override
+    public Set<byte[]> zrangeByScore(byte[] key, double min, double max) {
+        return execOp(key, OpName.ZRANGEBYSCORE, client -> client.zrangeByScore(key, min, max));
+    }
+
+    @Override
+    public Set<byte[]> zrangeByScore(byte[] key, byte[] min, byte[] max) {
+        return execOp(key, OpName.ZRANGEBYSCORE, client -> client.zrangeByScore(key, min, max));
+    }
+
+    @Override
+    public Set<byte[]> zrangeByScore(byte[] key, double min, double max, int offset, int count) {
+        return execOp(key, OpName.ZRANGEBYSCORE, client -> client.zrangeByScore(key, min, max, offset, count));
+    }
+
+    @Override
+    public Set<byte[]> zrangeByScore(byte[] key, byte[] min, byte[] max, int offset, int count) {
+        return execOp(key, OpName.ZRANGEBYSCORE, client -> client.zrangeByScore(key, min, max, offset, count));
+    }
+
+    @Override
+    public Set<byte[]> zrevrangeByScore(byte[] key, byte[] max, byte[] min) {
+        return execOp(key, OpName.ZREVRANGEBYSCORE, client -> client.zrevrangeByScore(key, max, min));
+    }
+
+    @Override
+    public Set<byte[]> zrevrangeByScore(byte[] key, double max, double min, int offset, int count) {
+        return execOp(key, OpName.ZREVRANGEBYSCORE, client -> client.zrevrangeByScore(key, max, min, offset, count));
+    }
+
+    @Override
+    public Set<byte[]> zrevrangeByScore(byte[] key, double max, double min) {
+        return execOp(key, OpName.ZREVRANGEBYSCORE, client -> client.zrevrangeByScore(key, max, min));
+    }
+
+    @Override
+    public Set<Tuple> zrangeByScoreWithScores(byte[] key, double min, double max) {
+        return execOp(key, OpName.ZRANGEBYSCOREWITHSCORES, client -> client.zrangeByScoreWithScores(key, min, max));
+    }
+
+    @Override
+    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, double max, double min) {
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, client -> client.zrevrangeByScoreWithScores(key, max, min));
+    }
+
+    @Override
+    public Set<Tuple> zrangeByScoreWithScores(byte[] key, double min, double max, int offset, int count) {
+        return execOp(key, OpName.ZRANGEBYSCOREWITHSCORES, client -> client.zrangeByScoreWithScores(key, min, max, offset, count));
+    }
+
+    @Override
+    public Set<byte[]> zrevrangeByScore(byte[] key, byte[] max, byte[] min, int offset, int count) {
+        return execOp(key, OpName.ZREVRANGEBYSCORE, client -> client.zrevrangeByScore(key, max, min, offset, count));
+    }
+
+    @Override
+    public Set<Tuple> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max) {
+        return execOp(key, OpName.ZRANGEBYSCOREWITHSCORES, client -> client.zrangeByScoreWithScores(key, min, max));
+    }
+
+    @Override
+    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, byte[] max, byte[] min) {
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, client -> client.zrevrangeByScoreWithScores(key, max, min));
+    }
+
+    @Override
+    public Set<Tuple> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max, int offset, int count) {
+        return execOp(key, OpName.ZRANGEBYSCOREWITHSCORES, client -> client.zrangeByScoreWithScores(key, min, max, offset, count));
+    }
+
+    @Override
+    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, double max, double min, int offset, int count) {
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, client -> client.zrevrangeByScoreWithScores(key, max, min, offset, count));
+    }
+
+    @Override
+    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, byte[] max, byte[] min, int offset, int count) {
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, client -> client.zrevrangeByScoreWithScores(key, max, min, offset, count));
+    }
+
+    @Override
+    public Long zremrangeByScore(byte[] key, byte[] start, byte[] end) {
+        return execOp(key, OpName.ZREMRANGEBYSCORE, client -> client.zremrangeByScore(key, start, end));
+    }
+
+    @Override
+    public Long zlexcount(byte[] key, byte[] min, byte[] max) {
+        return execOp(key, OpName.ZLEXCOUNT, client -> client.zlexcount(key, min, max));
+    }
+
+    @Override
+    public Set<byte[]> zrangeByLex(byte[] key, byte[] min, byte[] max) {
+        return execOp(key, OpName.ZRANGEBYLEX, client -> client.zrangeByLex(key, min, max));
+    }
+
+    @Override
+    public Set<byte[]> zrangeByLex(byte[] key, byte[] min, byte[] max, int offset, int count) {
+        return execOp(key, OpName.ZRANGEBYLEX, client -> client.zrangeByLex(key, min, max, offset, count));
+    }
+
+    @Override
+    public Long zremrangeByLex(byte[] key, byte[] min, byte[] max) {
+        return execOp(key, OpName.ZREMRANGEBYLEX, client -> client.zremrangeByLex(key, min, max));
+    }
+
+    @Override
+    public byte[] echo(byte[] string) {
+        return execOp(string, OpName.ECHO, client -> client.echo(string));
+    }
+
+    @Override
+    public Long move(byte[] key, int dbIndex) {
+        return execOp(key, OpName.MOVE, client -> client.move(key, dbIndex));
+    }
+
+    @Override
+    public Long bitcount(byte[] key) {
+        return execOp(key, OpName.BITCOUNT, client -> client.bitcount(key));
+    }
+
+    @Override
+    public Long pfadd(byte[] key, byte[]... elements) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public byte[] rpoplpush(byte[] srckey, byte[] dstkey) {
+    public long pfcount(byte[] key) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> sdiff(byte[]... keys) {
+    public Long bitcount(byte[] key, long start, long end) {
+        return execOp(key, OpName.BITCOUNT, client -> client.bitcount(key, start, end));
+    }
+
+    /**
+     * MULTI-KEY COMMANDS
+     */
+
+    @Override
+    public List<byte[]> blpop(int timeout, byte[]... keys) {
+        return execMultiOp(keys, OpName.BLPOP, client -> client.blpop(timeout, keys));
+    }
+
+    @Override
+    public List<byte[]> brpop(int timeout, byte[]... keys) {
+        return execMultiOp(keys, OpName.BRPOP, client -> client.brpop(timeout, keys));
+    }
+
+    @Override
+    public List<byte[]> blpop(byte[]... keys) {
+        return execMultiOp(keys, OpName.BLPOP, client -> client.blpop(keys));
+    }
+
+    @Override
+    public List<byte[]> brpop(byte[]... keys) {
+        return execMultiOp(keys, OpName.BRPOP, client -> client.brpop(keys));
+    }
+
+    @Override
+    public Set<byte[]> keys(final byte[] key) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long sdiffstore(byte[] dstkey, byte[]... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long pexpire(byte[] key, long milliseconds) {
+        return execOp(key, OpName.PEXPIRE, client -> client.pexpire(key, milliseconds));
+    }
+
+    /**
+     * Get values for all the keys provided. Returns a list of string values
+     * corresponding to individual keys. If one of the key is missing, the
+     * return list has null as its corresponding value.
+     *
+     * @param keys: variable list of keys to query
+     * @return list of string values
+     * @see <a href="http://redis.io/commands/MGET">mget</a>
+     */
+    @Override
+    public List<byte[]> mget(byte[]... keys) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execMultiOp(keys, OpName.MGET, client -> client.mget(keys));
+        } else {
+            return execCompressMultiOp(
+              keys,
+              OpName.MGET,
+              (client, state, op) -> new ArrayList<>(CollectionUtils.transform(client.mget(keys),
+                                                                               s -> op.decompressValue(state, s)))
+            );
+        }
+    }
+
+    @Override
+    public Long exists(byte[]... keys) {
+        return execMultiOp(keys, OpName.EXISTS, client -> client.exists(keys));
+    }
+
+    @Override
+    public Long del(byte[]... keys) {
+        return execMultiOp(keys, OpName.DEL, client -> client.del(keys));
+    }
+
+    @Override
+    public Long unlink(byte[]... keys) {
+        return execMultiOp(keys, OpName.UNLINK, client -> client.unlink(keys));
+    }
+
+    @Override
+    public Long msetnx(byte[]... keysvalues) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execMultiOp(keysvalues, OpName.MSETNX, client -> client.msetnx(keysvalues));
+        } else {
+            return execCompressMultiOp(
+              keysvalues,
+              OpName.MSETNX,
+              (client, state, op) -> client.msetnx(op.compressMultiKeyValue(state, keysvalues))
+            );
+        }
+    }
+
+    @Override
+    public String mset(byte[]... keysvalues) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(keysvalues[0], OpName.MSET, client -> client.mset(keysvalues));
+        } else {
+            return execCompressMultiOp(
+              keysvalues,
+              OpName.MSET,
+              (client, state, op) -> client.mset(op.compressMultiKeyValue(state, keysvalues))
+            );
+        }
     }
 
     @Override
     public Set<byte[]> sinter(byte[]... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execMultiOp(keys, OpName.SINTER, client -> client.sinter(keys));
     }
 
-    @Override
-    public Long sinterstore(byte[] dstkey, byte[]... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long smove(byte[] srckey, byte[] dstkey, byte[] member) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Long sinterstore(final byte[] dstkey, final byte[]... keys) {
+        return execOp(dstkey, OpName.SINTERSTORE, client -> client.sinterstore(dstkey, keys));
     }
 
     @Override
     public Long sort(byte[] key, SortingParams sortingParameters, byte[] dstkey) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.SORT, client -> client.sort(key, sortingParameters, dstkey));
     }
 
     @Override
     public Long sort(byte[] key, byte[] dstkey) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.SORT, client -> client.sort(key, dstkey));
     }
 
     @Override
     public Set<byte[]> sunion(byte[]... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execMultiOp(keys, OpName.SUNION, client -> client.sunion(keys));
     }
 
     @Override
     public Long sunionstore(byte[] dstkey, byte[]... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(dstkey, OpName.SUNIONSTORE, client -> client.sunionstore(dstkey, keys));
     }
 
     @Override
     public String watch(byte[]... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public String unwatch() {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -3053,6 +2655,16 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
     @Override
     public Long zinterstore(byte[] dstkey, ZParams params, byte[]... sets) {
         throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Set<byte[]> zrevrangeByLex(byte[] key, byte[] max, byte[] min) {
+        return execOp(key, OpName.ZREVRANGEBYLEX, client -> client.zrevrangeByLex(key, max, min));
+    }
+
+    @Override
+    public Set<byte[]> zrevrangeByLex(byte[] key, byte[] max, byte[] min, int offset, int count) {
+        return execOp(key, OpName.ZREVRANGEBYLEX, client -> client.zrevrangeByLex(key, max, min, offset, count));
     }
 
     @Override
@@ -3110,1030 +2722,111 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
         throw new UnsupportedOperationException("not yet implemented");
     }
 
-    @Override
-    public Long zinterstore(String dstkey, String... sets) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long zinterstore(String dstkey, ZParams params, String... sets) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<String> zrevrangeByLex(String key, String max, String min) {
-        return d_zrevrangeByLex(key, max, min).getResult();
-    }
-
-    public OperationResult<Set<String>> d_zrevrangeByLex(final String key, final String max, final String min) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZREVRANGEBYLEX) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrangeByLex(key, max, min);
-            }
-
-        });
-    }
-
-    @Override
-    public Set<String> zrevrangeByLex(String key, String max, String min, int offset, int count) {
-        return d_zrevrangeByLex(key, max, min, offset, count).getResult();
-    }
-
-    public OperationResult<Set<String>> d_zrevrangeByLex(final String key, final String max, final String min,
-                                                         final int offset, final int count) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<String>>(key, OpName.ZREVRANGEBYLEX) {
-
-            @Override
-            public Set<String> execute(Jedis client, ConnectionContext state) {
-                return client.zrangeByLex(key, max, min, offset, count);
-            }
-
-        });
-    }
-
-    @Override
-    public Long zunionstore(String dstkey, String... sets) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long zunionstore(String dstkey, ZParams params, String... sets) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public String brpoplpush(String source, String destination, int timeout) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long publish(String channel, String message) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public void subscribe(JedisPubSub jedisPubSub, String... channels) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public void psubscribe(JedisPubSub jedisPubSub, String... patterns) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public String randomKey() {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long bitop(BitOP op, String destKey, String... srcKeys) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    /******************* Jedis Binary Commands **************/
-    @Override
-    public String set(final byte[] key, final byte[] value) {
-        return d_set(key, value).getResult();
-    }
-
-    public OperationResult<String> d_set(final byte[] key, final byte[] value) {
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
-            @Override
-            public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.set(key, value);
-            }
-        });
-    }
-
-    @Override
-    public byte[] get(final byte[] key) {
-        return d_get(key).getResult();
-    }
-
-    public OperationResult<byte[]> d_get(final byte[] key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<byte[]>(key, OpName.GET) {
-            @Override
-            public byte[] execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.get(key);
-            }
-        });
-    }
-
-    @Override
-    public String setex(final byte[] key, final int seconds, final byte[] value) {
-        return d_setex(key, seconds, value).getResult();
-    }
-
-    public OperationResult<String> d_setex(final byte[] key, final Integer seconds, final byte[] value) {
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SETEX) {
-            @Override
-            public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.setex(key, seconds, value);
-            }
-        });
-    }
-
-    @Override
-    public String psetex(byte[] key, long milliseconds, byte[] value) {
-        return d_psetex(key, milliseconds, value).getResult();
-    }
-
-    public OperationResult<String> d_psetex(final byte[] key, final Long milliseconds, final byte[] value) {
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.PSETEX) {
-            @Override
-            public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.psetex(key, milliseconds, value);
-            }
-        });
-    }
-
-    @Override
-    public String set(final byte[] key, final byte[] value, final SetParams setParams) {
-        return d_set(key, value, setParams).getResult();
-    }
-
-    public OperationResult<String> d_set(final byte[] key, final byte[] value, final SetParams setParams) {
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.SET) {
-            @Override
-            public String execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.set(key, value, setParams);
-            }
-        });
-    }
-
-    @Override
-    public Boolean exists(final byte[] key) {
-        return d_exists(key).getResult();
-    }
-
-    public OperationResult<Boolean> d_exists(final byte[] key) {
-        return connPool.executeWithFailover(new BaseKeyOperation<Boolean>(key, OpName.EXISTS) {
-
-            @Override
-            public Boolean execute(Jedis client, ConnectionContext state) {
-                return client.exists(key);
-            }
-        });
-    }
-
-    @Override
-    public Long persist(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public String type(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public byte[] dump(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public String restore(byte[] key, int ttl, byte[] serializedValue) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public String restoreReplace(byte[] key, int ttl, byte[] serializedValue) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long expire(final byte[] key, final int seconds) {
-        return d_expire(key, seconds).getResult();
-    }
-
-    public OperationResult<Long> d_expire(final byte[] key, final int seconds) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.EXPIRE) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.expire(key, seconds);
-            }
-        });
-    }
-
-
-    @Override
-    public Long pexpire(byte[] key, final long milliseconds) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long expireAt(final byte[] key, final long unixTime) {
-        return d_expireAt(key, unixTime).getResult();
-    }
-
-    public OperationResult<Long> d_expireAt(final byte[] key, final long unixTime) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.EXPIREAT) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.expireAt(key, unixTime);
-            }
-
-        });
-    }
-
-    @Override
-    public Long pexpireAt(byte[] key, long millisecondsTimestamp) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long ttl(final byte[] key) {
-        return d_ttl(key).getResult();
-    }
-
-    public OperationResult<Long> d_ttl(final byte[] key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.TTL) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.ttl(key);
-            }
-
-        });
-    }
-
-    @Override
-    public Long pttl(byte[] key) {
-        return d_pttl(key).getResult();
-    }
-
-    public OperationResult<Long> d_pttl(final byte[] key) {
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.PTTL) {
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.pttl(key);
-            }
-
-        });
-    }
-
-    @Override
-    public Long touch(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Boolean setbit(byte[] key, long offset, boolean value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Boolean setbit(byte[] key, long offset, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Boolean getbit(byte[] key, long offset) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long setrange(byte[] key, long offset, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public byte[] getrange(byte[] key, long startOffset, long endOffset) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public byte[] getSet(byte[] key, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long setnx(byte[] key, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long decrBy(byte[] key, long integer) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long decr(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long incrBy(byte[] key, long integer) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Double incrByFloat(byte[] key, double value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long incr(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long append(byte[] key, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public byte[] substr(byte[] key, int start, int end) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long hset(final byte[] key, final byte[] field, final byte[] value) {
-        return d_hset(key, field, value).getResult();
-    }
-
-    @Override
-    public Long hset(byte[] key, Map<byte[], byte[]> hash) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    public OperationResult<Long> d_hset(final byte[] key, final byte[] field, final byte[] value) {
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HSET) {
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.hset(key, field, value);
-            }
-        });
-    }
-
-    @Override
-    public byte[] hget(final byte[] key, final byte[] field) {
-        return d_hget(key, field).getResult();
-    }
-
-    public OperationResult<byte[]> d_hget(final byte[] key, final byte[] field) {
-        return connPool.executeWithFailover(new BaseKeyOperation<byte[]>(key, OpName.HGET) {
-            @Override
-            public byte[] execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.hget(key, field);
-            }
-        });
-    }
-
-    @Override
-    public Long hsetnx(byte[] key, byte[] field, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public String hmset(final byte[] key, final Map<byte[], byte[]> hash) {
-        return d_hmset(key, hash).getResult();
-    }
-
-    public OperationResult<String> d_hmset(final byte[] key, final Map<byte[], byte[]> hash) {
-        return connPool.executeWithFailover(new BaseKeyOperation<String>(key, OpName.HMSET) {
-            @Override
-            public String execute(Jedis client, ConnectionContext state) {
-                return client.hmset(key, hash);
-            }
-        });
-    }
-
-    @Override
-    public List<byte[]> hmget(final byte[] key, final byte[]... fields) {
-        return d_hmget(key, fields).getResult();
-    }
-
-    public OperationResult<List<byte[]>> d_hmget(final byte[] key, final byte[]... fields) {
-        return connPool.executeWithFailover(new BaseKeyOperation<List<byte[]>>(key, OpName.HMGET) {
-            @Override
-            public List<byte[]> execute(Jedis client, ConnectionContext state) {
-                return client.hmget(key, fields);
-            }
-        });
-    }
-
-    @Override
-    public Long hincrBy(byte[] key, byte[] field, long value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Double hincrByFloat(byte[] key, byte[] field, double value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Boolean hexists(byte[] key, byte[] field) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long hdel(final byte[] key, final byte[]... fields) {
-        return d_hdel(key, fields).getResult();
-    }
-
-    public OperationResult<Long> d_hdel(final byte[] key, final byte[]... fields) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HDEL) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.hdel(key, fields);
-            }
-
-        });
-    }
-
-    @Override
-    public Long hlen(final byte[] key) {
-        return d_hlen(key).getResult();
-    }
-
-    public OperationResult<Long> d_hlen(final byte[] key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.HLEN) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.hlen(key);
-            }
-
-        });
-    }
-
-    @Override
-    public Set<byte[]> hkeys(final byte[] key) {
-        return d_hkeys(key).getResult();
-    }
-
-    public OperationResult<Set<byte[]>> d_hkeys(final byte[] key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<byte[]>>(key, OpName.HKEYS) {
-
-            @Override
-            public Set<byte[]> execute(Jedis client, ConnectionContext state) {
-                return client.hkeys(key);
-            }
-
-        });
-    }
-
-    @Override
-    public Collection<byte[]> hvals(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Map<byte[], byte[]> hgetAll(final byte[] key) {
-        return d_hgetAll(key).getResult();
-    }
-
-    public OperationResult<Map<byte[], byte[]>> d_hgetAll(final byte[] key) {
-        return connPool.executeWithFailover(new BaseKeyOperation<Map<byte[], byte[]>>(key, OpName.HGETALL) {
-            @Override
-            public Map<byte[], byte[]> execute(Jedis client, ConnectionContext state) throws DynoException {
-                return client.hgetAll(key);
-            }
-        });
-    }
-
-    @Override
-    public Long rpush(byte[] key, byte[]... args) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long lpush(byte[] key, byte[]... args) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long llen(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<byte[]> lrange(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public String ltrim(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public byte[] lindex(byte[] key, long index) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public String lset(byte[] key, long index, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long lrem(byte[] key, long count, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public byte[] lpop(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public byte[] rpop(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long sadd(final byte[] key, final byte[]... members) {
-        return d_sadd(key, members).getResult();
-    }
-
-    public OperationResult<Long> d_sadd(final byte[] key, final byte[]... members) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.SADD) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.sadd(key, members);
-            }
-
-        });
-    }
-
-    @Override
-    public Set<byte[]> smembers(final byte[] key) {
-        return d_smembers(key).getResult();
-    }
-
-    public OperationResult<Set<byte[]>> d_smembers(final byte[] key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Set<byte[]>>(key, OpName.SMEMBERS) {
-
-            @Override
-            public Set<byte[]> execute(Jedis client, ConnectionContext state) {
-                return client.smembers(key);
-            }
-        });
-    }
-
-    @Override
-    public Long srem(final byte[] key, final byte[]... members) {
-        return d_srem(key, members).getResult();
-    }
-
-    public OperationResult<Long> d_srem(final byte[] key, final byte[]... members) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.SREM) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.srem(key, members);
-            }
-
-        });
-    }
-
-    @Override
-    public byte[] spop(final byte[] key) {
-        return d_spop(key).getResult();
-    }
-
-    public OperationResult<byte[]> d_spop(final byte[] key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<byte[]>(key, OpName.SPOP) {
-
-            @Override
-            public byte[] execute(Jedis client, ConnectionContext state) {
-                return client.spop(key);
-            }
-        });
-    }
-
-    @Override
-    public Set<byte[]> spop(byte[] key, long count) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long scard(final byte[] key) {
-        return d_scard(key).getResult();
-    }
-
-    public OperationResult<Long> d_scard(final byte[] key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.SCARD) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.scard(key);
-            }
-
-        });
-    }
-
-    @Override
-    public Boolean sismember(byte[] key, byte[] member) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public byte[] srandmember(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<byte[]> srandmember(final byte[] key, final int count) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long strlen(final byte[] key) {
-        return d_strlen(key).getResult();
-    }
-
-    public OperationResult<Long> d_strlen(final byte[] key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.STRLEN) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.strlen(key);
-            }
-
-        });
-    }
-
-    @Override
-    public Long zadd(byte[] key, double score, byte[] member) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long zadd(byte[] key, Map<byte[], Double> scoreMembers) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<byte[]> zrange(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long zrem(byte[] key, byte[]... member) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Double zincrby(byte[] key, double score, byte[] member) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long zrank(byte[] key, byte[] member) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long zrevrank(byte[] key, byte[] member) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<byte[]> zrevrange(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<Tuple> zrangeWithScores(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<Tuple> zrevrangeWithScores(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long zcard(final byte[] key) {
-        return d_zcard(key).getResult();
-    }
-
-    public OperationResult<Long> d_zcard(final byte[] key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.ZCARD) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.zcard(key);
-            }
-
-        });
-    }
-
-    @Override
-    public Double zscore(final byte[] key, final byte[] member) {
-        return d_zscore(key, member).getResult();
-    }
-
-    public OperationResult<Double> d_zscore(final byte[] key, final byte[] member) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Double>(key, OpName.ZSCORE) {
-
-            @Override
-            public Double execute(Jedis client, ConnectionContext state) {
-                return client.zscore(key, member);
-            }
-
-        });
-    }
-
-    @Override
-    public List<byte[]> sort(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<byte[]> sort(byte[] key, SortingParams sortingParameters) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long zcount(byte[] key, double min, double max) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long zcount(byte[] key, byte[] min, byte[] max) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<byte[]> zrangeByScore(byte[] key, double min, double max) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<byte[]> zrangeByScore(byte[] key, byte[] min, byte[] max) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<byte[]> zrevrangeByScore(byte[] key, double max, double min) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<byte[]> zrangeByScore(byte[] key, double min, double max, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<byte[]> zrevrangeByScore(byte[] key, byte[] max, byte[] min) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<byte[]> zrangeByScore(byte[] key, byte[] min, byte[] max, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<byte[]> zrevrangeByScore(byte[] key, double max, double min, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<Tuple> zrangeByScoreWithScores(byte[] key, double min, double max) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, double max, double min) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<Tuple> zrangeByScoreWithScores(byte[] key, double min, double max, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<byte[]> zrevrangeByScore(byte[] key, byte[] max, byte[] min, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<Tuple> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, byte[] max, byte[] min) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<Tuple> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, double max, double min, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
 
     @Override
-    public Set<Tuple> zrevrangeByScoreWithScores(byte[] key, byte[] max, byte[] min, int offset, int count) {
+    public Long geoadd(byte[] arg0, Map<byte[], GeoCoordinate> arg1) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long zremrangeByRank(byte[] key, long start, long end) {
+    public Long geoadd(byte[] arg0, double arg1, double arg2, byte[] arg3) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long zremrangeByScore(byte[] key, double start, double end) {
+    public Double geodist(byte[] arg0, byte[] arg1, byte[] arg2) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long zremrangeByScore(byte[] key, byte[] start, byte[] end) {
+    public Double geodist(byte[] arg0, byte[] arg1, byte[] arg2, GeoUnit arg3) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long zlexcount(final byte[] key, final byte[] min, final byte[] max) {
+    public List<byte[]> geohash(byte[] arg0, byte[]... arg1) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrangeByLex(final byte[] key, final byte[] min, final byte[] max) {
+    public List<GeoCoordinate> geopos(byte[] arg0, byte[]... arg1) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrangeByLex(final byte[] key, final byte[] min, final byte[] max, int offset, int count) {
+    public List<GeoRadiusResponse> georadius(byte[] arg0, double arg1, double arg2, double arg3, GeoUnit arg4) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrevrangeByLex(final byte[] key, final byte[] max, final byte[] min) {
+    public List<GeoRadiusResponse> georadiusReadonly(byte[] key, double longitude, double latitude, double radius, GeoUnit unit) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Set<byte[]> zrevrangeByLex(final byte[] key, final byte[] max, final byte[] min, int offset, int count) {
+    public List<GeoRadiusResponse> georadius(byte[] arg0, double arg1, double arg2, double arg3, GeoUnit arg4,
+                                             GeoRadiusParam arg5) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long zremrangeByLex(final byte[] key, final byte[] min, final byte[] max) {
+    public List<GeoRadiusResponse> georadiusReadonly(byte[] key, double longitude, double latitude, double radius, GeoUnit unit, GeoRadiusParam param) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long linsert(byte[] key, ListPosition where, byte[] pivot, byte[] value) {
+    public List<GeoRadiusResponse> georadiusByMember(byte[] arg0, byte[] arg1, double arg2, GeoUnit arg3) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long lpushx(byte[] key, byte[]... arg) {
+    public List<GeoRadiusResponse> georadiusByMemberReadonly(byte[] key, byte[] member, double radius, GeoUnit unit) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long rpushx(byte[] key, byte[]... arg) {
+    public List<GeoRadiusResponse> georadiusByMember(byte[] arg0, byte[] arg1, double arg2, GeoUnit arg3,
+                                                     GeoRadiusParam arg4) {
         throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long del(final byte[] key) {
-        return d_del(key).getResult();
-    }
-
-    public OperationResult<Long> d_del(final byte[] key) {
-
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.DEL) {
-
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.del(key);
-            }
-
-        });
-    }
-
-    @Override
-    public Long unlink(byte[] key) {
-        return d_unlink(key).getResult();
-    }
-
-    public OperationResult<Long> d_unlink(final byte[] key) {
-        return connPool.executeWithFailover(new BaseKeyOperation<Long>(key, OpName.UNLINK) {
-            @Override
-            public Long execute(Jedis client, ConnectionContext state) {
-                return client.unlink(key);
-            }
-
-        });
     }
 
     @Override
-    public byte[] echo(byte[] arg) {
+    public List<GeoRadiusResponse> georadiusByMemberReadonly(byte[] key, byte[] member, double radius, GeoUnit unit, GeoRadiusParam param) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long move(byte[] key, int dbIndex) {
+    public List<Long> bitfield(byte[] key, byte[]... arguments) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long bitcount(final byte[] key) {
+    public Long hstrlen(byte[] key, byte[] field) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long bitcount(final byte[] key, long start, long end) {
+    public ScanResult<Entry<byte[], byte[]>> hscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Long pfadd(final byte[] key, final byte[]... elements) {
+    public Long zadd(byte[] arg0, Map<byte[], Double> arg1, ZAddParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public long pfcount(final byte[] key) {
+    public Double zincrby(byte[] arg0, double arg1, byte[] arg2, ZIncrByParams arg3) {
         throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    /**
-     * NOT SUPPORTED ! Use {@link #dyno_scan(CursorBasedResult, int, String...)}
-     * instead.
-     *
-     * @param cursor
-     * @return nothing -- throws UnsupportedOperationException when invoked
-     * @see #dyno_scan(CursorBasedResult, int, String...)
-     */
-    @Override
-    public ScanResult<String> scan(String cursor) {
-        throw new UnsupportedOperationException("Not supported - use dyno_scan(String, CursorBasedResult");
-    }
-
-    public CursorBasedResult<String> dyno_scan(String... pattern) {
-        return this.dyno_scan(10, pattern);
-    }
-
-    public CursorBasedResult<String> dyno_scan(int count, String... pattern) {
-        return this.dyno_scan(null, count, pattern);
     }
 
-    public CursorBasedResult<String> dyno_scan(CursorBasedResult<String> cursor, int count, String... pattern) {
-        if (cursor == null) {
-            // Create a temporary cursor context which will maintain a map of token to rack
-            cursor = new CursorBasedResultImpl<>(new LinkedHashMap<String, ScanResult<String>>());
-        }
-        final Map<String, ScanResult<String>> results = new LinkedHashMap<>();
-
-        List<OperationResult<ScanResult<String>>> opResults = scatterGatherScan(cursor, count, pattern);
-        for (OperationResult<ScanResult<String>> opResult : opResults) {
-            results.put(opResult.getNode().getHostAddress(), opResult.getResult());
-        }
-        return new CursorBasedResultImpl<>(results, ((TokenRackMapper) cursor).getTokenRackMap());
-    }
-
     @Override
-    public String pfmerge(String destkey, String... sourcekeys) {
+    public ScanResult<Tuple> zscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
-    @Override
-    public long pfcount(String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
+    /******************* End Jedis Binary Commands **************/
 
-    @Override
-    public Long touch(String... keys) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
 
     private boolean validHashtag(final String hashtag) {
         return !Strings.isNullOrEmpty(hashtag) && hashtag.length() == 2;
@@ -4236,8 +2929,8 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
 
         // If metadata operation failed, remove the data and throw exception
         if (!zResponse.get().equals(hResponse.get())) {
-            d_hdel(ehashDataKey, field);
-            d_zrem(ehashMetadataKey, field);
+            hdel(ehashDataKey, field);
+            zrem(ehashMetadataKey, field);
             throw new DynoException("Metadata inconsistent with data for expireHash: " + ehashDataKey);
         }
         return hResponse.get();
@@ -4895,250 +3588,6 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
             return new DynoJedisClient(appName, "TestCluster", cp, null, null);
         }
 
-    }
-
-    @Override
-    public ScanResult<String> scan(String arg0, ScanParams arg1) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long geoadd(byte[] arg0, Map<byte[], GeoCoordinate> arg1) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long geoadd(byte[] arg0, double arg1, double arg2, byte[] arg3) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Double geodist(byte[] arg0, byte[] arg1, byte[] arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Double geodist(byte[] arg0, byte[] arg1, byte[] arg2, GeoUnit arg3) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<byte[]> geohash(byte[] arg0, byte[]... arg1) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoCoordinate> geopos(byte[] arg0, byte[]... arg1) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadius(byte[] arg0, double arg1, double arg2, double arg3, GeoUnit arg4) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadiusReadonly(byte[] key, double longitude, double latitude, double radius, GeoUnit unit) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadius(byte[] arg0, double arg1, double arg2, double arg3, GeoUnit arg4,
-                                             GeoRadiusParam arg5) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadiusReadonly(byte[] key, double longitude, double latitude, double radius, GeoUnit unit, GeoRadiusParam param) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadiusByMember(byte[] arg0, byte[] arg1, double arg2, GeoUnit arg3) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadiusByMemberReadonly(byte[] key, byte[] member, double radius, GeoUnit unit) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadiusByMember(byte[] arg0, byte[] arg1, double arg2, GeoUnit arg3,
-                                                     GeoRadiusParam arg4) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadiusByMemberReadonly(byte[] key, byte[] member, double radius, GeoUnit unit, GeoRadiusParam param) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public ScanResult<Entry<byte[], byte[]>> hscan(byte[] arg0, byte[] arg1) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public ScanResult<Entry<byte[], byte[]>> hscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public ScanResult<byte[]> sscan(byte[] arg0, byte[] arg1) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public ScanResult<byte[]> sscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long zadd(byte[] arg0, Map<byte[], Double> arg1, ZAddParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long zadd(byte[] arg0, double arg1, byte[] arg2, ZAddParams arg3) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Double zincrby(byte[] arg0, double arg1, byte[] arg2, ZIncrByParams arg3) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public ScanResult<Tuple> zscan(byte[] arg0, byte[] arg1) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public ScanResult<Tuple> zscan(byte[] arg0, byte[] arg1, ScanParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<Long> bitfield(byte[] key, byte[]... arguments) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long hstrlen(byte[] key, byte[] field) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long bitpos(String arg0, boolean arg1) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long bitpos(String arg0, boolean arg1, BitPosParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long geoadd(String arg0, Map<String, GeoCoordinate> arg1) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long geoadd(String arg0, double arg1, double arg2, String arg3) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Double geodist(String arg0, String arg1, String arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Double geodist(String arg0, String arg1, String arg2, GeoUnit arg3) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<String> geohash(String arg0, String... arg1) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoCoordinate> geopos(String arg0, String... arg1) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadius(String arg0, double arg1, double arg2, double arg3, GeoUnit arg4) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadiusReadonly(String key, double longitude, double latitude, double radius, GeoUnit unit) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadius(String arg0, double arg1, double arg2, double arg3, GeoUnit arg4,
-                                             GeoRadiusParam arg5) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadiusReadonly(String key, double longitude, double latitude, double radius, GeoUnit unit, GeoRadiusParam param) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadiusByMember(String arg0, String arg1, double arg2, GeoUnit arg3) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadiusByMemberReadonly(String key, String member, double radius, GeoUnit unit) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadiusByMember(String arg0, String arg1, double arg2, GeoUnit arg3,
-                                                     GeoRadiusParam arg4) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<GeoRadiusResponse> georadiusByMemberReadonly(String key, String member, double radius, GeoUnit unit, GeoRadiusParam param) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public List<Long> bitfield(String key, String... arguments) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long hstrlen(String key, String field) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public ScanResult<Entry<String, String>> hscan(String arg0, String arg1, ScanParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Long zadd(String arg0, Map<String, Double> arg1, ZAddParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Double zincrby(String arg0, double arg1, String arg2, ZIncrByParams arg3) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public ScanResult<Tuple> zscan(String arg0, String arg1, ScanParams arg2) {
-        throw new UnsupportedOperationException("not yet implemented");
     }
 
 }

@@ -248,16 +248,16 @@ public class DynoJedisDemo {
         }
         // read
         for (int i = 0; i < numKeys; i++) {
-            OperationResult<String> result = client.d_get("DynoClientTest-" + i);
-            System.out.println("Reading Key: " + i + ", Value: " + result.getResult() + " " + result.getNode());
+            String result = client.get("DynoClientTest-" + i);
+            System.out.println("Reading Key: " + i + ", Value: " + result);
         }
 
         // read from shadow cluster
         if (shadowClusterClient != null) {
             // read
             for (int i = 0; i < numKeys; i++) {
-                OperationResult<String> result = shadowClusterClient.d_get("DynoClientTest-" + i);
-                System.out.println("Reading Key: " + i + ", Value: " + result.getResult() + " " + result.getNode());
+                String result = shadowClusterClient.get("DynoClientTest-" + i);
+                System.out.println("Reading Key: " + i + ", Value: " + result);
             }
         }
     }
@@ -285,10 +285,10 @@ public class DynoJedisDemo {
         // read
         System.out.println("Reading keys from dual writer pipeline client");
         for (int i = 0; i < numKeys; i++) {
-            OperationResult<String> result = client.d_hget("DynoClientTest", "DynoClientTest-" + i);
-            System.out.println("Reading Key: DynoClientTest/" + i + ", Value: " + result.getResult() + " " + result.getNode());
-            result = client.d_hget("DynoClientTest-1", "DynoClientTest-" + i);
-            System.out.println("Reading Key: DynoClientTest-1/" + i + ", Value: " + result.getResult() + " " + result.getNode());
+            String result = client.hget("DynoClientTest", "DynoClientTest-" + i);
+            System.out.println("Reading Key: DynoClientTest/" + i + ", Value: " + result);
+            result = client.hget("DynoClientTest-1", "DynoClientTest-" + i);
+            System.out.println("Reading Key: DynoClientTest-1/" + i + ", Value: " + result);
         }
 
         // read from shadow cluster
@@ -296,10 +296,10 @@ public class DynoJedisDemo {
         if (shadowClusterClient != null) {
             // read
             for (int i = 0; i < numKeys; i++) {
-                OperationResult<String> result = shadowClusterClient.d_hget("DynoClientTest", "DynoClientTest-" + i);
-                System.out.println("Reading Key: DynoClientTest/" + i + ", Value: " + result.getResult() + " " + result.getNode());
-                result = shadowClusterClient.d_hget("DynoClientTest-1", "DynoClientTest-" + i);
-                System.out.println("Reading Key: DynoClientTest-1/" + i + ", Value: " + result.getResult() + " " + result.getNode());
+                String result = shadowClusterClient.hget("DynoClientTest", "DynoClientTest-" + i);
+                System.out.println("Reading Key: DynoClientTest/" + i + ", Value: " + result);
+                result = shadowClusterClient.hget("DynoClientTest-1", "DynoClientTest-" + i);
+                System.out.println("Reading Key: DynoClientTest-1/" + i + ", Value: " + result);
             }
         }
 
@@ -337,8 +337,8 @@ public class DynoJedisDemo {
         System.out.println("Writing Key: " + new String(overallKey, Charset.forName("UTF-8")));
 
         // read
-        OperationResult<byte[]> result = client.d_get(newKey);
-        System.out.println("Reading Key: " + new String(newKey, Charset.forName("UTF-8")) + ", Value: " + result.getResult().toString() + " " + result.getNode());
+        byte[] result = client.get(newKey);
+        System.out.println("Reading Key: " + new String(newKey, Charset.forName("UTF-8")) + ", Value: " + Arrays.toString(result));
 
     }
 
@@ -361,9 +361,9 @@ public class DynoJedisDemo {
         }
         // read
         for (int i = 0; i < numKeys; i++) {
-            OperationResult<String> result = client.d_get(i + "-{bar}");
+            String result = client.get(i + "-{bar}");
             System.out.println(
-                    "Reading Key: " + i + "-{bar}" + " , Value: " + result.getResult() + " " + result.getNode());
+                    "Reading Key: " + i + "-{bar}" + " , Value: " + result);
         }
     }
 

@@ -181,6 +181,11 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
         }
 
         @Override
+        public void reset() {
+            jedisClient.resetState();
+        }
+
+        @Override
         public DynoConnectException getLastException() {
             return lastDynoException;
         }

@@ -22,9 +22,11 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
+import com.netflix.dyno.connectionpool.impl.lb.TokenAwareSelection;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
 import com.netflix.dyno.jedis.JedisConnectionFactory.JedisConnection;
+import com.netflix.dyno.jedis.operation.BaseKeyOperation;
 
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -43,11 +45,16 @@ import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static com.netflix.dyno.connectionpool.ConnectionPoolConfiguration.CompressionStrategy;
 
@@ -67,8 +74,9 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     // the cached row key for the pipeline. all subsequent requests to pipeline
     // must be the same. this is used to check that.
     private final AtomicReference<String> theKey = new AtomicReference<String>(null);
-    private final AtomicReference<byte[]> theBinaryKey = new AtomicReference<byte[]>(null);
     private final AtomicReference<String> hashtag = new AtomicReference<String>(null);
+    private final AtomicReference<byte[]> theBinaryKey = new AtomicReference<byte[]>(null);
+    private final AtomicReference<byte[]> hashtagBinary = new AtomicReference<byte[]>(null);
     // used for tracking errors
     private final AtomicReference<DynoException> pipelineEx = new AtomicReference<DynoException>(null);
 
@@ -167,24 +175,51 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     }
 
+    private void checkHashtag(final byte[] key, final byte[] hashtagValue) {
+        if (this.hashtagBinary.get() != null) {
+            verifyHashtagValue(hashtagValue);
+        } else {
+            boolean success = this.hashtagBinary.compareAndSet(null, hashtagValue);
+            if (!success) {
+                verifyHashtagValue(hashtagValue);
+            } else {
+                pipelined(key);
+            }
+        }
+
+    }
+
     /**
-     * Checks that a pipeline is associated with a single key. Binary keys do not
-     * support hashtags.
+     * Checks that a pipeline is associated with a single key.
      *
      * @param key
      */
     private void checkKey(final byte[] key) {
-        if (theBinaryKey.get() != null) {
-            verifyKey(key);
-        } else {
-            boolean success = theBinaryKey.compareAndSet(null, key);
-            if (!success) {
-                // someone already beat us to it. that's fine, just verify
-                // that the key is the same
+        String hashtag = connPool.getConfiguration().getHashtag();
+        if (hashtag == null || hashtag.isEmpty()) {
+            if (theBinaryKey.get() != null) {
                 verifyKey(key);
             } else {
-                pipelined(key);
+                boolean success = theBinaryKey.compareAndSet(null, key);
+                if (!success) {
+                    // someone already beat us to it. that's fine, just verify
+                    // that the key is the same
+                    verifyKey(key);
+                } else {
+                    pipelined(key);
+                }
             }
+        } else {
+            /*
+             * We have a identified a hashtag in the Host object. That means Dynomite has a
+             * defined hashtag. Producing the hashvalue out of the hashtag and using that as
+             * a reference to the pipeline
+             */
+            byte[] hashValue = TokenAwareSelection.getHashValue(key, hashtag);
+            if (hashValue == null || hashValue.length == 0) {
+                hashValue = key;
+            }
+            checkHashtag(key, hashValue);
         }
     }
 
@@ -221,8 +256,7 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
              * defined hashtag. Producing the hashvalue out of the hashtag and using that as
              * a reference to the pipeline
              */
-            String hashValue = StringUtils.substringBetween(key, Character.toString(hashtag.charAt(0)),
-                    Character.toString(hashtag.charAt(1)));
+            String hashValue = TokenAwareSelection.getHashValue(key, hashtag);
             if (Strings.isNullOrEmpty(hashValue)) {
                 hashValue = key;
             }
@@ -234,9 +268,10 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
      * Verifies binary key with pipeline binary key
      */
     private void verifyKey(final byte[] key) {
-        if (!theBinaryKey.get().equals(key)) {
+        if (!Arrays.equals(theBinaryKey.get(), key)) {
             try {
-                throw new RuntimeException("Must have same key for Redis Pipeline in Dynomite. This key: " + key);
+                throw new RuntimeException("Must have same key for Redis Pipeline in Dynomite. This key: "
+                                           + Arrays.toString(key));
             } finally {
                 discardPipelineAndReleaseConnection();
             }
@@ -262,7 +297,20 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
         if (!this.hashtag.get().equals(hashtagValue)) {
             try {
                 throw new RuntimeException(
-                        "Must have same hashtag for Redis Pipeline in Dynomite. This hashvalue: " + hashtagValue);
+                  "Must have same hashtag for Redis Pipeline in Dynomite. This hashvalue: " + hashtagValue);
+            } finally {
+                discardPipelineAndReleaseConnection();
+            }
+        }
+    }
+
+    private void verifyHashtagValue(final byte[] hashtagValue) {
+
+        if (!Arrays.equals(this.hashtagBinary.get(), hashtagValue)) {
+            try {
+                throw new RuntimeException(
+                  "Must have same hashtag for Redis Pipeline in Dynomite. This hashvalue: "
+                  + Arrays.toString(hashtagValue));
             } finally {
                 discardPipelineAndReleaseConnection();
             }
@@ -292,25 +340,45 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
         return value;
     }
 
-    /**
-     * As long as jdk 7 and below is supported we need to define our own function
-     * interfaces
-     */
-    private interface Func0<R> {
-        R call();
+    private String compressValue(String value) {
+        String result = value;
+        int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
+
+        try {
+            // prefer speed over accuracy here so rather than using
+            // getBytes() to get the actual size
+            // just estimate using 2 bytes per character
+            if ((2 * value.length()) > thresholdBytes) {
+                result = ZipUtils.compressStringToBase64String(value);
+            }
+        } catch (IOException e) {
+            Logger.warn("UNABLE to compress [" + value + "]; sending value uncompressed");
+        }
+
+        return result;
     }
 
-    public class PipelineResponse extends Response<String> {
+    private byte[] compressValue(byte[] value) {
+        int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
+
+        if (value.length > thresholdBytes) {
+            try {
+                return ZipUtils.compressBytesNonBase64(value);
+            } catch (IOException e) {
+                Logger.warn("UNABLE to compress byte array [" + value + "]; sending value uncompressed");
+            }
+        }
+
+        return value;
+    }
+
+    public class DecompressPipelineResponse extends Response<String> {
 
         private Response<String> response;
 
-        public PipelineResponse(Builder<String> b) {
+        public DecompressPipelineResponse(Response<String> response) {
             super(BuilderFactory.STRING);
-        }
-
-        public PipelineResponse apply(Func0<? extends Response<String>> f) {
-            this.response = f.call();
-            return this;
+            this.response = response;
         }
 
         @Override
@@ -320,55 +388,28 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     }
 
-    public class PipelineLongResponse extends Response<Long> {
-        private Response<Long> response;
-
-        public PipelineLongResponse(Builder<Long> b) {
-            super(b);
-        }
-
-        public PipelineLongResponse apply(Func0<? extends Response<Long>> f) {
-            this.response = f.call();
-            return this;
-        }
-    }
-
-    public class PipelineListResponse extends Response<List<String>> {
+    public class DecompressPipelineListResponse extends Response<List<String>> {
 
         private Response<List<String>> response;
 
-        public PipelineListResponse(Builder<List> b) {
+        public DecompressPipelineListResponse(Response<List<String>> response) {
             super(BuilderFactory.STRING_LIST);
-        }
-
-        public PipelineListResponse apply(Func0<? extends Response<List<String>>> f) {
-            this.response = f.call();
-            return this;
+            this.response = response;
         }
 
         @Override
         public List<String> get() {
-            return new ArrayList<String>(
-                    CollectionUtils.transform(response.get(), new CollectionUtils.Transform<String, String>() {
-                        @Override
-                        public String get(String s) {
-                            return decompressValue(s);
-                        }
-                    }));
+            return response.get().stream().map(val -> decompressValue(val)).collect(Collectors.toList());
         }
     }
 
-    public class PipelineBinaryResponse extends Response<byte[]> {
+    public class DecompressPipelineBinaryResponse extends Response<byte[]> {
 
         private Response<byte[]> response;
 
-        public PipelineBinaryResponse(Builder<String> b) {
+        public DecompressPipelineBinaryResponse(Response<byte[]> response) {
             super(BuilderFactory.BYTE_ARRAY);
-        }
-
-        public PipelineBinaryResponse apply(Func0<? extends Response<byte[]>> f) {
-            this.response = f.call();
-            return this;
+            this.response = response;
         }
 
         @Override
@@ -378,247 +419,137 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     }
 
-    public class PipelineMapResponse extends Response<Map<String, String>> {
+    public class DecompressPipelineBinaryListResponse extends Response<List<byte[]>> {
 
-        private Response<Map<String, String>> response;
+        private Response<List<byte[]>> response;
 
-        public PipelineMapResponse(Builder<Map<String, String>> b) {
-            super(BuilderFactory.STRING_MAP);
+        public DecompressPipelineBinaryListResponse(Response<List<byte[]>> response) {
+            super(BuilderFactory.BYTE_ARRAY_LIST);
+            this.response = response;
         }
 
         @Override
-        public Map<String, String> get() {
-            return CollectionUtils.transform(response.get(),
-                    new CollectionUtils.MapEntryTransform<String, String, String>() {
-                        @Override
-                        public String get(String key, String val) {
-                            return decompressValue(val);
-                        }
-                    });
-        }
-    }
-
-    public class PipelineBinaryMapResponse extends Response<Map<byte[], byte[]>> {
-
-        private Response<Map<byte[], byte[]>> response;
-
-        public PipelineBinaryMapResponse(Builder<Map<byte[], byte[]>> b) {
-            super(BuilderFactory.BYTE_ARRAY_MAP);
-        }
-
-        public PipelineBinaryMapResponse apply(Func0<? extends Response<Map<byte[], byte[]>>> f) {
-            this.response = f.call();
-            return this;
-        }
-
-        @Override
-        public Map<byte[], byte[]> get() {
-            return CollectionUtils.transform(response.get(),
-                    new CollectionUtils.MapEntryTransform<byte[], byte[], byte[]>() {
-                        @Override
-                        public byte[] get(byte[] key, byte[] val) {
-                            return decompressValue(val);
-                        }
-                    });
+        public List<byte[]> get() {
+            return response.get().stream().map(val -> decompressValue(val)).collect(Collectors.toList());
         }
 
     }
 
-    private abstract class PipelineOperation<R> {
-
-        abstract Response<R> execute(Pipeline jedisPipeline) throws DynoException;
-
-        Response<R> execute(final byte[] key, final OpName opName) {
-            checkKey(key);
-            return executeOperation(opName);
-        }
-
-        Response<R> execute(final String key, final OpName opName) {
-            checkKey(key);
-            return executeOperation(opName);
-        }
-
-        Response<R> executeOperation(final OpName opName) {
-            try {
-                opMonitor.recordOperation(opName.name());
-                return execute(jedisPipeline);
-
-            } catch (JedisConnectionException ex) {
-                handleConnectionException(ex);
-                throw ex;
-            }
-        }
-
-        void handleConnectionException(JedisConnectionException ex) {
+    protected <T> Response<T> execOp(String key, OpName opName, Supplier<Response<T>> fn) {
+        checkKey(key);
+        try {
+            opMonitor.recordOperation(opName.name());
+            return fn.get();
+        } catch (JedisConnectionException ex) {
             DynoException e = new FatalConnectionException(ex).setAttempt(1);
             pipelineEx.set(e);
             cpMonitor.incOperationFailure(connection.getHost(), e);
+            throw ex;
         }
     }
 
-    private abstract class PipelineCompressionOperation<R> extends PipelineOperation<R> {
-
-        /**
-         * Compresses the value based on the threshold defined by
-         * {@link ConnectionPoolConfiguration#getValueCompressionThreshold()}
-         *
-         * @param value
-         * @return
-         */
-        public String compressValue(String value) {
-            String result = value;
-            int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
-
-            try {
-                // prefer speed over accuracy here so rather than using
-                // getBytes() to get the actual size
-                // just estimate using 2 bytes per character
-                if ((2 * value.length()) > thresholdBytes) {
-                    result = ZipUtils.compressStringToBase64String(value);
-                }
-            } catch (IOException e) {
-                Logger.warn("UNABLE to compress [" + value + "]; sending value uncompressed");
-            }
-
-            return result;
+    protected <T> Response<T> execOp(byte[] key, OpName opName, Supplier<Response<T>> fn) {
+        checkKey(key);
+        try {
+            opMonitor.recordOperation(opName.name());
+            return fn.get();
+        } catch (JedisConnectionException ex) {
+            DynoException e = new FatalConnectionException(ex).setAttempt(1);
+            pipelineEx.set(e);
+            cpMonitor.incOperationFailure(connection.getHost(), e);
+            throw ex;
         }
-
-        public byte[] compressValue(byte[] value) {
-            int thresholdBytes = connPool.getConfiguration().getValueCompressionThreshold();
-
-            if (value.length > thresholdBytes) {
-                try {
-                    return ZipUtils.compressBytesNonBase64(value);
-                } catch (IOException e) {
-                    Logger.warn("UNABLE to compress byte array [" + value + "]; sending value uncompressed");
-                }
-            }
-
-            return value;
-        }
-
     }
+
+    protected String compress(String val) {
+        return compressValue(val);
+    }
+
+    protected Map<String, String> compressMap(Map<String, String> val) {
+        Map<String, String> result = new HashMap<>();
+        val.entrySet().stream().forEach(entry -> result.put(entry.getKey(), compressValue(entry.getValue())));
+        return result;
+    }
+
+    protected Response<String> decompress(Response<String> val) {
+        return new DecompressPipelineResponse(val);
+    }
+
+    protected Response<List<String>> decompressList(Response<List<String>> val) {
+        return new DecompressPipelineListResponse(val);
+    }
+
+    protected byte[] compressBin(byte[] val) {
+        return compressValue(val);
+    }
+
+    protected Map<byte[], byte[]> compressBinMap(Map<byte[], byte[]> val) {
+        Map<byte[], byte[]> result = new HashMap<>();
+        val.entrySet().stream().forEach(entry -> result.put(entry.getKey(), compressValue(entry.getValue())));
+        return result;
+    }
+
+    protected Response<byte[]> decompressBin(Response<byte[]> val) {
+        return new DecompressPipelineBinaryResponse(val);
+    }
+
+    protected Response<List<byte[]>> decompressBinList(Response<List<byte[]>> val) {
+        return new DecompressPipelineBinaryListResponse(val);
+    }
+
+    /******************* Jedis String Commands **************/
+
 
     @Override
     public Response<Long> append(final String key, final String value) {
-
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.append(key, value);
-            }
-
-        }.execute(key, OpName.APPEND);
+        return execOp(key, OpName.APPEND, () -> jedisPipeline.append(key, value));
     }
 
     @Override
     public Response<List<String>> blpop(final String arg) {
-
-        return new PipelineOperation<List<String>>() {
-
-            @Override
-            Response<List<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.blpop(arg);
-            }
-        }.execute(arg, OpName.BLPOP);
-
+        return execOp(arg, OpName.BLPOP, () -> jedisPipeline.blpop(arg));
     }
 
     @Override
     public Response<List<String>> brpop(final String arg) {
-        return new PipelineOperation<List<String>>() {
-
-            @Override
-            Response<List<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.brpop(arg);
-            }
-        }.execute(arg, OpName.BRPOP);
-
+        return execOp(arg, OpName.BRPOP, () -> jedisPipeline.brpop(arg));
     }
 
     @Override
     public Response<Long> decr(final String key) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.decr(key);
-            }
-        }.execute(key, OpName.DECR);
+        return execOp(key, OpName.DECR, () -> jedisPipeline.decr(key));
     }
 
     @Override
     public Response<Long> decrBy(final String key, final long integer) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.decrBy(key, integer);
-            }
-        }.execute(key, OpName.DECRBY);
+        return execOp(key, OpName.DECRBY, () -> jedisPipeline.decrBy(key, integer));
     }
 
     @Override
     public Response<Long> del(final String key) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.del(key);
-            }
-        }.execute(key, OpName.DEL);
+        return execOp(key, OpName.DEL, () -> jedisPipeline.del(key));
 
     }
 
     @Override
     public Response<Long> unlink(String key) {
-        return new PipelineOperation<Long>() {
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.unlink(key);
-            }
-        }.execute(key, OpName.UNLINK);
+        return execOp(key, OpName.UNLINK, () -> jedisPipeline.unlink(key));
     }
 
     @Override
     public Response<String> echo(final String string) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.echo(string);
-            }
-        }.execute(string, OpName.ECHO);
+        return execOp(string, OpName.ECHO, () -> jedisPipeline.echo(string));
 
     }
 
     @Override
     public Response<Boolean> exists(final String key) {
-        return new PipelineOperation<Boolean>() {
-
-            @Override
-            Response<Boolean> execute(final Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.exists(key);
-            }
-        }.execute(key, OpName.EXISTS);
+        return execOp(key, OpName.EXISTS, () -> jedisPipeline.exists(key));
     }
 
     @Override
     public Response<Long> expire(final String key, final int seconds) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(final Pipeline jedisPipeline) throws DynoException {
-                long startTime = System.nanoTime() / 1000;
-                try {
-                    return jedisPipeline.expire(key, seconds);
-                } finally {
-                    long duration = System.nanoTime() / 1000 - startTime;
-                    opMonitor.recordSendLatency(OpName.EXPIRE.name(), duration, TimeUnit.MICROSECONDS);
-                }
-            }
-        }.execute(key, OpName.EXPIRE);
+        return execOp(key, OpName.EXPIRE, () -> jedisPipeline.expire(key, seconds));
 
     }
 
@@ -629,13 +560,7 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     @Override
     public Response<Long> expireAt(final String key, final long unixTime) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(final Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.expireAt(key, unixTime);
-            }
-        }.execute(key, OpName.EXPIREAT);
+        return execOp(key, OpName.EXPIREAT, () -> jedisPipeline.expireAt(key, unixTime));
 
     }
 
@@ -647,238 +572,74 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     @Override
     public Response<String> get(final String key) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<String>() {
-                @Override
-                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                    long startTime = System.nanoTime() / 1000;
-                    try {
-                        return jedisPipeline.get(key);
-                    } finally {
-                        long duration = System.nanoTime() / 1000 - startTime;
-                        opMonitor.recordSendLatency(OpName.GET.name(), duration, TimeUnit.MICROSECONDS);
-                    }
-                }
-            }.execute(key, OpName.GET);
+            return execOp(key, OpName.GET, () -> jedisPipeline.get(key));
         } else {
-            return new PipelineCompressionOperation<String>() {
-                @Override
-                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
-                    return new PipelineResponse(null).apply(new Func0<Response<String>>() {
-                        @Override
-                        public Response<String> call() {
-                            return jedisPipeline.get(key);
-                        }
-                    });
-                }
-            }.execute(key, OpName.GET);
+            return execOp(key, OpName.GET, () -> decompress(jedisPipeline.get(key)));
         }
 
     }
 
     @Override
     public Response<Boolean> getbit(final String key, final long offset) {
-        return new PipelineOperation<Boolean>() {
-
-            @Override
-            Response<Boolean> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.getbit(key, offset);
-            }
-        }.execute(key, OpName.GETBIT);
+        return execOp(key, OpName.GETBIT, () -> jedisPipeline.getbit(key, offset));
 
     }
 
     @Override
     public Response<String> getrange(final String key, final long startOffset, final long endOffset) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.getrange(key, startOffset, endOffset);
-            }
-        }.execute(key, OpName.GETRANGE);
+        return execOp(key, OpName.GETRANGE, () -> jedisPipeline.getrange(key, startOffset, endOffset));
 
     }
 
     @Override
     public Response<String> getSet(final String key, final String value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<String>() {
-                @Override
-                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                    return jedisPipeline.getSet(key, value);
-                }
-            }.execute(key, OpName.GETSET);
+            return execOp(key, OpName.GETSET, () -> jedisPipeline.getSet(key, value));
         } else {
-            return new PipelineCompressionOperation<String>() {
-                @Override
-                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
-                    return new PipelineResponse(null).apply(new Func0<Response<String>>() {
-                        @Override
-                        public Response<String> call() {
-                            return jedisPipeline.getSet(key, compressValue(value));
-                        }
-                    });
-                }
-            }.execute(key, OpName.GETSET);
+            return execOp(key, OpName.GETSET, () -> decompress(jedisPipeline.getSet(key, compress(value))));
         }
     }
 
     @Override
     public Response<Long> hdel(final String key, final String... field) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hdel(key, field);
-            }
-        }.execute(key, OpName.HDEL);
+        return execOp(key, OpName.HDEL, () -> jedisPipeline.hdel(key, field));
 
     }
 
     @Override
     public Response<Boolean> hexists(final String key, final String field) {
-        return new PipelineOperation<Boolean>() {
-
-            @Override
-            Response<Boolean> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hexists(key, field);
-            }
-        }.execute(key, OpName.HEXISTS);
+        return execOp(key, OpName.HEXISTS, () -> jedisPipeline.hexists(key, field));
 
     }
 
     @Override
     public Response<String> hget(final String key, final String field) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<String>() {
-                @Override
-                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                    return jedisPipeline.hget(key, field);
-                }
-            }.execute(key, OpName.HGET);
+            return execOp(key, OpName.HGET, () -> jedisPipeline.hget(key, field));
         } else {
-            return new PipelineCompressionOperation<String>() {
-                @Override
-                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
-                    return new PipelineResponse(null).apply(new Func0<Response<String>>() {
-                        @Override
-                        public Response<String> call() {
-                            return jedisPipeline.hget(key, field);
-                        }
-                    });
-                }
-            }.execute(key, OpName.HGET);
+            return execOp(key, OpName.HGET, () -> decompress(jedisPipeline.hget(key, field)));
         }
 
-    }
-
-    /**
-     * This method is a BinaryRedisPipeline command which dyno does not yet properly
-     * support, therefore the interface is not yet implemented.
-     */
-    public Response<byte[]> hget(final byte[] key, final byte[] field) {
-        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<byte[]>() {
-                @Override
-                Response<byte[]> execute(Pipeline jedisPipeline) throws DynoException {
-                    return jedisPipeline.hget(key, field);
-                }
-            }.execute(key, OpName.HGET);
-        } else {
-            return new PipelineCompressionOperation<byte[]>() {
-                @Override
-                Response<byte[]> execute(final Pipeline jedisPipeline) throws DynoException {
-                    return new PipelineBinaryResponse(null).apply(new Func0<Response<byte[]>>() {
-                        @Override
-                        public Response<byte[]> call() {
-                            return jedisPipeline.hget(key, field);
-                        }
-                    });
-                }
-            }.execute(key, OpName.HGET);
-        }
     }
 
     @Override
     public Response<Map<String, String>> hgetAll(final String key) {
-
-        return new PipelineOperation<Map<String, String>>() {
-
-            @Override
-            Response<Map<String, String>> execute(Pipeline jedisPipeline) throws DynoException {
-                long startTime = System.nanoTime() / 1000;
-                try {
-                    return jedisPipeline.hgetAll(key);
-                } finally {
-                    long duration = System.nanoTime() / 1000 - startTime;
-                    opMonitor.recordSendLatency(OpName.HGETALL.name(), duration, TimeUnit.MICROSECONDS);
-                }
-            }
-
-        }.execute(key, OpName.HGETALL);
-
-    }
-
-    public Response<Map<byte[], byte[]>> hgetAll(final byte[] key) {
-        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<Map<byte[], byte[]>>() {
-                @Override
-                Response<Map<byte[], byte[]>> execute(Pipeline jedisPipeline) throws DynoException {
-                    long startTime = System.nanoTime() / 1000;
-                    try {
-                        return jedisPipeline.hgetAll(key);
-                    } finally {
-                        long duration = System.nanoTime() / 1000 - startTime;
-                        opMonitor.recordSendLatency(OpName.HGETALL.name(), duration, TimeUnit.MICROSECONDS);
-                    }
-                }
-            }.execute(key, OpName.HGETALL);
-        } else {
-            return new PipelineCompressionOperation<Map<byte[], byte[]>>() {
-                @Override
-                Response<Map<byte[], byte[]>> execute(final Pipeline jedisPipeline) throws DynoException {
-                    return new PipelineBinaryMapResponse(null).apply(new Func0<Response<Map<byte[], byte[]>>>() {
-                        @Override
-                        public Response<Map<byte[], byte[]>> call() {
-                            return jedisPipeline.hgetAll(key);
-                        }
-                    });
-                }
-            }.execute(key, OpName.HGETALL);
-        }
+        return execOp(key, OpName.HGETALL, () -> jedisPipeline.hgetAll(key));
     }
 
     @Override
     public Response<Long> hincrBy(final String key, final String field, final long value) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hincrBy(key, field, value);
-            }
-        }.execute(key, OpName.HINCRBY);
+        return execOp(key, OpName.HINCRBY, () -> jedisPipeline.hincrBy(key, field, value));
     }
 
     /* not supported by RedisPipeline 2.7.3 */
     public Response<Double> hincrByFloat(final String key, final String field, final double value) {
-        return new PipelineOperation<Double>() {
-
-            @Override
-            Response<Double> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hincrByFloat(key, field, value);
-            }
-        }.execute(key, OpName.HINCRBYFLOAT);
+        return execOp(key, OpName.HINCRBYFLOAT, () -> jedisPipeline.hincrByFloat(key, field, value));
     }
 
     @Override
     public Response<Set<String>> hkeys(final String key) {
-        return new PipelineOperation<Set<String>>() {
-
-            @Override
-            Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hkeys(key);
-            }
-        }.execute(key, OpName.HKEYS);
+        return execOp(key, OpName.HKEYS, () -> jedisPipeline.hkeys(key));
 
     }
 
@@ -888,170 +649,34 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     @Override
     public Response<Long> hlen(final String key) {
-        return new PipelineOperation<Long>() {
+        return execOp(key, OpName.HLEN, () -> jedisPipeline.hlen(key));
 
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hlen(key);
-            }
-        }.execute(key, OpName.HLEN);
-
-    }
-
-    /**
-     * This method is a BinaryRedisPipeline command which dyno does not yet properly
-     * support, therefore the interface is not yet implemented.
-     */
-    public Response<List<byte[]>> hmget(final byte[] key, final byte[]... fields) {
-        return new PipelineOperation<List<byte[]>>() {
-
-            @Override
-            Response<List<byte[]>> execute(Pipeline jedisPipeline) throws DynoException {
-                long startTime = System.nanoTime() / 1000;
-                try {
-                    return jedisPipeline.hmget(key, fields);
-                } finally {
-                    long duration = System.nanoTime() / 1000 - startTime;
-                    opMonitor.recordSendLatency(OpName.HMGET.name(), duration, TimeUnit.MICROSECONDS);
-                }
-            }
-        }.execute(key, OpName.HMGET);
     }
 
     @Override
     public Response<List<String>> hmget(final String key, final String... fields) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<List<String>>() {
-                @Override
-                Response<List<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                    long startTime = System.nanoTime() / 1000;
-                    try {
-                        return jedisPipeline.hmget(key, fields);
-                    } finally {
-                        long duration = System.nanoTime() / 1000 - startTime;
-                        opMonitor.recordSendLatency(OpName.HMGET.name(), duration, TimeUnit.MICROSECONDS);
-                    }
-                }
-            }.execute(key, OpName.HMGET);
+            return execOp(key, OpName.HMGET, () -> jedisPipeline.hmget(key, fields));
         } else {
-            return new PipelineCompressionOperation<List<String>>() {
-                @Override
-                Response<List<String>> execute(final Pipeline jedisPipeline) throws DynoException {
-                    long startTime = System.nanoTime() / 1000;
-                    try {
-                        return new PipelineListResponse(null).apply(new Func0<Response<List<String>>>() {
-                            @Override
-                            public Response<List<String>> call() {
-                                return jedisPipeline.hmget(key, fields);
-                            }
-                        });
-                    } finally {
-                        long duration = System.nanoTime() / 1000 - startTime;
-                        opMonitor.recordSendLatency(OpName.HMGET.name(), duration, TimeUnit.MICROSECONDS);
-                    }
-                }
-            }.execute(key, OpName.HGET);
-        }
-    }
-
-    /**
-     * This method is a BinaryRedisPipeline command which dyno does not yet properly
-     * support, therefore the interface is not yet implemented since only a few
-     * binary commands are present.
-     */
-    public Response<String> hmset(final byte[] key, final Map<byte[], byte[]> hash) {
-        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<String>() {
-                @Override
-                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                    long startTime = System.nanoTime() / 1000;
-                    try {
-                        return jedisPipeline.hmset(key, hash);
-                    } finally {
-                        long duration = System.nanoTime() / 1000 - startTime;
-                        opMonitor.recordSendLatency(OpName.HMSET.name(), duration, TimeUnit.MICROSECONDS);
-                    }
-                }
-            }.execute(key, OpName.HMSET);
-        } else {
-            return new PipelineCompressionOperation<String>() {
-                @Override
-                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
-                    return new PipelineResponse(null).apply(new Func0<Response<String>>() {
-                        @Override
-                        public Response<String> call() {
-                            return jedisPipeline.hmset(key, CollectionUtils.transform(hash,
-                                    new CollectionUtils.MapEntryTransform<byte[], byte[], byte[]>() {
-                                        @Override
-                                        public byte[] get(byte[] key, byte[] val) {
-                                            return compressValue(val);
-                                        }
-                                    }));
-                        }
-                    });
-                }
-            }.execute(key, OpName.HMSET);
+            return execOp(key, OpName.HMGET, () -> decompressList(jedisPipeline.hmget(key, fields)));
         }
     }
 
     @Override
     public Response<String> hmset(final String key, final Map<String, String> hash) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<String>() {
-                @Override
-                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                    long startTime = System.nanoTime() / 1000;
-                    try {
-                        return jedisPipeline.hmset(key, hash);
-                    } finally {
-                        long duration = System.nanoTime() / 1000 - startTime;
-                        opMonitor.recordSendLatency(OpName.HMSET.name(), duration, TimeUnit.MICROSECONDS);
-                    }
-                }
-            }.execute(key, OpName.HMSET);
+            return execOp(key, OpName.HMSET, () -> jedisPipeline.hmset(key, hash));
         } else {
-            return new PipelineCompressionOperation<String>() {
-                @Override
-                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
-                    return new PipelineResponse(null).apply(new Func0<Response<String>>() {
-                        @Override
-                        public Response<String> call() {
-                            return jedisPipeline.hmset(key, CollectionUtils.transform(hash,
-                                    new CollectionUtils.MapEntryTransform<String, String, String>() {
-                                        @Override
-                                        public String get(String key, String val) {
-                                            return compressValue(val);
-                                        }
-                                    }));
-                        }
-                    });
-                }
-            }.execute(key, OpName.HMSET);
+            return execOp(key, OpName.HMSET, () -> jedisPipeline.hmset(key, compressMap(hash)));
         }
-
     }
 
     @Override
     public Response<Long> hset(final String key, final String field, final String value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<Long>() {
-                @Override
-                Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                    return jedisPipeline.hset(key, field, value);
-                }
-            }.execute(key, OpName.HSET);
+            return execOp(key, OpName.HSET, () -> jedisPipeline.hset(key, field, value));
         } else {
-            return new PipelineCompressionOperation<Long>() {
-                @Override
-                Response<Long> execute(final Pipeline jedisPipeline) throws DynoException {
-                    return new PipelineLongResponse(null).apply(new Func0<Response<Long>>() {
-                        @Override
-                        public Response<Long> call() {
-                            return jedisPipeline.hset(key, field, compressValue(value));
-                        }
-                    });
-                }
-            }.execute(key, OpName.HSET);
+            return execOp(key, OpName.HSET, () -> jedisPipeline.hset(key, field, compress(value)));
         }
     }
 
@@ -1060,535 +685,224 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
         throw new UnsupportedOperationException("not yet implemented");
     }
 
-    /**
-     * This method is a BinaryRedisPipeline command which dyno does not yet properly
-     * support, therefore the interface is not yet implemented.
-     */
-    public Response<Long> hset(final byte[] key, final byte[] field, final byte[] value) {
-        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<Long>() {
-                @Override
-                Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                    return jedisPipeline.hset(key, field, value);
-                }
-            }.execute(key, OpName.HSET);
-        } else {
-            return new PipelineCompressionOperation<Long>() {
-                @Override
-                Response<Long> execute(final Pipeline jedisPipeline) throws DynoException {
-                    return new PipelineLongResponse(null).apply(new Func0<Response<Long>>() {
-                        @Override
-                        public Response<Long> call() {
-                            return jedisPipeline.hset(key, field, compressValue(value));
-                        }
-                    });
-                }
-            }.execute(key, OpName.HSET);
-        }
-    }
-
-    @Override
-    public Response<Long> hset(byte[] key, Map<byte[], byte[]> hash) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
     @Override
     public Response<Long> hsetnx(final String key, final String field, final String value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<Long>() {
-                @Override
-                Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                    return jedisPipeline.hsetnx(key, field, value);
-                }
-            }.execute(key, OpName.HSETNX);
+            return execOp(key, OpName.HSETNX, () -> jedisPipeline.hsetnx(key, field, value));
         } else {
-            return new PipelineCompressionOperation<Long>() {
-                @Override
-                Response<Long> execute(final Pipeline jedisPipeline) throws DynoException {
-                    return new PipelineLongResponse(null).apply(new Func0<Response<Long>>() {
-                        @Override
-                        public Response<Long> call() {
-                            return jedisPipeline.hsetnx(key, field, compressValue(value));
-                        }
-                    });
-                }
-            }.execute(key, OpName.HSETNX);
+            return execOp(key, OpName.HSETNX, () -> jedisPipeline.hsetnx(key, field, compress(value)));
         }
     }
 
     @Override
     public Response<List<String>> hvals(final String key) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<List<String>>() {
-                @Override
-                Response<List<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                    return jedisPipeline.hvals(key);
-                }
-            }.execute(key, OpName.HVALS);
+            return execOp(key, OpName.HVALS, () -> jedisPipeline.hvals(key));
         } else {
-            return new PipelineCompressionOperation<List<String>>() {
-                @Override
-                Response<List<String>> execute(final Pipeline jedisPipeline) throws DynoException {
-                    return new PipelineListResponse(null).apply(new Func0<Response<List<String>>>() {
-                        @Override
-                        public Response<List<String>> call() {
-                            return jedisPipeline.hvals(key);
-                        }
-                    });
-                }
-            }.execute(key, OpName.HVALS);
+            return execOp(key, OpName.HVALS, () -> decompressList(jedisPipeline.hvals(key)));
         }
 
     }
 
     @Override
     public Response<Long> incr(final String key) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.incr(key);
-            }
-
-        }.execute(key, OpName.INCR);
+        return execOp(key, OpName.INCR, () -> jedisPipeline.incr(key));
 
     }
 
     @Override
     public Response<Long> incrBy(final String key, final long integer) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.incrBy(key, integer);
-            }
-
-        }.execute(key, OpName.INCRBY);
+        return execOp(key, OpName.INCRBY, () -> jedisPipeline.incrBy(key, integer));
 
     }
 
     /* not supported by RedisPipeline 2.7.3 */
     public Response<Double> incrByFloat(final String key, final double increment) {
-        return new PipelineOperation<Double>() {
-
-            @Override
-            Response<Double> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.incrByFloat(key, increment);
-            }
-
-        }.execute(key, OpName.INCRBYFLOAT);
+        return execOp(key, OpName.INCRBYFLOAT, () -> jedisPipeline.incrByFloat(key, increment));
 
     }
 
     @Override
     public Response<String> psetex(String key, long milliseconds, String value) {
-        return null;
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<String> lindex(final String key, final long index) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.lindex(key, index);
-            }
-
-        }.execute(key, OpName.LINDEX);
+        return execOp(key, OpName.LINDEX, () -> jedisPipeline.lindex(key, index));
 
     }
 
     @Override
     public Response<Long> linsert(final String key, final ListPosition where, final String pivot, final String value) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.linsert(key, where, pivot, value);
-            }
-
-        }.execute(key, OpName.LINSERT);
+        return execOp(key, OpName.LINSERT, () -> jedisPipeline.linsert(key, where, pivot, value));
 
     }
 
     @Override
     public Response<Long> llen(final String key) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.llen(key);
-            }
-
-        }.execute(key, OpName.LLEN);
+        return execOp(key, OpName.LLEN, () -> jedisPipeline.llen(key));
 
     }
 
     @Override
     public Response<String> lpop(final String key) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.lpop(key);
-            }
-
-        }.execute(key, OpName.LPOP);
+        return execOp(key, OpName.LPOP, () -> jedisPipeline.lpop(key));
 
     }
 
     @Override
     public Response<Long> lpush(final String key, final String... string) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.lpush(key, string);
-            }
-
-        }.execute(key, OpName.LPUSH);
+        return execOp(key, OpName.LPUSH, () -> jedisPipeline.lpush(key, string));
 
     }
 
     @Override
     public Response<Long> lpushx(final String key, final String... string) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.lpushx(key, string);
-            }
-
-        }.execute(key, OpName.LPUSHX);
+        return execOp(key, OpName.LPUSHX, () -> jedisPipeline.lpushx(key, string));
 
     }
 
     @Override
     public Response<List<String>> lrange(final String key, final long start, final long end) {
-        return new PipelineOperation<List<String>>() {
-
-            @Override
-            Response<List<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.lrange(key, start, end);
-            }
-
-        }.execute(key, OpName.LRANGE);
+        return execOp(key, OpName.LRANGE, () -> jedisPipeline.lrange(key, start, end));
 
     }
 
     @Override
     public Response<Long> lrem(final String key, final long count, final String value) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.lrem(key, count, value);
-            }
-
-        }.execute(key, OpName.LREM);
+        return execOp(key, OpName.LREM, () -> jedisPipeline.lrem(key, count, value));
 
     }
 
     @Override
     public Response<String> lset(final String key, final long index, final String value) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.lset(key, index, value);
-            }
-
-        }.execute(key, OpName.LSET);
+        return execOp(key, OpName.LSET, () -> jedisPipeline.lset(key, index, value));
 
     }
 
     @Override
     public Response<String> ltrim(final String key, final long start, final long end) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.ltrim(key, start, end);
-            }
-
-        }.execute(key, OpName.LTRIM);
+        return execOp(key, OpName.LTRIM, () -> jedisPipeline.ltrim(key, start, end));
 
     }
 
     @Override
     public Response<Long> move(final String key, final int dbIndex) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.move(key, dbIndex);
-            }
-
-        }.execute(key, OpName.MOVE);
+        return execOp(key, OpName.MOVE, () -> jedisPipeline.move(key, dbIndex));
 
     }
 
     @Override
     public Response<Long> persist(final String key) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.persist(key);
-            }
-
-        }.execute(key, OpName.PERSIST);
+        return execOp(key, OpName.PERSIST, () -> jedisPipeline.persist(key));
 
     }
 
     /* not supported by RedisPipeline 2.7.3 */
     public Response<String> rename(final String oldkey, final String newkey) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.rename(oldkey, newkey);
-            }
-        }.execute(oldkey, OpName.RENAME);
+        return execOp(oldkey, OpName.RENAME, () -> jedisPipeline.rename(oldkey, newkey));
 
     }
 
     /* not supported by RedisPipeline 2.7.3 */
     public Response<Long> renamenx(final String oldkey, final String newkey) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.renamenx(oldkey, newkey);
-            }
-        }.execute(oldkey, OpName.RENAMENX);
+        return execOp(oldkey, OpName.RENAMENX, () -> jedisPipeline.renamenx(oldkey, newkey));
 
     }
 
     @Override
     public Response<String> rpop(final String key) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.rpop(key);
-            }
-
-        }.execute(key, OpName.RPOP);
+        return execOp(key, OpName.RPOP, () -> jedisPipeline.rpop(key));
 
     }
 
     @Override
     public Response<Long> rpush(final String key, final String... string) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.rpush(key, string);
-            }
-
-        }.execute(key, OpName.RPUSH);
+        return execOp(key, OpName.RPUSH, () -> jedisPipeline.rpush(key, string));
 
     }
 
     @Override
     public Response<Long> rpushx(final String key, final String... string) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.rpushx(key, string);
-            }
-
-        }.execute(key, OpName.RPUSHX);
+        return execOp(key, OpName.RPUSHX, () -> jedisPipeline.rpushx(key, string));
 
     }
 
     @Override
     public Response<Long> sadd(final String key, final String... member) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.sadd(key, member);
-            }
-
-        }.execute(key, OpName.SADD);
+        return execOp(key, OpName.SADD, () -> jedisPipeline.sadd(key, member));
 
     }
 
     @Override
     public Response<Long> scard(final String key) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.scard(key);
-            }
-
-        }.execute(key, OpName.SCARD);
+        return execOp(key, OpName.SCARD, () -> jedisPipeline.scard(key));
 
     }
 
     @Override
     public Response<Boolean> sismember(final String key, final String member) {
-        return new PipelineOperation<Boolean>() {
-
-            @Override
-            Response<Boolean> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.sismember(key, member);
-            }
-
-        }.execute(key, OpName.SISMEMBER);
+        return execOp(key, OpName.SISMEMBER, () -> jedisPipeline.sismember(key, member));
     }
 
     @Override
     public Response<String> set(final String key, final String value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<String>() {
-                @Override
-                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                    long startTime = System.nanoTime() / 1000;
-                    try {
-                        return jedisPipeline.set(key, value);
-                    } finally {
-                        long duration = System.nanoTime() / 1000 - startTime;
-                        opMonitor.recordSendLatency(OpName.SET.name(), duration, TimeUnit.MICROSECONDS);
-                    }
-                }
-
-            }.execute(key, OpName.SET);
+            return execOp(key, OpName.SET, () -> jedisPipeline.set(key, value));
         } else {
-            return new PipelineCompressionOperation<String>() {
-                @Override
-                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
-                    long startTime = System.nanoTime() / 1000;
-                    try {
-                        return new PipelineResponse(null).apply(new Func0<Response<String>>() {
-                            @Override
-                            public Response<String> call() {
-                                return jedisPipeline.set(key, compressValue(value));
-                            }
-                        });
-                    } finally {
-                        long duration = System.nanoTime() / 1000 - startTime;
-                        opMonitor.recordSendLatency(OpName.SET.name(), duration, TimeUnit.MICROSECONDS);
-                    }
-                }
-            }.execute(key, OpName.SET);
+            return execOp(key, OpName.SET, () -> jedisPipeline.set(key, compress(value)));
         }
     }
 
     @Override
     public Response<Boolean> setbit(final String key, final long offset, final boolean value) {
-        return new PipelineOperation<Boolean>() {
-
-            @Override
-            Response<Boolean> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.setbit(key, offset, value);
-            }
-
-        }.execute(key, OpName.SETBIT);
+        return execOp(key, OpName.SETBIT, () -> jedisPipeline.setbit(key, offset, value));
 
     }
 
     @Override
     public Response<String> setex(final String key, final int seconds, final String value) {
         if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
-            return new PipelineOperation<String>() {
-                @Override
-                Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                    return jedisPipeline.setex(key, seconds, value);
-                }
-            }.execute(key, OpName.SETEX);
+            return execOp(key, OpName.SETEX, () -> jedisPipeline.setex(key, seconds, value));
         } else {
-            return new PipelineCompressionOperation<String>() {
-                @Override
-                Response<String> execute(final Pipeline jedisPipeline) throws DynoException {
-                    return new PipelineResponse(null).apply(new Func0<Response<String>>() {
-                        @Override
-                        public Response<String> call() {
-                            return jedisPipeline.setex(key, seconds, compressValue(value));
-                        }
-                    });
-                }
-            }.execute(key, OpName.SETEX);
+            return execOp(key, OpName.SETEX, () -> jedisPipeline.setex(key, seconds, compress(value)));
         }
 
     }
 
     @Override
     public Response<Long> setnx(final String key, final String value) {
-        return new PipelineOperation<Long>() {
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.setnx(key, value);
-            }
-        }.execute(key, OpName.SETNX);
+        return execOp(key, OpName.SETNX, () -> jedisPipeline.setnx(key, value));
     }
 
     @Override
     public Response<Long> setrange(final String key, final long offset, final String value) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.setrange(key, offset, value);
-            }
-
-        }.execute(key, OpName.SETRANGE);
+        return execOp(key, OpName.SETRANGE, () -> jedisPipeline.setrange(key, offset, value));
 
     }
 
     @Override
     public Response<Set<String>> smembers(final String key) {
-        return new PipelineOperation<Set<String>>() {
-
-            @Override
-            Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.smembers(key);
-            }
-
-        }.execute(key, OpName.SMEMBERS);
+        return execOp(key, OpName.SMEMBERS, () -> jedisPipeline.smembers(key));
 
     }
 
     @Override
     public Response<List<String>> sort(final String key) {
-        return new PipelineOperation<List<String>>() {
-
-            @Override
-            Response<List<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.sort(key);
-            }
-
-        }.execute(key, OpName.SORT);
+        return execOp(key, OpName.SORT, () -> jedisPipeline.sort(key));
 
     }
 
     @Override
     public Response<List<String>> sort(final String key, final SortingParams sortingParameters) {
-        return new PipelineOperation<List<String>>() {
-
-            @Override
-            Response<List<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.sort(key, sortingParameters);
-            }
-
-        }.execute(key, OpName.SORT);
+        return execOp(key, OpName.SORT, () -> jedisPipeline.sort(key, sortingParameters));
 
     }
 
     @Override
     public Response<String> spop(final String key) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.spop(key);
-            }
-
-        }.execute(key, OpName.SPOP);
+        return execOp(key, OpName.SPOP, () -> jedisPipeline.spop(key));
 
     }
 
@@ -1599,67 +913,33 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     @Override
     public Response<String> srandmember(final String key) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.srandmember(key);
-            }
-
-        }.execute(key, OpName.SRANDMEMBER);
+        return execOp(key, OpName.SRANDMEMBER, () -> jedisPipeline.srandmember(key));
 
     }
 
     @Override
     public Response<Long> srem(final String key, final String... member) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.srem(key, member);
-            }
-
-        }.execute(key, OpName.SREM);
+        return execOp(key, OpName.SREM, () -> jedisPipeline.srem(key, member));
 
     }
 
-    /**
-     * This method is not supported by the BinaryRedisPipeline interface.
-     */
     public Response<ScanResult<String>> sscan(final String key, final int cursor) {
         throw new UnsupportedOperationException("'SSCAN' cannot be called in pipeline");
     }
 
-    /**
-     * This method is not supported by the BinaryRedisPipeline interface.
-     */
     public Response<ScanResult<String>> sscan(final String key, final String cursor) {
         throw new UnsupportedOperationException("'SSCAN' cannot be called in pipeline");
     }
 
     @Override
     public Response<Long> strlen(final String key) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.strlen(key);
-            }
-
-        }.execute(key, OpName.STRLEN);
+        return execOp(key, OpName.STRLEN, () -> jedisPipeline.strlen(key));
 
     }
 
     @Override
     public Response<String> substr(final String key, final int start, final int end) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.substr(key, start, end);
-            }
-
-        }.execute(key, OpName.SUBSTR);
+        return execOp(key, OpName.SUBSTR, () -> jedisPipeline.substr(key, start, end));
 
     }
 
@@ -1670,442 +950,205 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     @Override
     public Response<Long> ttl(final String key) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.ttl(key);
-            }
-
-        }.execute(key, OpName.TTL);
+        return execOp(key, OpName.TTL, () -> jedisPipeline.ttl(key));
 
     }
 
     @Override
     public Response<Long> pttl(String key) {
-        return new PipelineOperation<Long>() {
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.pttl(key);
-            }
-        }.execute(key, OpName.PTTL);
+        return execOp(key, OpName.PTTL, () -> jedisPipeline.pttl(key));
     }
 
     @Override
     public Response<String> type(final String key) {
-        return new PipelineOperation<String>() {
-
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.type(key);
-            }
-
-        }.execute(key, OpName.TYPE);
+        return execOp(key, OpName.TYPE, () -> jedisPipeline.type(key));
 
     }
 
     @Override
     public Response<Long> zadd(final String key, final double score, final String member) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zadd(key, score, member);
-            }
-
-        }.execute(key, OpName.ZADD);
+        return execOp(key, OpName.ZADD, () -> jedisPipeline.zadd(key, score, member));
 
     }
 
     @Override
     public Response<Long> zadd(final String key, final Map<String, Double> scoreMembers) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zadd(key, scoreMembers);
-            }
-
-        }.execute(key, OpName.ZADD);
+        return execOp(key, OpName.ZADD, () -> jedisPipeline.zadd(key, scoreMembers));
 
     }
 
     @Override
     public Response<Long> zcard(final String key) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zcard(key);
-            }
-
-        }.execute(key, OpName.ZCARD);
+        return execOp(key, OpName.ZCARD, () -> jedisPipeline.zcard(key));
 
     }
 
     @Override
     public Response<Long> zcount(final String key, final double min, final double max) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zcount(key, min, max);
-            }
-
-        }.execute(key, OpName.ZCOUNT);
+        return execOp(key, OpName.ZCOUNT, () -> jedisPipeline.zcount(key, min, max));
 
     }
 
     @Override
     public Response<Long> zcount(String key, String min, String max) {
-        return new PipelineOperation<Long>() {
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zcount(key, min, max);
-            }
-        }.execute(key, OpName.ZCOUNT);
+        return execOp(key, OpName.ZCOUNT, () -> jedisPipeline.zcount(key, min, max));
     }
 
     @Override
     public Response<Double> zincrby(final String key, final double score, final String member) {
-        return new PipelineOperation<Double>() {
-
-            @Override
-            Response<Double> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zincrby(key, score, member);
-            }
-
-        }.execute(key, OpName.ZINCRBY);
+        return execOp(key, OpName.ZINCRBY, () -> jedisPipeline.zincrby(key, score, member));
 
     }
 
     @Override
     public Response<Set<String>> zrange(final String key, final long start, final long end) {
-        return new PipelineOperation<Set<String>>() {
-
-            @Override
-            Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrange(key, start, end);
-            }
-
-        }.execute(key, OpName.ZRANGE);
+        return execOp(key, OpName.ZRANGE, () -> jedisPipeline.zrange(key, start, end));
 
     }
 
     @Override
     public Response<Set<String>> zrangeByScore(final String key, final double min, final double max) {
-        return new PipelineOperation<Set<String>>() {
-
-            @Override
-            Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrangeByScore(key, min, max);
-            }
-
-        }.execute(key, OpName.ZRANGEBYSCORE);
+        return execOp(key, OpName.ZRANGEBYSCORE, () -> jedisPipeline.zrangeByScore(key, min, max));
 
     }
 
     @Override
     public Response<Set<String>> zrangeByScore(final String key, final String min, final String max) {
-        return new PipelineOperation<Set<String>>() {
-
-            @Override
-            Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrangeByScore(key, min, max);
-            }
-
-        }.execute(key, OpName.ZRANGEBYSCORE);
+        return execOp(key, OpName.ZRANGEBYSCORE, () -> jedisPipeline.zrangeByScore(key, min, max));
 
     }
 
     @Override
     public Response<Set<String>> zrangeByScore(final String key, final double min, final double max, final int offset,
                                                final int count) {
-        return new PipelineOperation<Set<String>>() {
-
-            @Override
-            Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrangeByScore(key, min, max, offset, count);
-            }
-
-        }.execute(key, OpName.ZRANGEBYSCORE);
+        return execOp(key, OpName.ZRANGEBYSCORE, () -> jedisPipeline.zrangeByScore(key, min, max, offset, count));
 
     }
 
     @Override
     public Response<Set<String>> zrangeByScore(String key, String min, String max, int offset, int count) {
-        return new PipelineOperation<Set<String>>() {
-
-            @Override
-            Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrangeByScore(key, min, max, offset, count);
-            }
-
-        }.execute(key, OpName.ZRANGEBYSCORE);
+        return execOp(key, OpName.ZRANGEBYSCORE, () -> jedisPipeline.zrangeByScore(key, min, max, offset, count));
     }
 
     @Override
     public Response<Set<Tuple>> zrangeByScoreWithScores(final String key, final double min, final double max) {
-        return new PipelineOperation<Set<Tuple>>() {
-
-            @Override
-            Response<Set<Tuple>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrangeByScoreWithScores(key, min, max);
-            }
-
-        }.execute(key, OpName.ZRANGEBYSCOREWITHSCORES);
+        return execOp(key, OpName.ZRANGEBYSCOREWITHSCORES, () -> jedisPipeline.zrangeByScoreWithScores(key, min, max));
 
     }
 
     @Override
     public Response<Set<Tuple>> zrangeByScoreWithScores(final String key, final double min, final double max,
                                                         final int offset, final int count) {
-        return new PipelineOperation<Set<Tuple>>() {
-
-            @Override
-            Response<Set<Tuple>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrangeByScoreWithScores(key, min, max, offset, count);
-            }
-
-        }.execute(key, OpName.ZRANGEBYSCOREWITHSCORES);
+        return execOp(key, OpName.ZRANGEBYSCOREWITHSCORES, () -> jedisPipeline.zrangeByScoreWithScores(key, min, max, offset, count));
 
     }
 
     @Override
     public Response<Set<String>> zrevrangeByScore(final String key, final double max, final double min) {
-        return new PipelineOperation<Set<String>>() {
-
-            @Override
-            Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrevrangeByScore(key, max, min);
-            }
-
-        }.execute(key, OpName.ZREVRANGEBYSCORE);
+        return execOp(key, OpName.ZREVRANGEBYSCORE, () -> jedisPipeline.zrevrangeByScore(key, max, min));
 
     }
 
     @Override
     public Response<Set<String>> zrevrangeByScore(final String key, final String max, final String min) {
-        return new PipelineOperation<Set<String>>() {
-
-            @Override
-            Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrevrangeByScore(key, max, min);
-            }
-
-        }.execute(key, OpName.ZREVRANGEBYSCORE);
+        return execOp(key, OpName.ZREVRANGEBYSCORE, () -> jedisPipeline.zrevrangeByScore(key, max, min));
 
     }
 
     @Override
     public Response<Set<String>> zrevrangeByScore(final String key, final double max, final double min,
                                                   final int offset, final int count) {
-        return new PipelineOperation<Set<String>>() {
-
-            @Override
-            Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrevrangeByScore(key, max, min, offset, count);
-            }
-
-        }.execute(key, OpName.ZREVRANGEBYSCORE);
+        return execOp(key, OpName.ZREVRANGEBYSCORE, () -> jedisPipeline.zrevrangeByScore(key, max, min, offset, count));
 
     }
 
     @Override
     public Response<Set<String>> zrevrangeByScore(String key, String max, String min, int offset, int count) {
-        return new PipelineOperation<Set<String>>() {
-
-            @Override
-            Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrevrangeByScore(key, max, min, offset, count);
-            }
-
-        }.execute(key, OpName.ZREVRANGEBYSCORE);
+        return execOp(key, OpName.ZREVRANGEBYSCORE, () -> jedisPipeline.zrevrangeByScore(key, max, min, offset, count));
     }
 
     @Override
     public Response<Set<Tuple>> zrevrangeByScoreWithScores(final String key, final double max, final double min) {
-        return new PipelineOperation<Set<Tuple>>() {
-
-            @Override
-            Response<Set<Tuple>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrevrangeByScoreWithScores(key, max, min);
-            }
-
-        }.execute(key, OpName.ZREVRANGEBYSCOREWITHSCORES);
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, () -> jedisPipeline.zrevrangeByScoreWithScores(key, max, min));
 
     }
 
     @Override
     public Response<Set<Tuple>> zrevrangeByScoreWithScores(String key, String max, String min) {
-        return new PipelineOperation<Set<Tuple>>() {
-
-            @Override
-            Response<Set<Tuple>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrevrangeByScoreWithScores(key, max, min);
-            }
-
-        }.execute(key, OpName.ZREVRANGEBYSCOREWITHSCORES);
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, () -> jedisPipeline.zrevrangeByScoreWithScores(key, max, min));
     }
 
     @Override
     public Response<Set<Tuple>> zrevrangeByScoreWithScores(final String key, final double max, final double min,
                                                            final int offset, final int count) {
-        return new PipelineOperation<Set<Tuple>>() {
-
-            @Override
-            Response<Set<Tuple>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrevrangeByScoreWithScores(key, max, min, offset, count);
-            }
-
-        }.execute(key, OpName.ZREVRANGEBYSCOREWITHSCORES);
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, () -> jedisPipeline.zrevrangeByScoreWithScores(key, max, min, offset, count));
 
     }
 
     @Override
     public Response<Set<Tuple>> zrevrangeByScoreWithScores(String key, String max, String min, int offset, int count) {
-        return new PipelineOperation<Set<Tuple>>() {
-
-            @Override
-            Response<Set<Tuple>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrevrangeByScoreWithScores(key, max, min, offset, count);
-            }
-
-        }.execute(key, OpName.ZREVRANGEBYSCOREWITHSCORES);
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, () -> jedisPipeline.zrevrangeByScoreWithScores(key, max, min, offset, count));
     }
 
     @Override
     public Response<Set<Tuple>> zrangeWithScores(final String key, final long start, final long end) {
-        return new PipelineOperation<Set<Tuple>>() {
-
-            @Override
-            Response<Set<Tuple>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrangeWithScores(key, start, end);
-            }
-
-        }.execute(key, OpName.ZRANGEWITHSCORES);
+        return execOp(key, OpName.ZRANGEWITHSCORES, () -> jedisPipeline.zrangeWithScores(key, start, end));
 
     }
 
     @Override
     public Response<Long> zrank(final String key, final String member) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrank(key, member);
-            }
-
-        }.execute(key, OpName.ZRANK);
+        return execOp(key, OpName.ZRANK, () -> jedisPipeline.zrank(key, member));
 
     }
 
     @Override
     public Response<Long> zrem(final String key, final String... member) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrem(key, member);
-            }
-
-        }.execute(key, OpName.ZREM);
+        return execOp(key, OpName.ZREM, () -> jedisPipeline.zrem(key, member));
 
     }
 
     @Override
     public Response<Long> zremrangeByRank(final String key, final long start, final long end) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zremrangeByRank(key, start, end);
-            }
-
-        }.execute(key, OpName.ZREMRANGEBYRANK);
+        return execOp(key, OpName.ZREMRANGEBYRANK, () -> jedisPipeline.zremrangeByRank(key, start, end));
 
     }
 
     @Override
     public Response<Long> zremrangeByScore(final String key, final double start, final double end) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zremrangeByScore(key, start, end);
-            }
-
-        }.execute(key, OpName.ZREMRANGEBYSCORE);
+        return execOp(key, OpName.ZREMRANGEBYSCORE, () -> jedisPipeline.zremrangeByScore(key, start, end));
 
     }
 
     @Override
     public Response<Long> zremrangeByScore(String key, String min, String max) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zremrangeByScore(key, min, max);
-            }
-
-        }.execute(key, OpName.ZREMRANGEBYSCORE);
+        return execOp(key, OpName.ZREMRANGEBYSCORE, () -> jedisPipeline.zremrangeByScore(key, min, max));
     }
 
     @Override
     public Response<Set<String>> zrevrange(final String key, final long start, final long end) {
-        return new PipelineOperation<Set<String>>() {
-
-            @Override
-            Response<Set<String>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrevrange(key, start, end);
-            }
-
-        }.execute(key, OpName.ZREVRANGE);
+        return execOp(key, OpName.ZREVRANGE, () -> jedisPipeline.zrevrange(key, start, end));
 
     }
 
     @Override
     public Response<Set<Tuple>> zrevrangeWithScores(final String key, final long start, final long end) {
-        return new PipelineOperation<Set<Tuple>>() {
-
-            @Override
-            Response<Set<Tuple>> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrevrangeWithScores(key, start, end);
-            }
-
-        }.execute(key, OpName.ZREVRANGEWITHSCORES);
+        return execOp(key, OpName.ZREVRANGEWITHSCORES, () -> jedisPipeline.zrevrangeWithScores(key, start, end));
 
     }
 
     @Override
     public Response<Long> zrevrank(final String key, final String member) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zrevrank(key, member);
-            }
-
-        }.execute(key, OpName.ZREVRANK);
+        return execOp(key, OpName.ZREVRANK, () -> jedisPipeline.zrevrank(key, member));
 
     }
 
     @Override
     public Response<Double> zscore(final String key, final String member) {
-        return new PipelineOperation<Double>() {
-
-            @Override
-            Response<Double> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zscore(key, member);
-            }
-
-        }.execute(key, OpName.ZSCORE);
+        return execOp(key, OpName.ZSCORE, () -> jedisPipeline.zscore(key, member));
 
     }
 
-    /**
-     * This method is not supported by the BinaryRedisPipeline interface.
-     */
     public Response<ScanResult<Tuple>> zscan(final String key, final int cursor) {
         throw new UnsupportedOperationException("'ZSCAN' cannot be called in pipeline");
     }
@@ -2132,46 +1175,14 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     @Override
     public Response<Long> bitcount(final String key) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.bitcount(key);
-            }
-
-        }.execute(key, OpName.BITCOUNT);
+        return execOp(key, OpName.BITCOUNT, () -> jedisPipeline.bitcount(key));
 
     }
 
     @Override
     public Response<Long> bitcount(final String key, final long start, final long end) {
-        return new PipelineOperation<Long>() {
+        return execOp(key, OpName.BITCOUNT, () -> jedisPipeline.bitcount(key, start, end));
 
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.bitcount(key, start, end);
-            }
-
-        }.execute(key, OpName.BITCOUNT);
-
-    }
-
-    /**** Binary Operations ****/
-    @Override
-    public Response<String> set(final byte[] key, final byte[] value) {
-        return new PipelineOperation<String>() {
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                long startTime = System.nanoTime() / 1000;
-                try {
-                    return jedisPipeline.set(key, value);
-                } finally {
-                    long duration = System.nanoTime() / 1000 - startTime;
-                    opMonitor.recordSendLatency(OpName.SET.name(), duration, TimeUnit.MICROSECONDS);
-                }
-            }
-
-        }.execute(key, OpName.SET);
     }
 
     @Override
@@ -2191,17 +1202,7 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     @Override
     public Response<Long> hstrlen(String key, String field) {
-        return new PipelineOperation<Long>() {
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.hstrlen(key, field);
-            }
-        }.execute(key, OpName.HSTRLEN);
-    }
-
-    @Override
-    public Response<byte[]> dump(String key) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.HSTRLEN, () -> jedisPipeline.hstrlen(key, field));
     }
 
     @Override
@@ -2211,6 +1212,11 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     @Override
     public Response<String> restoreReplace(String key, int ttl, byte[] serializedValue) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<byte[]> dump(String key) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -2304,243 +1310,121 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     @Override
     public Response<Long> bitpos(String key, boolean value) {
-        return null;
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<Long> bitpos(String key, boolean value, BitPosParams params) {
-        return null;
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<String> set(String key, String value, SetParams params) {
-        return null;
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<List<String>> srandmember(String key, int count) {
-        return null;
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<Set<Tuple>> zrangeByScoreWithScores(String key, String min, String max) {
-        return null;
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<Set<Tuple>> zrangeByScoreWithScores(String key, String min, String max, int offset, int count) {
-        return null;
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<Long> objectRefcount(String key) {
-        return null;
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<String> objectEncoding(String key) {
-        return null;
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<Long> objectIdletime(String key) {
-        return null;
+        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<Long> zadd(String key, Map<String, Double> members, ZAddParams params) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zadd(key, members, params);
-            }
-
-        }.execute(key, OpName.ZADD);
+        return execOp(key, OpName.ZADD, () -> jedisPipeline.zadd(key, members, params));
     }
 
     public Response<Long> zadd(final String key, final double score, final String member, final ZAddParams params) {
-
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.zadd(key, score, member, params);
-            }
-
-        }.execute(key, OpName.ZADD);
-
-
+        return execOp(key, OpName.ZADD, () -> jedisPipeline.zadd(key, score, member, params));
     }
-
 
     @Override
     public Response<Double> zincrby(String arg0, double arg1, String arg2, ZIncrByParams arg3) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
-    public void sync() {
-        long startTime = System.nanoTime() / 1000;
-        try {
-            jedisPipeline.sync();
-            opMonitor.recordPipelineSync();
-        } catch (JedisConnectionException jce) {
-            String msg = "Failed sync() to host: " + getHostInfo();
-            pipelineEx.set(new FatalConnectionException(msg, jce).
-                    setHost(connection == null ? Host.NO_HOST : connection.getHost()));
-            cpMonitor.incOperationFailure(connection == null ? null : connection.getHost(), jce);
-            throw jce;
-        } finally {
-            long duration = System.nanoTime() / 1000 - startTime;
-            opMonitor.recordLatency(duration, TimeUnit.MICROSECONDS);
-            discardPipeline(false);
-            releaseConnection();
-        }
-    }
 
-    public List<Object> syncAndReturnAll() {
-        long startTime = System.nanoTime() / 1000;
-        try {
-            List<Object> result = jedisPipeline.syncAndReturnAll();
-            opMonitor.recordPipelineSync();
-            return result;
-        } catch (JedisConnectionException jce) {
-            String msg = "Failed syncAndReturnAll() to host: " + getHostInfo();
-            pipelineEx.set(new FatalConnectionException(msg, jce).
-                    setHost(connection == null ? Host.NO_HOST : connection.getHost()));
-            cpMonitor.incOperationFailure(connection == null ? null : connection.getHost(), jce);
-            throw jce;
-        } finally {
-            long duration = System.nanoTime() / 1000 - startTime;
-            opMonitor.recordLatency(duration, TimeUnit.MICROSECONDS);
-            discardPipeline(false);
-            releaseConnection();
-        }
-    }
+    /******************* End Jedis String Commands **************/
 
-    private void discardPipeline(boolean recordLatency) {
-        try {
-            if (jedisPipeline != null) {
-                long startTime = System.nanoTime() / 1000;
-                jedisPipeline.sync();
-                if (recordLatency) {
-                    long duration = System.nanoTime() / 1000 - startTime;
-                    opMonitor.recordLatency(duration, TimeUnit.MICROSECONDS);
-                }
-                jedisPipeline = null;
-            }
-        } catch (Exception e) {
-            Logger.warn(String.format("Failed to discard jedis pipeline, %s", getHostInfo()), e);
-        }
-    }
 
-    private void releaseConnection() {
-        if (connection != null) {
-            try {
-                connection.getContext().reset();
-                connection.getParentConnectionPool().returnConnection(connection);
-                if (pipelineEx.get() != null) {
-                    connPool.getHealthTracker().trackConnectionError(connection.getParentConnectionPool(),
-                            pipelineEx.get());
-                    pipelineEx.set(null);
-                }
-                connection = null;
-            } catch (Exception e) {
-                Logger.warn(String.format("Failed to return connection in Dyno Jedis Pipeline, %s", getHostInfo()), e);
-            }
-        }
-    }
+    /******************* Jedis Binary Commands **************/
 
-    public void discardPipelineAndReleaseConnection() {
-        opMonitor.recordPipelineDiscard();
-        discardPipeline(true);
-        releaseConnection();
+
+    @Override
+    public Response<Long> append(final byte[] key, final byte[] value) {
+        return execOp(key, OpName.APPEND, () -> jedisPipeline.append(key, value));
     }
 
     @Override
-    public void close() throws Exception {
-        discardPipelineAndReleaseConnection();
-    }
-
-    private String getHostInfo() {
-        if (connection != null && connection.getHost() != null) {
-            return connection.getHost().toString();
-        }
-
-        return "unknown";
+    public Response<List<byte[]>> blpop(final byte[] arg) {
+        return execOp(arg, OpName.BLPOP, () -> jedisPipeline.blpop(arg));
     }
 
     @Override
-    public Response<Long> append(byte[] key, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<List<byte[]>> brpop(final byte[] arg) {
+        return execOp(arg, OpName.BRPOP, () -> jedisPipeline.brpop(arg));
     }
 
     @Override
-    public Response<List<byte[]>> blpop(byte[] arg) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<List<byte[]>> brpop(byte[] arg) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Long> decr(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> decr(final byte[] key) {
+        return execOp(key, OpName.DECR, () -> jedisPipeline.decr(key));
     }
 
     @Override
     public Response<Long> decrBy(final byte[] key, final long integer) {
-        return new PipelineOperation<Long>() {
-
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.decrBy(key, integer);
-            }
-        }.execute(key, OpName.DECRBY);
+        return execOp(key, OpName.DECRBY, () -> jedisPipeline.decrBy(key, integer));
     }
 
     @Override
     public Response<Long> del(final byte[] key) {
-        return new PipelineOperation<Long>() {
+        return execOp(key, OpName.DEL, () -> jedisPipeline.del(key));
 
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.del(key);
-            }
-        }.execute(key, OpName.DEL);
     }
 
     @Override
-    public Response<Long> unlink(byte[] keys) {
-        return new PipelineOperation<Long>() {
-            @Override
-            Response<Long> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.unlink(keys);
-            }
-        }.execute(keys, OpName.UNLINK);
+    public Response<Long> unlink(byte[] key) {
+        return execOp(key, OpName.UNLINK, () -> jedisPipeline.unlink(key));
     }
 
     @Override
-    public Response<byte[]> echo(byte[] string) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<byte[]> echo(final byte[] string) {
+        return execOp(string, OpName.ECHO, () -> jedisPipeline.echo(string));
+
     }
 
     @Override
     public Response<Boolean> exists(final byte[] key) {
-        return new PipelineOperation<Boolean>() {
-
-            @Override
-            Response<Boolean> execute(final Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.exists(key);
-            }
-        }.execute(key, OpName.EXISTS);
+        return execOp(key, OpName.EXISTS, () -> jedisPipeline.exists(key));
     }
 
     @Override
-    public Response<Long> expire(byte[] key, int seconds) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> expire(final byte[] key, final int seconds) {
+        return execOp(key, OpName.EXPIRE, () -> jedisPipeline.expire(key, seconds));
+
     }
 
     @Override
@@ -2549,8 +1433,9 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     }
 
     @Override
-    public Response<Long> expireAt(byte[] key, long unixTime) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> expireAt(final byte[] key, final long unixTime) {
+        return execOp(key, OpName.EXPIREAT, () -> jedisPipeline.expireAt(key, unixTime));
+
     }
 
     @Override
@@ -2560,443 +1445,594 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     @Override
     public Response<byte[]> get(final byte[] key) {
-        return new PipelineOperation<byte[]>() {
-            @Override
-            Response<byte[]> execute(Pipeline jedisPipeline) throws DynoException {
-                long startTime = System.nanoTime() / 1000;
-                try {
-                    return jedisPipeline.get(key);
-                } finally {
-                    long duration = System.nanoTime() / 1000 - startTime;
-                    opMonitor.recordSendLatency(OpName.GET.name(), duration, TimeUnit.MICROSECONDS);
-                }
-            }
-        }.execute(key, OpName.GET);
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.GET, () -> jedisPipeline.get(key));
+        } else {
+            return execOp(key, OpName.GET, () -> decompressBin(jedisPipeline.get(key)));
+        }
+
     }
 
     @Override
-    public Response<Boolean> getbit(byte[] key, long offset) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Boolean> getbit(final byte[] key, final long offset) {
+        return execOp(key, OpName.GETBIT, () -> jedisPipeline.getbit(key, offset));
+
+    }
+
+    @Override
+    public Response<byte[]> getrange(final byte[] key, final long startOffset, final long endOffset) {
+        return execOp(key, OpName.GETRANGE, () -> jedisPipeline.getrange(key, startOffset, endOffset));
+
     }
 
     @Override
     public Response<byte[]> getSet(final byte[] key, final byte[] value) {
-        return new PipelineOperation<byte[]>() {
-            @Override
-            Response<byte[]> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.getSet(key, value);
-            }
-        }.execute(key, OpName.GETSET);
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.GETSET, () -> jedisPipeline.getSet(key, value));
+        } else {
+            return execOp(key, OpName.GETSET, () -> decompressBin(jedisPipeline.getSet(key, compressBin(value))));
+        }
     }
 
     @Override
-    public Response<byte[]> getrange(byte[] key, long startOffset, long endOffset) {
+    public Response<Long> hdel(final byte[] key, final byte[]... field) {
+        return execOp(key, OpName.HDEL, () -> jedisPipeline.hdel(key, field));
+
+    }
+
+    @Override
+    public Response<Boolean> hexists(final byte[] key, final byte[] field) {
+        return execOp(key, OpName.HEXISTS, () -> jedisPipeline.hexists(key, field));
+
+    }
+
+    @Override
+    public Response<byte[]> hget(final byte[] key, final byte[] field) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HGET, () -> jedisPipeline.hget(key, field));
+        } else {
+            return execOp(key, OpName.HGET, () -> decompressBin(jedisPipeline.hget(key, field)));
+        }
+
+    }
+
+    @Override
+    public Response<Map<byte[], byte[]>> hgetAll(final byte[] key) {
+        return execOp(key, OpName.HGETALL, () -> jedisPipeline.hgetAll(key));
+    }
+
+    @Override
+    public Response<Long> hincrBy(final byte[] key, final byte[] field, final long value) {
+        return execOp(key, OpName.HINCRBY, () -> jedisPipeline.hincrBy(key, field, value));
+    }
+
+    /* not supported by RedisPipeline 2.7.3 */
+    public Response<Double> hincrByFloat(final byte[] key, final byte[] field, final double value) {
+        return execOp(key, OpName.HINCRBYFLOAT, () -> jedisPipeline.hincrByFloat(key, field, value));
+    }
+
+    @Override
+    public Response<Set<byte[]>> hkeys(final byte[] key) {
+        return execOp(key, OpName.HKEYS, () -> jedisPipeline.hkeys(key));
+
+    }
+
+    public Response<ScanResult<Map.Entry<byte[], byte[]>>> hscan(final byte[] key, int cursor) {
+        throw new UnsupportedOperationException("'HSCAN' cannot be called in pipeline");
+    }
+
+    @Override
+    public Response<Long> hlen(final byte[] key) {
+        return execOp(key, OpName.HLEN, () -> jedisPipeline.hlen(key));
+
+    }
+
+    @Override
+    public Response<List<byte[]>> hmget(final byte[] key, final byte[]... fields) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HMGET, () -> jedisPipeline.hmget(key, fields));
+        } else {
+            return execOp(key, OpName.HMGET, () -> decompressBinList(jedisPipeline.hmget(key, fields)));
+        }
+    }
+
+    @Override
+    public Response<String> hmset(final byte[] key, final Map<byte[], byte[]> hash) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HMSET, () -> jedisPipeline.hmset(key, hash));
+        } else {
+            return execOp(key, OpName.HMSET, () -> jedisPipeline.hmset(key, compressBinMap(hash)));
+        }
+    }
+
+    @Override
+    public Response<Long> hset(final byte[] key, final byte[] field, final byte[] value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HSET, () -> jedisPipeline.hset(key, field, value));
+        } else {
+            return execOp(key, OpName.HSET, () -> jedisPipeline.hset(key, field, compressBin(value)));
+        }
+    }
+
+    @Override
+    public Response<Long> hset(byte[] key, Map<byte[], byte[]> hash) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Response<Long> hdel(byte[] key, byte[]... field) {
+    public Response<Long> hsetnx(final byte[] key, final byte[] field, final byte[] value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HSETNX, () -> jedisPipeline.hsetnx(key, field, value));
+        } else {
+            return execOp(key, OpName.HSETNX, () -> jedisPipeline.hsetnx(key, field, compressBin(value)));
+        }
+    }
+
+    @Override
+    public Response<List<byte[]>> hvals(final byte[] key) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HVALS, () -> jedisPipeline.hvals(key));
+        } else {
+            return execOp(key, OpName.HVALS, () -> decompressBinList(jedisPipeline.hvals(key)));
+        }
+
+    }
+
+    @Override
+    public Response<Long> incr(final byte[] key) {
+        return execOp(key, OpName.INCR, () -> jedisPipeline.incr(key));
+
+    }
+
+    @Override
+    public Response<Long> incrBy(final byte[] key, final long integer) {
+        return execOp(key, OpName.INCRBY, () -> jedisPipeline.incrBy(key, integer));
+
+    }
+
+    /* not supported by RedisPipeline 2.7.3 */
+    public Response<Double> incrByFloat(final byte[] key, final double increment) {
+        return execOp(key, OpName.INCRBYFLOAT, () -> jedisPipeline.incrByFloat(key, increment));
+
+    }
+
+    @Override
+    public Response<String> psetex(byte[] key, long milliseconds, byte[] value) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Response<Boolean> hexists(byte[] key, byte[] field) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<byte[]> lindex(final byte[] key, final long index) {
+        return execOp(key, OpName.LINDEX, () -> jedisPipeline.lindex(key, index));
+
     }
 
     @Override
-    public Response<Long> hincrBy(byte[] key, byte[] field, long value) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> linsert(final byte[] key, final ListPosition where, final byte[] pivot, final byte[] value) {
+        return execOp(key, OpName.LINSERT, () -> jedisPipeline.linsert(key, where, pivot, value));
+
     }
 
     @Override
-    public Response<Set<byte[]>> hkeys(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> llen(final byte[] key) {
+        return execOp(key, OpName.LLEN, () -> jedisPipeline.llen(key));
+
     }
 
     @Override
-    public Response<Long> hlen(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<byte[]> lpop(final byte[] key) {
+        return execOp(key, OpName.LPOP, () -> jedisPipeline.lpop(key));
+
     }
 
     @Override
-    public Response<Long> hsetnx(byte[] key, byte[] field, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> lpush(final byte[] key, final byte[]... string) {
+        return execOp(key, OpName.LPUSH, () -> jedisPipeline.lpush(key, string));
+
     }
 
     @Override
-    public Response<List<byte[]>> hvals(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> lpushx(final byte[] key, final byte[]... string) {
+        return execOp(key, OpName.LPUSHX, () -> jedisPipeline.lpushx(key, string));
+
     }
 
     @Override
-    public Response<Long> incr(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<List<byte[]>> lrange(final byte[] key, final long start, final long end) {
+        return execOp(key, OpName.LRANGE, () -> jedisPipeline.lrange(key, start, end));
+
     }
 
     @Override
-    public Response<Long> incrBy(byte[] key, long integer) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> lrem(final byte[] key, final long count, final byte[] value) {
+        return execOp(key, OpName.LREM, () -> jedisPipeline.lrem(key, count, value));
+
     }
 
     @Override
-    public Response<byte[]> lindex(byte[] key, long index) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<String> lset(final byte[] key, final long index, final byte[] value) {
+        return execOp(key, OpName.LSET, () -> jedisPipeline.lset(key, index, value));
+
     }
 
     @Override
-    public Response<Long> linsert(byte[] key, ListPosition where, byte[] pivot, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<String> ltrim(final byte[] key, final long start, final long end) {
+        return execOp(key, OpName.LTRIM, () -> jedisPipeline.ltrim(key, start, end));
+
     }
 
     @Override
-    public Response<Long> llen(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> move(final byte[] key, final int dbIndex) {
+        return execOp(key, OpName.MOVE, () -> jedisPipeline.move(key, dbIndex));
+
     }
 
     @Override
-    public Response<byte[]> lpop(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> persist(final byte[] key) {
+        return execOp(key, OpName.PERSIST, () -> jedisPipeline.persist(key));
+
+    }
+
+    /* not supported by RedisPipeline 2.7.3 */
+    public Response<String> rename(final byte[] oldkey, final byte[] newkey) {
+        return execOp(oldkey, OpName.RENAME, () -> jedisPipeline.rename(oldkey, newkey));
+
+    }
+
+    /* not supported by RedisPipeline 2.7.3 */
+    public Response<Long> renamenx(final byte[] oldkey, final byte[] newkey) {
+        return execOp(oldkey, OpName.RENAMENX, () -> jedisPipeline.renamenx(oldkey, newkey));
+
     }
 
     @Override
-    public Response<Long> lpush(byte[] key, byte[]... string) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<byte[]> rpop(final byte[] key) {
+        return execOp(key, OpName.RPOP, () -> jedisPipeline.rpop(key));
+
     }
 
     @Override
-    public Response<Long> lpushx(byte[] key, byte[]... bytes) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> rpush(final byte[] key, final byte[]... string) {
+        return execOp(key, OpName.RPUSH, () -> jedisPipeline.rpush(key, string));
+
     }
 
     @Override
-    public Response<List<byte[]>> lrange(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> rpushx(final byte[] key, final byte[]... string) {
+        return execOp(key, OpName.RPUSHX, () -> jedisPipeline.rpushx(key, string));
+
     }
 
     @Override
-    public Response<Long> lrem(byte[] key, long count, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> sadd(final byte[] key, final byte[]... member) {
+        return execOp(key, OpName.SADD, () -> jedisPipeline.sadd(key, member));
+
     }
 
     @Override
-    public Response<String> lset(byte[] key, long index, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> scard(final byte[] key) {
+        return execOp(key, OpName.SCARD, () -> jedisPipeline.scard(key));
+
     }
 
     @Override
-    public Response<String> ltrim(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Boolean> sismember(final byte[] key, final byte[] member) {
+        return execOp(key, OpName.SISMEMBER, () -> jedisPipeline.sismember(key, member));
     }
 
     @Override
-    public Response<Long> move(byte[] key, int dbIndex) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<String> set(final byte[] key, final byte[] value) {
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.SET, () -> jedisPipeline.set(key, value));
+        } else {
+            return execOp(key, OpName.SET, () -> jedisPipeline.set(key, compressBin(value)));
+        }
     }
 
     @Override
-    public Response<Long> persist(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
+    public Response<Boolean> setbit(final byte[] key, final long offset, final byte[] value) {
+        return execOp(key, OpName.SETBIT, () -> jedisPipeline.setbit(key, offset, value));
 
-    @Override
-    public Response<byte[]> rpop(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Long> rpush(byte[] key, byte[]... string) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Long> rpushx(byte[] key, byte[]... string) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Long> sadd(byte[] key, byte[]... member) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Long> scard(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Boolean> setbit(byte[] key, long offset, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Long> setrange(byte[] key, long offset, byte[] value) {
-        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<String> setex(final byte[] key, final int seconds, final byte[] value) {
-        return new PipelineOperation<String>() {
-            @Override
-            Response<String> execute(Pipeline jedisPipeline) throws DynoException {
-                return jedisPipeline.setex(key, seconds, value);
-            }
-        }.execute(key, OpName.SETEX);
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.SETEX, () -> jedisPipeline.setex(key, seconds, value));
+        } else {
+            return execOp(key, OpName.SETEX, () -> jedisPipeline.setex(key, seconds, compressBin(value)));
+        }
+
     }
 
     @Override
-    public Response<Long> setnx(byte[] key, byte[] value) {
+    public Response<Long> setnx(final byte[] key, final byte[] value) {
+        return execOp(key, OpName.SETNX, () -> jedisPipeline.setnx(key, value));
+    }
+
+    @Override
+    public Response<Long> setrange(final byte[] key, final long offset, final byte[] value) {
+        return execOp(key, OpName.SETRANGE, () -> jedisPipeline.setrange(key, offset, value));
+
+    }
+
+    @Override
+    public Response<Set<byte[]>> smembers(final byte[] key) {
+        return execOp(key, OpName.SMEMBERS, () -> jedisPipeline.smembers(key));
+    }
+
+    @Override
+    public Response<List<byte[]>> sort(final byte[] key) {
+        return execOp(key, OpName.SORT, () -> jedisPipeline.sort(key));
+
+    }
+
+    @Override
+    public Response<List<byte[]>> sort(final byte[] key, final SortingParams sortingParameters) {
+        return execOp(key, OpName.SORT, () -> jedisPipeline.sort(key, sortingParameters));
+
+    }
+
+    @Override
+    public Response<byte[]> spop(final byte[] key) {
+        return execOp(key, OpName.SPOP, () -> jedisPipeline.spop(key));
+
+    }
+
+    @Override
+    public Response<Set<byte[]>> spop(final byte[] key, final long count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Response<Set<byte[]>> smembers(byte[] key) {
+    public Response<byte[]> srandmember(final byte[] key) {
+        return execOp(key, OpName.SRANDMEMBER, () -> jedisPipeline.srandmember(key));
+
+    }
+
+    @Override
+    public Response<Long> srem(final byte[] key, final byte[]... member) {
+        return execOp(key, OpName.SREM, () -> jedisPipeline.srem(key, member));
+
+    }
+
+    /**
+     * This method is not supported by the BinaryRedisPipeline interface.
+     */
+    public Response<ScanResult<byte[]>> sscan(final byte[] key, final int cursor) {
+        throw new UnsupportedOperationException("'SSCAN' cannot be called in pipeline");
+    }
+
+    /**
+     * This method is not supported by the BinaryRedisPipeline interface.
+     */
+    public Response<ScanResult<byte[]>> sscan(final byte[] key, final byte[] cursor) {
+        throw new UnsupportedOperationException("'SSCAN' cannot be called in pipeline");
+    }
+
+    @Override
+    public Response<Long> strlen(final byte[] key) {
+        return execOp(key, OpName.STRLEN, () -> jedisPipeline.strlen(key));
+
+    }
+
+    @Override
+    public Response<String> substr(final byte[] key, final int start, final int end) {
+        return execOp(key, OpName.SUBSTR, () -> jedisPipeline.substr(key, start, end));
+
+    }
+
+    @Override
+    public Response<Long> touch(byte[] key) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Response<Boolean> sismember(byte[] key, byte[] member) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
+    public Response<Long> ttl(final byte[] key) {
+        return execOp(key, OpName.TTL, () -> jedisPipeline.ttl(key));
 
-    @Override
-    public Response<List<byte[]>> sort(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<List<byte[]>> sort(byte[] key, SortingParams sortingParameters) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<byte[]> spop(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Set<byte[]>> spop(byte[] key, long count) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<byte[]> srandmember(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Long> srem(byte[] key, byte[]... member) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Long> strlen(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<String> substr(byte[] key, int start, int end) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Long> touch(byte[] keys) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Long> ttl(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<Long> pttl(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.PTTL, () -> jedisPipeline.pttl(key));
     }
 
     @Override
-    public Response<String> type(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<String> type(final byte[] key) {
+        return execOp(key, OpName.TYPE, () -> jedisPipeline.type(key));
+
     }
 
     @Override
-    public Response<Long> zadd(byte[] key, double score, byte[] member) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> zadd(final byte[] key, final double score, final byte[] member) {
+        return execOp(key, OpName.ZADD, () -> jedisPipeline.zadd(key, score, member));
+
     }
 
     @Override
-    public Response<Long> zadd(byte[] key, double score, byte[] member, ZAddParams params) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> zadd(final byte[] key, final Map<byte[], Double> scoreMembers) {
+        return execOp(key, OpName.ZADD, () -> jedisPipeline.zadd(key, scoreMembers));
+
     }
 
     @Override
-    public Response<Long> zadd(byte[] key, Map<byte[], Double> scoreMembers) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> zcard(final byte[] key) {
+        return execOp(key, OpName.ZCARD, () -> jedisPipeline.zcard(key));
+
     }
 
     @Override
-    public Response<Long> zadd(byte[] key, Map<byte[], Double> scoreMembers, ZAddParams params) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
+    public Response<Long> zcount(final byte[] key, final double min, final double max) {
+        return execOp(key, OpName.ZCOUNT, () -> jedisPipeline.zcount(key, min, max));
 
-    @Override
-    public Response<Long> zcard(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Long> zcount(byte[] key, double min, double max) {
-        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<Long> zcount(byte[] key, byte[] min, byte[] max) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.ZCOUNT, () -> jedisPipeline.zcount(key, min, max));
     }
 
     @Override
-    public Response<Double> zincrby(byte[] key, double score, byte[] member) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Double> zincrby(final byte[] key, final double score, final byte[] member) {
+        return execOp(key, OpName.ZINCRBY, () -> jedisPipeline.zincrby(key, score, member));
+
     }
 
     @Override
-    public Response<Double> zincrby(byte[] key, double score, byte[] member, ZIncrByParams params) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Set<byte[]>> zrange(final byte[] key, final long start, final long end) {
+        return execOp(key, OpName.ZRANGE, () -> jedisPipeline.zrange(key, start, end));
+
     }
 
     @Override
-    public Response<Set<byte[]>> zrange(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Set<byte[]>> zrangeByScore(final byte[] key, final double min, final double max) {
+        return execOp(key, OpName.ZRANGEBYSCORE, () -> jedisPipeline.zrangeByScore(key, min, max));
+
     }
 
     @Override
-    public Response<Set<byte[]>> zrangeByScore(byte[] key, double min, double max) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Set<byte[]>> zrangeByScore(final byte[] key, final byte[] min, final byte[] max) {
+        return execOp(key, OpName.ZRANGEBYSCORE, () -> jedisPipeline.zrangeByScore(key, min, max));
+
     }
 
     @Override
-    public Response<Set<byte[]>> zrangeByScore(byte[] key, byte[] min, byte[] max) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
+    public Response<Set<byte[]>> zrangeByScore(final byte[] key, final double min, final double max, final int offset,
+                                               final int count) {
+        return execOp(key, OpName.ZRANGEBYSCORE, () -> jedisPipeline.zrangeByScore(key, min, max, offset, count));
 
-    @Override
-    public Response<Set<byte[]>> zrangeByScore(byte[] key, double min, double max, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<Set<byte[]>> zrangeByScore(byte[] key, byte[] min, byte[] max, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.ZRANGEBYSCORE, () -> jedisPipeline.zrangeByScore(key, min, max, offset, count));
     }
 
     @Override
-    public Response<Set<Tuple>> zrangeByScoreWithScores(byte[] key, double min, double max) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Set<Tuple>> zrangeByScoreWithScores(final byte[] key, final double min, final double max) {
+        return execOp(key, OpName.ZRANGEBYSCOREWITHSCORES, () -> jedisPipeline.zrangeByScoreWithScores(key, min, max));
+
     }
 
     @Override
-    public Response<Set<Tuple>> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Set<Tuple>> zrangeByScoreWithScores(final byte[] key, final double min, final double max,
+                                                        final int offset, final int count) {
+        return execOp(key, OpName.ZRANGEBYSCOREWITHSCORES, () -> jedisPipeline.zrangeByScoreWithScores(key, min, max, offset, count));
+
     }
 
     @Override
-    public Response<Set<Tuple>> zrangeByScoreWithScores(byte[] key, double min, double max, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Set<byte[]>> zrevrangeByScore(final byte[] key, final double max, final double min) {
+        return execOp(key, OpName.ZREVRANGEBYSCORE, () -> jedisPipeline.zrevrangeByScore(key, max, min));
+
     }
 
     @Override
-    public Response<Set<Tuple>> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Set<byte[]>> zrevrangeByScore(final byte[] key, final byte[] max, final byte[] min) {
+        return execOp(key, OpName.ZREVRANGEBYSCORE, () -> jedisPipeline.zrevrangeByScore(key, max, min));
+
     }
 
     @Override
-    public Response<Set<byte[]>> zrevrangeByScore(byte[] key, double max, double min) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
+    public Response<Set<byte[]>> zrevrangeByScore(final byte[] key, final double max, final double min,
+                                                  final int offset, final int count) {
+        return execOp(key, OpName.ZREVRANGEBYSCORE, () -> jedisPipeline.zrevrangeByScore(key, max, min, offset, count));
 
-    @Override
-    public Response<Set<byte[]>> zrevrangeByScore(byte[] key, byte[] max, byte[] min) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Set<byte[]>> zrevrangeByScore(byte[] key, double max, double min, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<Set<byte[]>> zrevrangeByScore(byte[] key, byte[] max, byte[] min, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.ZREVRANGEBYSCORE, () -> jedisPipeline.zrevrangeByScore(key, max, min, offset, count));
     }
 
     @Override
-    public Response<Set<Tuple>> zrevrangeByScoreWithScores(byte[] key, double max, double min) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Set<Tuple>> zrevrangeByScoreWithScores(final byte[] key, final double max, final double min) {
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, () -> jedisPipeline.zrevrangeByScoreWithScores(key, max, min));
+
     }
 
     @Override
     public Response<Set<Tuple>> zrevrangeByScoreWithScores(byte[] key, byte[] max, byte[] min) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, () -> jedisPipeline.zrevrangeByScoreWithScores(key, max, min));
     }
 
     @Override
-    public Response<Set<Tuple>> zrevrangeByScoreWithScores(byte[] key, double max, double min, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Set<Tuple>> zrevrangeByScoreWithScores(final byte[] key, final double max, final double min,
+                                                           final int offset, final int count) {
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, () -> jedisPipeline.zrevrangeByScoreWithScores(key, max, min, offset, count));
+
     }
 
     @Override
     public Response<Set<Tuple>> zrevrangeByScoreWithScores(byte[] key, byte[] max, byte[] min, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
+        return execOp(key, OpName.ZREVRANGEBYSCOREWITHSCORES, () -> jedisPipeline.zrevrangeByScoreWithScores(key, max, min, offset, count));
     }
 
     @Override
-    public Response<Set<Tuple>> zrangeWithScores(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Set<Tuple>> zrangeWithScores(final byte[] key, final long start, final long end) {
+        return execOp(key, OpName.ZRANGEWITHSCORES, () -> jedisPipeline.zrangeWithScores(key, start, end));
+
     }
 
     @Override
-    public Response<Long> zrank(byte[] key, byte[] member) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> zrank(final byte[] key, final byte[] member) {
+        return execOp(key, OpName.ZRANK, () -> jedisPipeline.zrank(key, member));
+
     }
 
     @Override
-    public Response<Long> zrem(byte[] key, byte[]... member) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> zrem(final byte[] key, final byte[]... member) {
+        return execOp(key, OpName.ZREM, () -> jedisPipeline.zrem(key, member));
+
     }
 
     @Override
-    public Response<Long> zremrangeByRank(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> zremrangeByRank(final byte[] key, final long start, final long end) {
+        return execOp(key, OpName.ZREMRANGEBYRANK, () -> jedisPipeline.zremrangeByRank(key, start, end));
+
     }
 
     @Override
-    public Response<Long> zremrangeByScore(byte[] key, double start, double end) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> zremrangeByScore(final byte[] key, final double start, final double end) {
+        return execOp(key, OpName.ZREMRANGEBYSCORE, () -> jedisPipeline.zremrangeByScore(key, start, end));
+
     }
 
     @Override
-    public Response<Long> zremrangeByScore(byte[] key, byte[] start, byte[] end) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> zremrangeByScore(byte[] key, byte[] min, byte[] max) {
+        return execOp(key, OpName.ZREMRANGEBYSCORE, () -> jedisPipeline.zremrangeByScore(key, min, max));
     }
 
     @Override
-    public Response<Set<byte[]>> zrevrange(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Set<byte[]>> zrevrange(final byte[] key, final long start, final long end) {
+        return execOp(key, OpName.ZREVRANGE, () -> jedisPipeline.zrevrange(key, start, end));
+
     }
 
     @Override
-    public Response<Set<Tuple>> zrevrangeWithScores(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Set<Tuple>> zrevrangeWithScores(final byte[] key, final long start, final long end) {
+        return execOp(key, OpName.ZREVRANGEWITHSCORES, () -> jedisPipeline.zrevrangeWithScores(key, start, end));
+
     }
 
     @Override
-    public Response<Long> zrevrank(byte[] key, byte[] member) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> zrevrank(final byte[] key, final byte[] member) {
+        return execOp(key, OpName.ZREVRANK, () -> jedisPipeline.zrevrank(key, member));
+
     }
 
     @Override
-    public Response<Double> zscore(byte[] key, byte[] member) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Double> zscore(final byte[] key, final byte[] member) {
+        return execOp(key, OpName.ZSCORE, () -> jedisPipeline.zscore(key, member));
+
+    }
+
+    /**
+     * This method is not supported by the BinaryRedisPipeline interface.
+     */
+    public Response<ScanResult<Tuple>> zscan(final byte[] key, final int cursor) {
+        throw new UnsupportedOperationException("'ZSCAN' cannot be called in pipeline");
     }
 
     @Override
@@ -3015,28 +2051,20 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     }
 
     @Override
-    public Response<Set<byte[]>> zrevrangeByLex(byte[] key, byte[] max, byte[] min) {
+    public Response<Long> zremrangeByLex(byte[] key, byte[] start, byte[] end) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Response<Set<byte[]>> zrevrangeByLex(byte[] key, byte[] max, byte[] min, int offset, int count) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> bitcount(final byte[] key) {
+        return execOp(key, OpName.BITCOUNT, () -> jedisPipeline.bitcount(key));
+
     }
 
     @Override
-    public Response<Long> zremrangeByLex(byte[] key, byte[] min, byte[] max) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
+    public Response<Long> bitcount(final byte[] key, final long start, final long end) {
+        return execOp(key, OpName.BITCOUNT, () -> jedisPipeline.bitcount(key, start, end));
 
-    @Override
-    public Response<Long> bitcount(byte[] key) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Long> bitcount(byte[] key, long start, long end) {
-        throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
@@ -3050,8 +2078,13 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     }
 
     @Override
-    public Response<byte[]> dump(byte[] key) {
+    public Response<List<Long>> bitfield(byte[] key, byte[]... arguments) {
         throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<Long> hstrlen(byte[] key, byte[] field) {
+        return execOp(key, OpName.HSTRLEN, () -> jedisPipeline.hstrlen(key, field));
     }
 
     @Override
@@ -3065,43 +2098,58 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     }
 
     @Override
+    public Response<byte[]> dump(byte[] key) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
     public Response<String> migrate(String host, int port, byte[] key, int destinationDB, int timeout) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Response<Long> geoadd(byte[] key, double longitude, double latitude, byte[] member) {
+    public Response<Set<byte[]>> zrevrangeByLex(byte[] key, byte[] max, byte[] min) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Response<Long> geoadd(byte[] key, Map<byte[], GeoCoordinate> memberCoordinateMap) {
+    public Response<Set<byte[]>> zrevrangeByLex(byte[] key, byte[] max, byte[] min, int offset, int count) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Response<Double> geodist(byte[] key, byte[] member1, byte[] member2) {
+    public Response<Long> geoadd(byte[] arg0, Map<byte[], GeoCoordinate> arg1) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Response<Double> geodist(byte[] key, byte[] member1, byte[] member2, GeoUnit unit) {
+    public Response<Long> geoadd(byte[] arg0, double arg1, double arg2, byte[] arg3) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Response<List<byte[]>> geohash(byte[] key, byte[]... members) {
+    public Response<Double> geodist(byte[] arg0, byte[] arg1, byte[] arg2) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Response<List<GeoCoordinate>> geopos(byte[] key, byte[]... members) {
+    public Response<Double> geodist(byte[] arg0, byte[] arg1, byte[] arg2, GeoUnit arg3) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
-    public Response<List<GeoRadiusResponse>> georadius(byte[] key, double longitude, double latitude, double radius,
-                                                       GeoUnit unit) {
+    public Response<List<byte[]>> geohash(byte[] arg0, byte[]... arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<List<GeoCoordinate>> geopos(byte[] arg0, byte[]... arg1) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<List<GeoRadiusResponse>> georadius(byte[] arg0, double arg1, double arg2, double arg3,
+                                                       GeoUnit arg4) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -3111,8 +2159,8 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     }
 
     @Override
-    public Response<List<GeoRadiusResponse>> georadius(byte[] key, double longitude, double latitude, double radius,
-                                                       GeoUnit unit, GeoRadiusParam param) {
+    public Response<List<GeoRadiusResponse>> georadius(byte[] arg0, double arg1, double arg2, double arg3, GeoUnit arg4,
+                                                       GeoRadiusParam arg5) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -3122,7 +2170,7 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     }
 
     @Override
-    public Response<List<GeoRadiusResponse>> georadiusByMember(byte[] key, byte[] member, double radius, GeoUnit unit) {
+    public Response<List<GeoRadiusResponse>> georadiusByMember(byte[] arg0, byte[] arg1, double arg2, GeoUnit arg3) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -3132,23 +2180,13 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     }
 
     @Override
-    public Response<List<GeoRadiusResponse>> georadiusByMember(byte[] key, byte[] member, double radius, GeoUnit unit,
-                                                               GeoRadiusParam param) {
+    public Response<List<GeoRadiusResponse>> georadiusByMember(byte[] arg0, byte[] arg1, double arg2, GeoUnit arg3,
+                                                               GeoRadiusParam arg4) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
     @Override
     public Response<List<GeoRadiusResponse>> georadiusByMemberReadonly(byte[] key, byte[] member, double radius, GeoUnit unit, GeoRadiusParam param) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<List<Long>> bitfield(byte[] key, byte[]... elements) {
-        throw new UnsupportedOperationException("not yet implemented");
-    }
-
-    @Override
-    public Response<Long> hstrlen(byte[] key, byte[] field) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
@@ -3173,6 +2211,16 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     }
 
     @Override
+    public Response<Set<Tuple>> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
+    public Response<Set<Tuple>> zrangeByScoreWithScores(byte[] key, byte[] min, byte[] max, int offset, int count) {
+        throw new UnsupportedOperationException("not yet implemented");
+    }
+
+    @Override
     public Response<Long> objectRefcount(byte[] key) {
         throw new UnsupportedOperationException("not yet implemented");
     }
@@ -3188,17 +2236,114 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     }
 
     @Override
-    public Response<Double> incrByFloat(byte[] key, double increment) {
-        throw new UnsupportedOperationException("not yet implemented");
+    public Response<Long> zadd(byte[] key, Map<byte[], Double> members, ZAddParams params) {
+        return execOp(key, OpName.ZADD, () -> jedisPipeline.zadd(key, members, params));
+    }
+
+    public Response<Long> zadd(final byte[] key, final double score, final byte[] member, final ZAddParams params) {
+        return execOp(key, OpName.ZADD, () -> jedisPipeline.zadd(key, score, member, params));
     }
 
     @Override
-    public Response<String> psetex(byte[] key, long milliseconds, byte[] value) {
+    public Response<Double> zincrby(byte[] arg0, double arg1, byte[] arg2, ZIncrByParams arg3) {
         throw new UnsupportedOperationException("not yet implemented");
     }
 
-    @Override
-    public Response<Double> hincrByFloat(byte[] key, byte[] field, double increment) {
-        throw new UnsupportedOperationException("not yet implemented");
+
+    /******************* End Jedis Binary Commands **************/
+
+
+    public void sync() {
+        long startTime = System.nanoTime() / 1000;
+        try {
+            jedisPipeline.sync();
+            opMonitor.recordPipelineSync();
+        } catch (JedisConnectionException jce) {
+            String msg = "Failed sync() to host: " + getHostInfo();
+            pipelineEx.set(new FatalConnectionException(msg, jce).
+              setHost(connection == null ? Host.NO_HOST : connection.getHost()));
+            cpMonitor.incOperationFailure(connection == null ? null : connection.getHost(), jce);
+            throw jce;
+        } finally {
+            long duration = System.nanoTime() / 1000 - startTime;
+            opMonitor.recordLatency(duration, TimeUnit.MICROSECONDS);
+            discardPipeline(false);
+            releaseConnection();
+        }
     }
+
+    public List<Object> syncAndReturnAll() {
+        long startTime = System.nanoTime() / 1000;
+        try {
+            List<Object> result = jedisPipeline.syncAndReturnAll();
+            opMonitor.recordPipelineSync();
+            return result;
+        } catch (JedisConnectionException jce) {
+            String msg = "Failed syncAndReturnAll() to host: " + getHostInfo();
+            pipelineEx.set(new FatalConnectionException(msg, jce).
+              setHost(connection == null ? Host.NO_HOST : connection.getHost()));
+            cpMonitor.incOperationFailure(connection == null ? null : connection.getHost(), jce);
+            throw jce;
+        } finally {
+            long duration = System.nanoTime() / 1000 - startTime;
+            opMonitor.recordLatency(duration, TimeUnit.MICROSECONDS);
+            discardPipeline(false);
+            releaseConnection();
+        }
+    }
+
+    private void discardPipeline(boolean recordLatency) {
+        if (jedisPipeline != null) {
+            try {
+                long startTime = System.nanoTime() / 1000;
+                jedisPipeline.sync();
+                if (recordLatency) {
+                    long duration = System.nanoTime() / 1000 - startTime;
+                    opMonitor.recordLatency(duration, TimeUnit.MICROSECONDS);
+                }
+            } catch (Exception e) {
+                Logger.warn(String.format("Failed to discard jedis pipeline, %s", getHostInfo()), e);
+            } finally {
+                jedisPipeline = null;
+            }
+        }
+    }
+
+    private void releaseConnection() {
+        if (connection != null) {
+            try {
+                connection.getContext().reset();
+                connection.getParentConnectionPool().returnConnection(connection);
+                if (pipelineEx.get() != null) {
+                    connPool.getHealthTracker().trackConnectionError(connection.getParentConnectionPool(),
+                                                                     pipelineEx.get());
+                    pipelineEx.set(null);
+                }
+            } catch (Exception e) {
+                Logger.warn(String.format("Failed to return connection in Dyno Jedis Pipeline, %s", getHostInfo()), e);
+            } finally {
+                connection = null;
+            }
+        }
+    }
+
+    public void discardPipelineAndReleaseConnection() {
+        opMonitor.recordPipelineDiscard();
+        discardPipeline(true);
+        releaseConnection();
+    }
+
+    @Override
+    public void close() throws Exception {
+        discardPipelineAndReleaseConnection();
+    }
+
+    private String getHostInfo() {
+        if (connection != null && connection.getHost() != null) {
+            return connection.getHost().toString();
+        }
+
+        return "unknown";
+    }
+
 }

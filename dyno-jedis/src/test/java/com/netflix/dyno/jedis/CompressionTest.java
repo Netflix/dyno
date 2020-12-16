@@ -137,7 +137,7 @@ public class CompressionTest {
         map.put(KEY_1KB, VALUE_1KB);
         map.put(KEY_3KB, VALUE_3KB);
 
-        client.d_hmset("compressionTestKey", map);
+        client.hmset("compressionTestKey", map);
 
         LastOperationMonitor monitor = (LastOperationMonitor) opMonitor;
         Assert.assertTrue(1 == monitor.getSuccessCount(OpName.HMSET.name(), true));

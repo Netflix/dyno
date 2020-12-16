@@ -125,6 +125,10 @@ public class RedissonConnectionFactory implements ConnectionFactory<RedisAsyncCo
         }
 
         @Override
+        public void reset() {
+        }
+
+        @Override
         public DynoConnectException getLastException() {
             return lastEx.get();
         }
