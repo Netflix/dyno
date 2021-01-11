@@ -162,6 +162,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 
         @Override
         public void close() {
+            jedisClient.resetState();
             jedisClient.quit();
             jedisClient.disconnect();
         }
