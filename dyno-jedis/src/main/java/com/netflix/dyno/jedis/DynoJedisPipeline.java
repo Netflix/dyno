@@ -682,7 +682,11 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     @Override
     public Response<Long> hset(String key, Map<String, String> hash) {
-        throw new UnsupportedOperationException("not yet implemented");
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HSET, () -> jedisPipeline.hset(key, hash));
+        } else {
+            throw new UnsupportedOperationException("not yet implemented");
+        }
     }
 
     @Override
@@ -1556,7 +1560,11 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
 
     @Override
     public Response<Long> hset(byte[] key, Map<byte[], byte[]> hash) {
-        throw new UnsupportedOperationException("not yet implemented");
+        if (CompressionStrategy.NONE == connPool.getConfiguration().getCompressionStrategy()) {
+            return execOp(key, OpName.HSET, () -> jedisPipeline.hset(key, hash));
+        } else {
+            throw new UnsupportedOperationException("not yet implemented");
+        }
     }
 
     @Override
