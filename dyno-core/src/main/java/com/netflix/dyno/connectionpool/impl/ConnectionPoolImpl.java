@@ -343,8 +343,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
                 } else {
                     cpMonitor.incOperationFailure(null, e);
                 }
-            } catch (Throwable t) {
-                throw new RuntimeException(t);
             } finally {
                 if (connection != null) {
                     if (connection.getLastException() != null
@@ -422,8 +420,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
                             cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
                         }
 
-                    } catch (Throwable t) {
-                        throw new RuntimeException(t);
                     } finally {
                         connection.getContext().reset();
                         connection.getParentConnectionPool().returnConnection(connection);
@@ -442,7 +438,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
                     connectionToClose.getContext().reset();
                     connectionToClose.getParentConnectionPool().returnConnection(connectionToClose);
                 } catch (Throwable t) {
-
+                    Logger.warn("Error returning connection to pool", t);
                 }
             }
         }
@@ -490,8 +486,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
             } catch (DynoException e) {
                 retry.failure(e);
                 lastException = e;
-            } catch (Throwable t) {
-                throw new RuntimeException(t);
             }
 
         } while (retry.allowRetry());
@@ -729,8 +723,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
                 cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
             }
 
-        } catch (Throwable t) {
-            t.printStackTrace();
         } finally {
             if (connection != null) {
                 connection.getParentConnectionPool().returnConnection(connection);
