@@ -468,7 +468,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
      * @return
      */
     public <R> Connection<CL> getConnectionWithFailover(BaseOperation<CL, R> baseOperation) {
-
         RetryPolicy retry = cpConfiguration.getRetryPolicyFactory().getRetryPolicy();
         retry.begin();
 
@@ -478,14 +477,9 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
             try {
                 Connection<CL> connection = selectionStrategy.getConnectionUsingRetryPolicy(baseOperation,
                         cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS, retry);
-
                 updateConnectionContext(connection.getContext(), connection.getHost());
-
                 retry.success();
-                cpMonitor.incOperationSuccess(connection.getHost(), 0);
-
                 return connection;
-
             } catch (NoAvailableHostsException e) {
                 cpMonitor.incOperationFailure(null, e);
                 throw e;

@@ -1000,12 +1000,13 @@ public class DynoJedisDemo {
 
     private class SAXHandler extends DefaultHandler {
 
-        private final List<Map<String, String>> list = new ArrayList<Map<String, String>>();
+        private final List<Map<String, String>> list = new ArrayList<>();
         private final String rootElement;
-        private final Set<String> interestElements = new HashSet<String>();
+        private final Set<String> interestElements = new HashSet<>();
 
         private Map<String, String> currentPayload = null;
         private String currentInterestElement = null;
+        private StringBuilder valueBuffer = new StringBuilder();
 
         private SAXHandler(String root, String... interests) {
 
@@ -1016,12 +1017,11 @@ public class DynoJedisDemo {
         }
 
         @Override
-        public void startElement(String uri, String localName, String qName, Attributes attributes)
-                throws SAXException {
+        public void startElement(String uri, String localName, String qName, Attributes attributes) {
 
             if (qName.equalsIgnoreCase(rootElement)) {
                 // prep for next instance
-                currentPayload = new HashMap<String, String>();
+                currentPayload = new HashMap<>();
                 return;
             }
 
@@ -1033,7 +1033,13 @@ public class DynoJedisDemo {
         }
 
         @Override
-        public void endElement(String uri, String localName, String qName) throws SAXException {
+        public void endElement(String uri, String localName, String qName) {
+            if (currentInterestElement != null && currentPayload != null) {
+                String value = valueBuffer.toString();
+                currentPayload.put(currentInterestElement, value);
+                currentInterestElement = null;
+                valueBuffer = new StringBuilder(); //reset buffer
+            }
 
             // add host to list
             if (qName.equalsIgnoreCase(rootElement)) {
@@ -1043,13 +1049,9 @@ public class DynoJedisDemo {
         }
 
         @Override
-        public void characters(char[] ch, int start, int length) throws SAXException {
-
-            String value = new String(ch, start, length);
-
+        public void characters(char[] ch, int start, int length) {
             if (currentInterestElement != null && currentPayload != null) {
-                currentPayload.put(currentInterestElement, value);
-                currentInterestElement = null;
+                valueBuffer.append(ch, start, length);
             }
         }
 
