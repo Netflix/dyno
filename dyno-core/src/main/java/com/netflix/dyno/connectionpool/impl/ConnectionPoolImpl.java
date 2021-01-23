@@ -467,9 +467,42 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
      * @param baseOperation
      * @return
      */
-    public <R> Connection<CL> getConnectionForOperation(BaseOperation<CL, R> baseOperation) {
-        return selectionStrategy.getConnection(baseOperation, cpConfiguration.getMaxTimeoutWhenExhausted(),
-                TimeUnit.MILLISECONDS);
+    public <R> Connection<CL> getConnectionWithFailover(BaseOperation<CL, R> baseOperation) {
+
+        RetryPolicy retry = cpConfiguration.getRetryPolicyFactory().getRetryPolicy();
+        retry.begin();
+
+        DynoException lastException = null;
+
+        do {
+            try {
+                Connection<CL> connection = selectionStrategy.getConnectionUsingRetryPolicy(baseOperation,
+                        cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS, retry);
+
+                updateConnectionContext(connection.getContext(), connection.getHost());
+
+                retry.success();
+                cpMonitor.incOperationSuccess(connection.getHost(), 0);
+
+                return connection;
+
+            } catch (NoAvailableHostsException e) {
+                cpMonitor.incOperationFailure(null, e);
+                throw e;
+            } catch (PoolExhaustedException e) {
+                Logger.warn("Pool exhausted: " + e.getMessage());
+                cpMonitor.incOperationFailure(null, e);
+                cpHealthTracker.trackConnectionError(e.getHostConnectionPool(), e);
+            } catch (DynoException e) {
+                retry.failure(e);
+                lastException = e;
+            } catch (Throwable t) {
+                throw new RuntimeException(t);
+            }
+
+        } while (retry.allowRetry());
+
+        throw lastException;
     }
 
     @Override

@@ -20,15 +20,11 @@ import com.netflix.dyno.connectionpool.*;
 import com.netflix.dyno.connectionpool.Connection;
 import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
-import com.netflix.dyno.connectionpool.exception.NoAvailableHostsException;
 import com.netflix.dyno.connectionpool.impl.ConnectionPoolImpl;
 import com.netflix.dyno.connectionpool.impl.lb.TokenAwareSelection;
-import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.ZipUtils;
 import com.netflix.dyno.jedis.JedisConnectionFactory.JedisConnection;
-import com.netflix.dyno.jedis.operation.BaseKeyOperation;
 
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +40,6 @@ import redis.clients.jedis.params.ZIncrByParams;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -52,7 +47,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -90,72 +84,48 @@ public class DynoJedisPipeline implements RedisPipeline, BinaryRedisPipeline, Au
     }
 
     private void pipelined(final byte[] key) {
-        try {
-            try {
-                connection = connPool.getConnectionForOperation(new BaseOperation<Jedis, String>() {
+        connection = connPool.getConnectionWithFailover(new BaseOperation<Jedis, String>() {
 
-                    @Override
-                    public String getName() {
-                        return DynoPipeline;
-                    }
-
-                    @Override
-                    public String getStringKey() {// we do not use it in this context
-                        return null;
-                    }
-
-                    @Override
-                    public byte[] getBinaryKey() {
-                        return key;
-                    }
-
-                });
-            } catch (NoAvailableHostsException nahe) {
-                cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, nahe);
-                discardPipelineAndReleaseConnection();
-                throw nahe;
+            @Override
+            public String getName() {
+                return DynoPipeline;
             }
-        } catch (NoAvailableHostsException nahe) {
-            cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, nahe);
-            discardPipelineAndReleaseConnection();
-            throw nahe;
-        }
+
+            @Override
+            public String getStringKey() {// we do not use it in this context
+                return null;
+            }
+
+            @Override
+            public byte[] getBinaryKey() {
+                return key;
+            }
+
+        });
         Jedis jedis = ((JedisConnection) connection).getClient();
         jedisPipeline = jedis.pipelined();
         cpMonitor.incOperationSuccess(connection.getHost(), 0);
     }
 
     private void pipelined(final String key) {
-        try {
-            try {
-                connection = connPool.getConnectionForOperation(new BaseOperation<Jedis, String>() {
+        connection = connPool.getConnectionWithFailover(new BaseOperation<Jedis, String>() {
 
-                    @Override
-                    public String getName() {
-                        return DynoPipeline;
-                    }
-
-                    @Override
-                    public String getStringKey() {
-                        return key;
-                    }
-
-                    @Override
-                    public byte[] getBinaryKey() { // we do not use it in this context
-                        return null;
-                    }
-
-                });
-            } catch (NoAvailableHostsException nahe) {
-                cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, nahe);
-                discardPipelineAndReleaseConnection();
-                throw nahe;
+            @Override
+            public String getName() {
+                return DynoPipeline;
             }
-        } catch (NoAvailableHostsException nahe) {
-            cpMonitor.incOperationFailure(connection != null ? connection.getHost() : null, nahe);
-            discardPipelineAndReleaseConnection();
-            throw nahe;
-        }
+
+            @Override
+            public String getStringKey() {
+                return key;
+            }
+
+            @Override
+            public byte[] getBinaryKey() { // we do not use it in this context
+                return null;
+            }
+
+        });
         Jedis jedis = ((JedisConnection) connection).getClient();
         jedisPipeline = jedis.pipelined();
         cpMonitor.incOperationSuccess(connection.getHost(), 0);
