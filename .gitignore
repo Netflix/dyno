@@ -69,3 +69,5 @@ atlassian-ide-plugin.xml
 .nbattrs
 /.nb-gradle/
 
+# publishing secrets
+secrets/signing-key
