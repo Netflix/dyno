@@ -404,12 +404,18 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         return this;
     }
 
-    public ConnectionPoolConfigurationImpl setDualWrite(boolean isDualWriteEnabled, String dualWriteClusterName,
-                                                        Integer dualWritePercentage) {
-        this.dualWriteClusterName = dualWriteClusterName;
-        this.dualWritePercentage = dualWritePercentage;
+    public ConnectionPoolConfigurationImpl setDualWriteEnabled(boolean isDualWriteEnabled) {
         this.isDualWriteEnabled = isDualWriteEnabled;
+        return this;
+    }
 
+    public ConnectionPoolConfigurationImpl setDualWriteClusterName(String dualWriteClusterName) {
+        this.dualWriteClusterName = dualWriteClusterName;
+        return this;
+    }
+
+    public ConnectionPoolConfigurationImpl setDualWritePercentage(int dualWritePercentage) {
+        this.dualWritePercentage = dualWritePercentage;
         return this;
     }
 

@@ -4791,8 +4791,13 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 // TODO: Move to a clean generic userconfig + FP model.
                 if (!cpConfig.isDualWriteEnabled() && archaiusConfig.isDualWriteEnabled()) {
                     // If a user sets these configs explicitly, they take precedence over the FP values.
-                    cpConfig.setDualWrite(true, archaiusConfig.getDualWriteClusterName(),
-                            archaiusConfig.getDualWritePercentage());
+                    if (cpConfig.getDualWriteClusterName() == null) {
+                        cpConfig.setDualWriteClusterName(archaiusConfig.getDualWriteClusterName());
+                    }
+                    if (cpConfig.getDualWritePercentage() == 0) {
+                        cpConfig.setDualWritePercentage(archaiusConfig.getDualWritePercentage());
+                    }
+                    cpConfig.setDualWriteEnabled(true);
                 }
             }
             cpConfig.setConnectToDatastore(isDatastoreClient);
