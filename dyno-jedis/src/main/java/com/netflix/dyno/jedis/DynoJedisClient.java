@@ -4780,9 +4780,20 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                 throw new DynoException("Cannot set isDatastoreClient(true) and also set withConnectionPoolConsistency() together");
             }
 
+            ArchaiusConnectionPoolConfiguration archaiusConfig = new ArchaiusConnectionPoolConfiguration(appName);
             if (cpConfig == null) {
-                cpConfig = new ArchaiusConnectionPoolConfiguration(appName);
+                cpConfig = archaiusConfig;
                 Logger.info("Dyno Client runtime properties: " + cpConfig.toString());
+            } else {
+                // Based on current requirements, we currently only want to prioritize pulling in the following FPs
+                // if provided:
+                // 'dualwrite.enabled', 'dualwrite.cluster', 'dualwrite.percentage'
+                // TODO: Move to a clean generic userconfig + FP model.
+                if (!cpConfig.isDualWriteEnabled() && archaiusConfig.isDualWriteEnabled()) {
+                    // If a user sets these configs explicitly, they take precedence over the FP values.
+                    cpConfig.setDualWrite(true, archaiusConfig.getDualWriteClusterName(),
+                            archaiusConfig.getDualWritePercentage());
+                }
             }
             cpConfig.setConnectToDatastore(isDatastoreClient);
 

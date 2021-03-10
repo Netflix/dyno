@@ -404,6 +404,15 @@ public class ConnectionPoolConfigurationImpl implements ConnectionPoolConfigurat
         return this;
     }
 
+    public ConnectionPoolConfigurationImpl setDualWrite(boolean isDualWriteEnabled, String dualWriteClusterName,
+                                                        Integer dualWritePercentage) {
+        this.dualWriteClusterName = dualWriteClusterName;
+        this.dualWritePercentage = dualWritePercentage;
+        this.isDualWriteEnabled = isDualWriteEnabled;
+
+        return this;
+    }
+
     @Override
     public String getConnectionPoolConsistency() {
         return this.connectionPoolConsistency;
