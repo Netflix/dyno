@@ -18,7 +18,20 @@ subprojects {
     sourceCompatibility = 1.8
 
     repositories {
-        jcenter()
+        mavenCentral()
+        /**
+         * This repository locates artifacts that don't exist in maven central but we had to backup from spinnaker/jcenter
+         */
+        exclusiveContent {
+            forRepository {
+                maven {
+                    url "https://artifactory-oss.prod.netflix.net/artifactory/spinnaker"
+                }
+            }
+            filter {
+                includeGroupByRegex "com\\.netflix\\.spinnaker.*"
+            }
+        }
     }
     group = "com.netflix.${githubProjectName}"
 
