@@ -808,8 +808,10 @@ public class DynoJedisClient implements JedisCommands, BinaryJedisCommands, Mult
                         @Override
                         public ScanResult<Map.Entry<String, String>> execute(final Jedis client,
                                                                              final ConnectionContext state) {
-                            return new ScanResult<>(cursor, new ArrayList(CollectionUtils.transform(
-                                    client.hscan(key, cursor).getResult(),
+
+                            ScanResult<Map.Entry<String, String>> result = client.hscan(key, cursor);
+                            return new ScanResult<>(result.getCursor(), new ArrayList(CollectionUtils.transform(
+                                result.getResult(),
                                     new CollectionUtils.Transform<Map.Entry<String, String>, Map.Entry<String, String>>() {
                                         @Override
                                         public Map.Entry<String, String> get(Map.Entry<String, String> entry) {
