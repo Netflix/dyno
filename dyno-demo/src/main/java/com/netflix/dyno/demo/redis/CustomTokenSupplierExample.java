@@ -93,8 +93,8 @@ public class CustomTokenSupplierExample {
         }
         // read
         for (int i = 0; i < 10; i++) {
-            OperationResult<String> result = client.d_get("" + i);
-            System.out.println("Key: " + i + ", Value: " + result.getResult() + " " + result.getNode());
+            String result = client.get("" + i);
+            System.out.println("Key: " + i + ", Value: " + result);
         }
     }
 

@@ -23,4 +23,9 @@ public interface CompressionOperation<CL, R> extends Operation<CL, R> {
     String compressValue(String value, ConnectionContext ctx);
 
     String decompressValue(String value, ConnectionContext ctx);
+
+    byte[] compressValue(byte[] value, ConnectionContext ctx);
+
+    byte[] decompressValue(byte[] value, ConnectionContext ctx);
+
 }

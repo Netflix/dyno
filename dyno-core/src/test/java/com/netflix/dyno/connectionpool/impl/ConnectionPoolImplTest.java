@@ -114,6 +114,10 @@ public class ConnectionPoolImplTest {
         }
 
         @Override
+        public void reset() {
+        }
+
+        @Override
         public DynoConnectException getLastException() {
             return ex;
         }

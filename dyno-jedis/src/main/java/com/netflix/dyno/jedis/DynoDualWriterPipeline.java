@@ -38,6 +38,11 @@ import java.util.concurrent.Future;
  * dynomite clusters.
  */
 public class DynoDualWriterPipeline extends DynoJedisPipeline {
+
+
+    // FIXME: not all write commands are shadowed
+
+
     private static final org.slf4j.Logger logger = LoggerFactory.getLogger(DynoDualWriterPipeline.class);
     private static ExecutorService executor = Executors.newSingleThreadExecutor();
     private final ConnectionPoolImpl<Jedis> connPool;

@@ -15,6 +15,13 @@
  ******************************************************************************/
 package com.netflix.dyno.connectionpool.impl.lb;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 import com.netflix.dyno.connectionpool.BaseOperation;
 import com.netflix.dyno.connectionpool.HashPartitioner;
 import com.netflix.dyno.connectionpool.HostConnectionPool;
@@ -25,13 +32,8 @@ import com.netflix.dyno.connectionpool.impl.hash.BinarySearchTokenMapper;
 import com.netflix.dyno.connectionpool.impl.hash.Murmur1HashPartitioner;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils;
 import com.netflix.dyno.connectionpool.impl.utils.CollectionUtils.Transform;
-import org.apache.commons.lang3.StringUtils;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import org.apache.commons.lang3.StringUtils;
 
 /**
  * Concrete implementation of the {@link HostSelectionStrategy} interface using
@@ -92,7 +94,7 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
             if (hashtag == null || hashtag.isEmpty()) {
                 hToken = this.getTokenForKey(key);
             } else {
-                String hashValue = StringUtils.substringBetween(key, Character.toString(hashtag.charAt(0)), Character.toString(hashtag.charAt(1)));
+                String hashValue = getHashValue(key, hashtag);
                 hToken = this.getTokenForKey(hashValue);
             }
 
@@ -108,9 +110,15 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
         } else {
             // the key is binary
             byte[] binaryKey = op.getBinaryKey();
-            hToken = this.getTokenForKey(binaryKey);
+            if (hashtag == null || hashtag.isEmpty()) {
+                hToken = this.getTokenForKey(binaryKey);
+            } else {
+                byte[] hashValue = getHashValue(binaryKey, hashtag);
+                hToken = this.getTokenForKey(hashValue);
+            }
+
             if (hToken == null) {
-                throw new NoAvailableHostsException("Token not found for key " + binaryKey.toString());
+                throw new NoAvailableHostsException("Token not found for key " + Arrays.toString(binaryKey));
             }
 
             hostPool = tokenPools.get(hToken.getToken());
@@ -122,6 +130,44 @@ public class TokenAwareSelection<CL> implements HostSelectionStrategy<CL> {
         }
         return hostPool;
 
+    }
+
+    public static String getHashValue(String key, String hashtag) {
+        if (key == null || hashtag == null || hashtag.length() < 2) {
+            throw new RuntimeException(
+              "Hash value calculation not possible for key: " + key + ", hashtag: " + hashtag);
+        }
+        return StringUtils.substringBetween(
+          key, Character.toString(hashtag.charAt(0)), Character.toString(hashtag.charAt(1))
+        );
+    }
+
+    public static byte[] getHashValue(byte[] key, String hashtag) {
+        if (key == null || hashtag == null || hashtag.length() < 2) {
+            throw new RuntimeException(
+              "Hash value calculation not possible for key: " + Arrays.toString(key) + ", hashtag: " + hashtag);
+        }
+
+        char startChar = hashtag.charAt(0);
+        char endChar = hashtag.charAt(1);
+
+        int s = -1;
+        int e = -1;
+        boolean sFound = false;
+        for (int i = 0; i < key.length; i++) {
+            if (key[i] == startChar && !sFound) {
+                s = i;
+                sFound = true;
+            }
+            if (key[i] == endChar && sFound) {
+                e = i;
+                break;
+            }
+        }
+        if (s > -1 && e > -1 && e != s + 1) {
+            return Arrays.copyOfRange(key, s + 1, e);
+        }
+        return key;
     }
 
     @Override
