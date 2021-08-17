@@ -162,6 +162,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 
         @Override
         public void close() {
+            jedisClient.resetState();
             jedisClient.quit();
             jedisClient.disconnect();
         }
@@ -178,6 +179,11 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
                 jedisClient.getClient().sendCommand(DynoConfigCommand.CONN_CONSISTENCY, this.consistencyLevel);
                 jedisClient.getClient().getStatusCodeReply();
             }
+        }
+
+        @Override
+        public void reset() {
+            jedisClient.resetState();
         }
 
         @Override

@@ -346,8 +346,14 @@ public class HostConnectionPoolImpl<CL> implements HostConnectionPool<CL> {
                     return closeConnection(connection);
                 } else {
                     // Add the given connection back to the pool
-                    availableConnections.add(connection);
-                    return false;
+                    try {
+                        connection.reset();
+                        availableConnections.add(connection);
+                        return false;
+                    } catch (Exception e) {
+                        recycleConnection(connection);
+                        return true;
+                    }
                 }
             } finally {
                 monitor.incConnectionReturned(host);

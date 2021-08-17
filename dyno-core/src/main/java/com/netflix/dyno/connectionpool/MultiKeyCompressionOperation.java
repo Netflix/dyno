@@ -13,4 +13,9 @@ public interface MultiKeyCompressionOperation<CL, R> extends Operation<CL, R> {
     String[] compressMultiKeyValue(ConnectionContext ctx, String... value);
 
     String decompressValue(ConnectionContext ctx, String value);
+
+    byte[][] compressMultiKeyValue(ConnectionContext ctx, byte[]... value);
+
+    byte[] decompressValue(ConnectionContext ctx, byte[] value);
+
 }

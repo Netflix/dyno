@@ -343,8 +343,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
                 } else {
                     cpMonitor.incOperationFailure(null, e);
                 }
-            } catch (Throwable t) {
-                throw new RuntimeException(t);
             } finally {
                 if (connection != null) {
                     if (connection.getLastException() != null
@@ -422,8 +420,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
                             cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
                         }
 
-                    } catch (Throwable t) {
-                        throw new RuntimeException(t);
                     } finally {
                         connection.getContext().reset();
                         connection.getParentConnectionPool().returnConnection(connection);
@@ -442,7 +438,7 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
                     connectionToClose.getContext().reset();
                     connectionToClose.getParentConnectionPool().returnConnection(connectionToClose);
                 } catch (Throwable t) {
-
+                    Logger.warn("Error returning connection to pool", t);
                 }
             }
         }
@@ -467,9 +463,34 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
      * @param baseOperation
      * @return
      */
-    public <R> Connection<CL> getConnectionForOperation(BaseOperation<CL, R> baseOperation) {
-        return selectionStrategy.getConnection(baseOperation, cpConfiguration.getMaxTimeoutWhenExhausted(),
-                TimeUnit.MILLISECONDS);
+    public <R> Connection<CL> getConnectionWithFailover(BaseOperation<CL, R> baseOperation) {
+        RetryPolicy retry = cpConfiguration.getRetryPolicyFactory().getRetryPolicy();
+        retry.begin();
+
+        DynoException lastException = null;
+
+        do {
+            try {
+                Connection<CL> connection = selectionStrategy.getConnectionUsingRetryPolicy(baseOperation,
+                        cpConfiguration.getMaxTimeoutWhenExhausted(), TimeUnit.MILLISECONDS, retry);
+                updateConnectionContext(connection.getContext(), connection.getHost());
+                retry.success();
+                return connection;
+            } catch (NoAvailableHostsException e) {
+                cpMonitor.incOperationFailure(null, e);
+                throw e;
+            } catch (PoolExhaustedException e) {
+                Logger.warn("Pool exhausted: " + e.getMessage());
+                cpMonitor.incOperationFailure(null, e);
+                cpHealthTracker.trackConnectionError(e.getHostConnectionPool(), e);
+            } catch (DynoException e) {
+                retry.failure(e);
+                lastException = e;
+            }
+
+        } while (retry.allowRetry());
+
+        throw lastException;
     }
 
     @Override
@@ -702,8 +723,6 @@ public class ConnectionPoolImpl<CL> implements ConnectionPool<CL>, TopologyView 
                 cpHealthTracker.trackConnectionError(connection.getParentConnectionPool(), lastException);
             }
 
-        } catch (Throwable t) {
-            t.printStackTrace();
         } finally {
             if (connection != null) {
                 connection.getParentConnectionPool().returnConnection(connection);
