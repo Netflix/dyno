@@ -114,7 +114,7 @@ project(':dyno-jedis') {
         annotationProcessor 'org.projectlombok:lombok:1.18.4'
         compile project(':dyno-core')
         compile project(':dyno-contrib')
-        compile 'redis.clients:jedis:3.0.1'
+        compile 'redis.clients:jedis:3.7.0'
         compileOnly 'org.projectlombok:lombok:1.18.4'
         testCompile 'com.netflix.spinnaker.embedded-redis:embedded-redis:0.8.0'
     }
