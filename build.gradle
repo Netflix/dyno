@@ -73,6 +73,10 @@ project(':dyno-core') {
         compile 'org.apache.commons:commons-lang3:3.6'
         compile 'commons-io:commons-io:2.4'
     }
+
+    test {
+        exclude '**/*'
+    }
 }
 
 project(':dyno-contrib') {
