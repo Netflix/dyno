@@ -141,7 +141,7 @@ public abstract class AbstractTokenMapSupplier implements TokenMapSupplier {
         // hence trying them all
         Set<HostToken> allTokens = new HashSet<HostToken>();
         Set<Host> remainingHosts = new HashSet<>(activeHosts);
-
+        Logger.info("[DynoConnectDebug] Number of active hosts = " + activeHosts.size());
         for (Host host : activeHosts) {
             try {
                 List<HostToken> hostTokens = parseTokenListFromJson(getTopologyJsonPayload((host.getHostAddress())));

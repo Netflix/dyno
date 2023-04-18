@@ -70,6 +70,7 @@ public class HttpEndpointBasedTokenMapSupplier extends AbstractTokenMapSupplier 
     @Override
     public String getTopologyJsonPayload(String hostname) {
         try {
+            Logger.info("[DynoConnectDebug] Hostname is = " + hostname);
             return getResponseViaHttp(hostname);
         } catch (Exception e) {
             throw new RuntimeException(e);

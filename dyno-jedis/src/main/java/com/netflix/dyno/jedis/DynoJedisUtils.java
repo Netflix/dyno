@@ -119,6 +119,7 @@ public class DynoJedisUtils {
         List<Host> hosts = (List<Host>) hostSupplier.getHosts();
         Collections.sort(hosts);
 
+        logger.info("[DynoConnectDebug] Got number of hosts = " + hosts.size());
         // Take the token map supplier (aka the token topology from
         // Dynomite)
         TokenMapSupplier tokenMapSupplier = config.getTokenSupplier();
