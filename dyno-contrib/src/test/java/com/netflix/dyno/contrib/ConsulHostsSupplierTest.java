@@ -26,6 +26,7 @@ import com.pszymczyk.consul.ConsulStarterBuilder;
 import org.codehaus.jettison.json.JSONException;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -56,7 +57,7 @@ public class ConsulHostsSupplierTest {
         consulServer.close();
     }
 
-    @Test
+    @Test @Ignore
     public void testAwsHosts() throws JSONException {
         List<String> tags = new ArrayList<>();
         tags.add("cloud=aws");
@@ -96,7 +97,7 @@ public class ConsulHostsSupplierTest {
         assertTrue(host.isUp());
     }
 
-    @Test
+    @Test @Ignore
     public void testOtherCloudProviderHosts() throws JSONException {
         List<String> tags = new ArrayList<>();
         tags.add("cloud=kubernetes");

@@ -30,7 +30,7 @@ import com.netflix.dyno.connectionpool.exception.DynoException;
 import com.netflix.dyno.connectionpool.exception.FatalConnectionException;
 import com.netflix.dyno.connectionpool.impl.ConnectionContextImpl;
 import com.netflix.dyno.connectionpool.impl.OperationResultImpl;
-import org.apache.commons.lang.NotImplementedException;
+import org.apache.commons.lang3.NotImplementedException;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisShardInfo;
@@ -157,7 +157,7 @@ public class JedisConnectionFactory implements ConnectionFactory<Jedis> {
 
         @Override
         public <R> ListenableFuture<OperationResult<R>> executeAsync(AsyncOperation<Jedis, R> op) throws DynoException {
-            throw new NotImplementedException();
+            throw new NotImplementedException("Not Implemented");
         }
 
         @Override
