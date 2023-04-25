@@ -79,6 +79,10 @@ public class EurekaHostsSupplier implements HostSupplier {
         }
         Logger.info("Dyno fetching instance list for app: " + applicationName);
         Application app = discoveryClient.getApplication(applicationName);
+        if (app != null)
+            Logger.info("Got application instances : " + app.getInstances().size());
+        else
+            Logger.info("Got null application");
         List<Host> hosts = new ArrayList<Host>();
 
         if (app == null) {
