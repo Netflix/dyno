@@ -53,7 +53,9 @@ public class ConsulHostsSupplierTest {
 
     @After
     public void afterEach() throws Exception {
-        consulServer.close();
+        if(consulServer != null) {
+            consulServer.close();
+        }
     }
 
     @Test
